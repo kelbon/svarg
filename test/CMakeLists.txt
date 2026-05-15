@@ -13,7 +13,7 @@ foreach(test_src ${svarg_TESTS})
     
     set_target_properties(${test_name} PROPERTIES
 		LINKER_LANGUAGE CXX
-		CXX_STANDARD 20
+		CXX_STANDARD 23
 		CMAKE_CXX_STANDARD_REQUIRED ON
 	)
     add_test(NAME ${test_name} COMMAND ${test_name})

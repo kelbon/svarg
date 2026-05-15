@@ -1,4 +1,4 @@
-#include "svarg/common.hpp"
+#include "svarg/openapi.hpp"
 #include <moko3/moko3.hpp>
 
 TEST("name") {

@@ -21,6 +21,11 @@ target_link_libraries(svarglib PUBLIC
     kelcorolib
     zallib
     clinoklib
+    Boost::json
+    Boost::pfr
+    ryml
+    Boost::iostreams # mapped file
+    strswitchlib
 )
 
 if(svarg_ENABLE_TESTING)
@@ -34,7 +39,7 @@ target_link_libraries(svarg PUBLIC svarglib)
 
 set_target_properties(svarg svarglib PROPERTIES
 	LINKER_LANGUAGE CXX
-	CXX_STANDARD 20
+	CXX_STANDARD 23
 	CMAKE_CXX_STANDARD_REQUIRED ON
 )
 

@@ -1,5 +1,27 @@
 include(cmake/get_cpm.cmake)
 
+set(BOOST_INCLUDE_LIBRARIES system asio pfr json iostreams)
+CPMAddPackage(
+  NAME BOOST
+  VERSION 1.87.0
+  URL https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-cmake.tar.xz
+  OPTIONS "BOOST_ENABLE_CMAKE ON"
+)
+unset(BOOST_INCLUDE_LIBRARIES)
+
+CPMAddPackage(
+  NAME STRING_SWITCH
+  GITHUB_REPOSITORY kelbon/strswitch
+  GIT_TAG v1.0
+)
+
+CPMAddPackage(
+  NAME RAPIDYAML
+  GITHUB_REPOSITORY biojppm/rapidyaml
+  GIT_TAG v0.12.1
+  OPTIONS "RYML_WITH_TAB_TOKENS ON" "RYML_INSTALL OFF"
+)
+
 # cmake tools
 CPMAddPackage(
   NAME CCOZY
