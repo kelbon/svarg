@@ -18,3 +18,5 @@ foreach(test_src ${svarg_TESTS})
 	)
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
+
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_specs" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")

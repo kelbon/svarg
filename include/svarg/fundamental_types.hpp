@@ -1,6 +1,8 @@
 #pragma once
 
 #include "svarg/utils/box.hpp"
+#include "svarg/utils/number.hpp"
+#include "svarg/errors.hpp"
 
 #include <string>
 #include <vector>
@@ -12,20 +14,6 @@
 #include <strswitch/strswitch.hpp>
 
 namespace svarg {
-
-struct parse_error : std::runtime_error {
-  template <typename... Args>
-  explicit parse_error(std::format_string<Args...> fmt, Args&&... args)
-      : std::runtime_error(std::format(fmt, std::forward<Args>(args)...)) {
-  }
-  explicit parse_error(const char* p) : std::runtime_error(p) {
-  }
-};
-
-struct validate_error : parse_error {
-  using parse_error::parse_error;
-  using parse_error::operator=;
-};
 
 // data types
 
@@ -51,6 +39,16 @@ struct reference_object {
   string ref_;  // MUST be URI, в json как $ref
   optional<string> summary;
   optional<string> description;
+};
+
+// тег для парсинга
+template <typename T>
+struct one_or_array {
+  array<T> values;
+
+  [[nodiscard]] bool empty() const noexcept {
+    return values.empty();
+  }
 };
 
 struct path_item_object;
