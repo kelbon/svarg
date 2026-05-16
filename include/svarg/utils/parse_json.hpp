@@ -143,7 +143,8 @@ struct parse<string_map<T>> {
         throw parse_error("while parsing string map key `{}`: {}", std::string(key), e.what());
       }
       if (out.contains(key))
-        throw parse_error("duplicated key `{}` while parsing string map of `{}`", key, type_name<T>());
+        throw parse_error("duplicated key `{}` while parsing string map of `{}`", std::string_view(key),
+                          type_name<T>());
       out.emplace(key, std::move(elem));
     }
   }
