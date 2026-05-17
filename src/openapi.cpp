@@ -1,10 +1,8 @@
 #include "svarg/openapi.hpp"
 
 #include <boost/iostreams/device/mapped_file.hpp>
-#include <iostream>  // TODO rm
 #include <ryml.hpp>
 #include <boost/json.hpp>
-#include "svarg/utils/json_pretty.hpp"
 
 namespace c4 {
 // TODO по какой-то причине нет в символах этого. c4 даунская какая-то либа из ryml
@@ -63,9 +61,6 @@ openapi_object parse_yaml_spec(std::string_view yaml, const svarg_options& optio
 openapi_object parse_json_spec(std::string_view json, const svarg_options& options) {
   boost::json::value v = boost::json::parse(json);
   v = resolve_raw_references(std::move(v), options);
-  bool print = false;  // TODO rm
-  if (print)
-    pretty_print(std::cout, v);
   return parse_spec(std::move(v), options);
 }
 

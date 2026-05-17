@@ -1,34 +1,86 @@
 
 #include <boost/json/value.hpp>
 #include "boost/json/parse.hpp"
+
 #include "svarg/openapi.hpp"
-#include "svarg/utils/json_pretty.hpp"
+#include "svarg/utils/parse_uri.hpp"
+
+#include <http2/http2_client.hpp>
 
 namespace svarg {
 
-// TODO план
+[[nodiscard]] static bool is_net_ref(std::string_view s) {
+  return s.starts_with("https://") || s.starts_with("http://");
+}
 
-// препроцессирование
-// TODO сериализацию попросить клауда написать, это изи (сериализация нужна для тестирования
-// препроцессирования) тест на парс спеки объект содержащий сразу все спеки нужные резолв ссылок на нём
+// преобразует путь(который также может быть url) к нормальному виду без ./ и прочей фигни относительной
+// при этом оставляя https:// и не убирая //
+static std::string fixup_path(std::filesystem::path p) {
+  std::string gs = p.generic_string();
+  if (is_net_ref(gs)) {
+    parsed_uri u = parse_uri(gs);
+    std::string newpath = std::filesystem::path(u.path).lexically_normal().generic_string();
+    u.path = newpath;
+    return u.to_string();
+  } else {
+    return std::filesystem::absolute(p).lexically_normal().generic_string();
+  }
+}
+
+static dd::task<void> do_load_refered_object(http2::http2_client& client, parsed_uri uri, auto success,
+                                             auto fail) try {
+  http2::http_request req{.path = std::string(uri.path), .method = http2::http_method_e::GET};
+  req.authority = uri.host;
+  http2::http_response rsp =
+      co_await client.send_request(req, http2::deadline_after(std::chrono::seconds(5)));
+  // редирект не обрабатывается
+  if (rsp.status < 200 || rsp.status >= 300) {
+    fail(std::format("invalid rsp with status={}", rsp.status).c_str());
+    co_return;
+  }
+  success(rsp.body_strview());
+} catch (std::exception& e) {
+  fail(e.what());
+}
+
+// загруженное body иди исключение
+// никаких кешей, плевать на перф здесь +- совсем, просто на случай если кому-то очень надо
+std::string do_get_request_to(std::string_view uri) {
+  std::string fixed = fixup_path(uri);
+  uri = fixed;
+  parsed_uri u = parse_uri(uri);
+  std::optional<http2::http2_client> client;
+  http2::http2_client_options opts{.allow_requests_before_server_settings = true};
+  if (uri.starts_with("http://")) {
+    client.emplace(http2::endpoint(std::string(u.host), u.get_port()), opts);
+  } else if (uri.starts_with("https://")) {
+    client.emplace(http2::endpoint(std::string(u.host), u.get_port()), opts,
+                   [](boost::asio::io_context& ctx) { return http2::default_tls_transport_factory(ctx); });
+  } else
+    throw parse_error("invalid $ref, network ref must start with http:// or https://, ref: `{}`", uri);
+
+  std::optional<std::string> body;
+  std::optional<std::string> err;
+  auto suc = [&](std::string_view res) { body = res; };
+  auto fail = [&](const char* what) { err = what; };
+  do_load_refered_object(*client, u, suc, fail).start_and_detach();
+  while (!body && !err)
+    client->ioctx().poll();
+  if (err)
+    throw parse_error("cannot load uri(`{}`), err: {}", uri, *err);
+  assert(body);
+  return std::move(*body);
+}
 
 // если в ref нет # (разделителя на путь до файла и json поинтер) это означает include json/yaml по URI
 // делает блокирующий GET запрос по URL с/без SSL (url должно начинаться с http:// или https://)
 // а затем парсит ответ как json
-static boost::json::value request_refered_object(std::string_view url) {
-  // TODO
-#if 0
-  // TODO кеш этих запросов url -> boost::json::value
-  // TODO если там .yaml то надо парсить как yaml
-  bool is_yaml = url.ends_with(".yaml") || url.ends_with(".yml");
-  // TODO get request etc
-  if (is_yaml) {
-    std::string json = yaml2json(rsp.body);
-    // TODO
-  }
-  // TODO смотреть внутрь объекта и резолвить дальше, если есть ссылки, при этом ref должны быть относительно
-  // нового объекта
-#endif
+static boost::json::value request_refered_object(std::string_view uri) {
+  std::string body = do_get_request_to(uri);
+  if (uri.ends_with(".yaml") || uri.ends_with(".yml"))
+    return boost::json::parse(yaml2json(body));
+  else  // пробуем как json в любом случае
+    return boost::json::parse(body);
   return {};
 }
 
@@ -42,30 +94,33 @@ struct load_raw_ref_return {
 // `curfile` должен быть относительным путём или URL (или также может быть URL, если загрузили файл до этого)
 static load_raw_ref_return load_raw_refered_object(std::string_view url, std::filesystem::path curfile,
                                                    const svarg_options& options) {
-  curfile = curfile.lexically_normal();
+  curfile = fixup_path(std::move(curfile));
+  // вроде если не обрабатывать путь может получится слишком длинным и в итоге
+  // сломается всё. А если обрабатывать - https:// -> https:/ может выйти боком
   assert(!url.contains('#'));
-  auto is_net_ref = [](std::string_view s) { return s.starts_with("https://") || s.starts_with("http://"); };
+  // TODO здесь путь обрабывается и https:// может превратиться в https:/
+
   // абсолютные ссылки в сеть
   if (is_net_ref(url)) {
     if (!options.resolve_url_refs) {
       throw parse_error(
           "loading external refs disabled due to options - resolve_url_refs = false by default. ref: `{}`, "
           "path: `{}`",
-          url, curfile.string());
+          url, curfile.generic_string());
     }
     return load_raw_ref_return(request_refered_object(url), url);
   }
   // до этого загрузили из сети, но сейчас это уже внутри загруженного файла локальная ссылка
-  if (is_net_ref(curfile.string())) {
+  if (is_net_ref(curfile.generic_string())) {
     // странно что мы уже загружали и опять, но обработаем на всякий
     if (!options.resolve_url_refs) {
       throw parse_error(
           "loading external refs disabled due to options - resolve_url_refs = false by default. ref: `{}`, "
           "path: `{}`",
-          url, curfile.string());
+          url, curfile.generic_string());
     }
     std::filesystem::path path = curfile.parent_path() / url;
-    return load_raw_ref_return(request_refered_object(path.string()), path);
+    return load_raw_ref_return(request_refered_object(path.generic_string()), path.generic_string());
   }
   boost::json::value result;
   std::filesystem::path path = curfile.parent_path() / url;
@@ -111,7 +166,6 @@ static void collect_raw_refs(boost::json::value* v, std::vector<raw_ref>& refs) 
 
 // если depth дошло до 0, то больше погружаться нельзя
 // ссылки разрешаются относительно curfile
-// возвращает true когда ссылок больше нет
 static void include_raw_references(boost::json::value& v, std::filesystem::path curfile, size_t depth,
                                    const svarg_options& options) {
   std::vector<raw_ref> refs;
@@ -124,29 +178,13 @@ static void include_raw_references(boost::json::value& v, std::filesystem::path 
       links += r.value;
       links.push_back(';');
     }
-    return;  // TODO
-    // throw parse_error("refs resolution max depth reached, yet unresolved links `{}`", links);
+    if (options.ref_depth_is_a_fail)
+      throw parse_error("refs resolution max depth reached, yet unresolved links `{}`", links);
+    else
+      return;
   }
 
   for (auto& [ref, parent, value] : refs) {
-    // TODO вероятно всё же буст джсон так не работает
-    // придётся с указателей уходить как-то
-#if 0
-    std::cout << "REF " << std::endl;
-    pretty_print(std::cout, *ref);
-    std::cout << "PARENT " << std::endl;
-    pretty_print(std::cout, *parent);
-    std::cout << "VALUE! " << std::endl;
-    pretty_print(std::cout, v);
-    on_scope_exit {
-      std::cout << "REF AT END " << std::endl;
-      pretty_print(std::cout, *ref);
-      std::cout << "PARENT AT END " << std::endl;
-      pretty_print(std::cout, *parent);
-      std::cout << "VALUE! AT END" << std::endl;
-      pretty_print(std::cout, v);
-    };
-#endif
     auto [replace, replace_path] = load_raw_refered_object(value, curfile, options);
     include_raw_references(replace, replace_path, depth - 1, options);
     assert(ref && parent);

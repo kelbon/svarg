@@ -10,9 +10,9 @@ CPMAddPackage(
 unset(BOOST_INCLUDE_LIBRARIES)
 
 CPMAddPackage(
-  NAME STRING_SWITCH
+  NAME STRSWITCH
   GITHUB_REPOSITORY kelbon/strswitch
-  GIT_TAG v1.0
+  GIT_TAG v1.1.0
 )
 
 CPMAddPackage(
@@ -35,7 +35,7 @@ include(${CCOZY_SOURCE_DIR}/ccozy_tools.cmake)
 CPMAddPackage(
   NAME KELCORO
   GITHUB_REPOSITORY kelbon/kelcoro
-  GIT_TAG v1.2.0
+  GIT_TAG v1.4.3
 )
 
 # move_only_function, function ref etc (anyanylib)
@@ -57,6 +57,13 @@ CPMAddPackage(
   NAME CLINOK
   GITHUB_REPOSITORY kelbon/clinok
   GIT_TAG v2.0.1
+)
+
+CPMAddPackage(
+  NAME HTTP2
+  GIT_REPOSITORY https://github.com/kelbon/http2
+  GIT_TAG v0.9.4
+  OPTIONS "KELHTTP2_USE_CPM ON"
 )
 
 if (svarg_ENABLE_TESTING)

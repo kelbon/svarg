@@ -86,7 +86,7 @@ inline void efromstr(std::string_view s, parameter_location& out) {
                  .case_("header", header)
                  .case_("path", path)
                  .case_("cookie", cookie)
-                 .orDefault(parameter_location(-1));
+                 .or_default(parameter_location(-1));
   if (loc == parameter_location(-1))
     throw parse_error("unknown parameter location `{}`", s);
   out = loc;

@@ -22,7 +22,7 @@ struct parse<bool> {
     if (auto* b = v.if_bool())
       out = *b;
     else
-      throw parse_error("bool expected, got `{}`", e2str(v.kind()));
+      throw parse_error(" bool expected, got `{}`", e2str(v.kind()));
   }
 };
 
@@ -33,10 +33,10 @@ struct parse<uint64_t> {
       out = *x;
     else if (auto* x = v.if_int64()) {
       if (*x < 0)
-        throw parse_error("expected >= 0, got {}", *x);
+        throw parse_error(" expected >= 0, got {}", *x);
       out = *x;
     } else
-      throw parse_error("uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
+      throw parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
   }
 };
 
@@ -45,12 +45,12 @@ struct parse<int64_t> {
   void operator()(boost::json::value const& v, int64_t& out) {
     if (auto* x = v.if_uint64()) {
       if (!std::in_range<int64_t>(*x))
-        throw parse_error("value `{}` is not in range int64_t", *x);
+        throw parse_error(" value `{}` is not in range int64_t", *x);
       out = *x;
     } else if (auto* x = v.if_int64()) {
       out = *x;
     } else
-      throw parse_error("uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
+      throw parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
   }
 };
 
@@ -60,7 +60,7 @@ struct parse<string> {
     if (auto* s = v.if_string())
       out = s->subview();
     else
-      throw parse_error("string expected, got `{}`", e2str(v.kind()));
+      throw parse_error(" string expected, got `{}`", e2str(v.kind()));
   }
 };
 
@@ -74,7 +74,7 @@ struct parse<number> {
     else if (v.is_double())
       out = v.get_double();
     else
-      throw parse_error("expected number, got `{}`", e2str(v.kind()));
+      throw parse_error(" expected number, got `{}`", e2str(v.kind()));
   }
 };
 
@@ -108,7 +108,7 @@ struct parse<array<T>> {
   void operator()(boost::json::value const& v, array<T>& out) {
     auto const* arr = v.if_array();
     if (!arr)
-      throw parse_error("array expected, got `{}`", e2str(v.kind()));
+      throw parse_error(" array expected, got `{}`", e2str(v.kind()));
     out.clear();
     out.reserve(arr->size());
     for (size_t i = 0; i < arr->size(); ++i) {
@@ -117,7 +117,7 @@ struct parse<array<T>> {
       try {
         parse<T>{}((*arr)[i], elem);
       } catch (parse_error const& e) {
-        throw parse_error("while parsing array[{}]: {}", i, e.what());
+        throw parse_error("[{}]{}", i, e.what());
       }
       out.push_back(std::move(elem));
     }
@@ -132,7 +132,7 @@ struct parse<string_map<T>> {
     // TODO? проверять что ключ один раз встречается каждый?
     auto const* obj = v.if_object();
     if (!obj)
-      throw parse_error("object expected, got `{}`", e2str(v.kind()));
+      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
     out.clear();
     for (auto const& [key, val] : *obj) {
       // не вставляем полураспаршенный элемент
@@ -140,11 +140,10 @@ struct parse<string_map<T>> {
       try {
         parse<T>{}(val, elem);
       } catch (parse_error const& e) {
-        throw parse_error("while parsing string map key `{}`: {}", std::string_view(key), e.what());
+        throw parse_error("/`{}`{}", std::string_view(key), e.what());
       }
       if (out.contains(key))
-        throw parse_error("duplicated key `{}` while parsing string map of `{}`", std::string_view(key),
-                          type_name<T>());
+        throw parse_error(" {} contains duplicated key `{}`", type_name<T>(), std::string_view(key));
       out.emplace(key, std::move(elem));
     }
   }
@@ -163,7 +162,7 @@ struct parse<parameter_location> {
     if (auto const* s = v.if_string())
       efromstr(s->subview(), out);
     else
-      throw parse_error("string expected for parameter_location, got `{}`", e2str(v.kind()));
+      throw parse_error(" string expected for parameter_location, got `{}`", e2str(v.kind()));
   }
 };
 
@@ -193,9 +192,13 @@ void parse_field(boost::json::object const& obj, T& out) {
     if (is_optional_field<Field>::value)
       return;
     else
-      throw parse_error("field `{}` in type `{}` is REQUIRED but not present", name, type_name<T>());
+      throw parse_error(" field `{}` in type `{}` is REQUIRED but not present", name, type_name<T>());
   }
-  parse<Field>{}(it->value(), boost::pfr::get<I>(out));
+  try {
+    parse<Field>{}(it->value(), boost::pfr::get<I>(out));
+  } catch (parse_error& e) {
+    throw parse_error("/`{}`{}", name, e.what());
+  }
 }
 
 template <aggregate T, size_t... Is>
@@ -212,18 +215,16 @@ struct parse<T> {
   void operator()(boost::json::value const& v, T& out) {
     auto const* obj = v.if_object();
     if (!obj) {
-      if constexpr (requires {
-                      { T::parse_if_not_object(v) } -> std::same_as<T>;
-                    }) {
+      if constexpr (parsable_even_from_not_object<T>) {
         out = T::parse_if_not_object(v);
         return;
       }
-      throw parse_error("object expected, got `{}`", e2str(v.kind()));
+      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
     }
     for (auto&& [key, _] : *obj) {
       std::string_view k(key);
       if (!noexport::has_field<T>(k) && !allow_additional_field<T>{}.allow(k))
-        throw parse_error("not allowed field `{}` in type `{}`", k, type_name<T>());
+        throw parse_error(" not allowed field `{}` in type `{}`", k, type_name<T>());
     }
     noexport::parse_all_fields(*obj, out, std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
     validate<T>{}(out);
@@ -236,8 +237,13 @@ struct parse<reference_or<T>> {
     // path_item_object содержит в себе опциональную ссылку, его так парсить было бы неверно и бессмысленно
     static_assert(!std::is_same_v<T, path_item_object>);
     auto const* obj = v.if_object();
-    if (!obj)
-      throw parse_error("object expected, got `{}`", e2str(v.kind()));
+    if (!obj) {
+      if constexpr (parsable_even_from_not_object<T>) {
+        out = T::parse_if_not_object(v);
+        return;
+      }
+      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+    }
     if (obj->contains("$ref")) {
       reference_object ref{};
       parse<reference_object>{}(v, ref);

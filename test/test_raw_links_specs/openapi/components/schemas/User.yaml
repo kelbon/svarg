@@ -48,9 +48,9 @@ properties:
       type: string
       format: url
     example: ['https://twitter.com/example', 'https://instagram.com/example']
-  recursiveProperty:
-    allOf:
-      - $ref: './User.yaml'
+  #recursiveProperty:
+  #  allOf:
+  #    - $ref: './User.yaml'
   status:
     description: "Status of the user account."
     type: array

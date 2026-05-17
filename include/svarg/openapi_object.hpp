@@ -87,7 +87,7 @@ struct xml_object {
 };
 
 struct schema_object {
-  schema_object parse_if_not_object(boost::json::value const& j) {
+  static schema_object parse_if_not_object(boost::json::value const& j) {
     assert(!j.is_object());
     auto* b = j.if_bool();
     if (!b)
@@ -222,6 +222,8 @@ struct schema_object {
   optional<bool> _keyfield_boolean_schema;
 };
 
+static_assert(parsable_even_from_not_object<schema_object>);
+
 template <>
 struct allow_additional_field<schema_object> {
   static bool allow(std::string_view name) noexcept {
@@ -229,11 +231,6 @@ struct allow_additional_field<schema_object> {
     return name.starts_with('$') || name.starts_with("x-");
   }
 };
-
-// TODO видимо парсинг schema_object не так прост... там внезапно можно просто false/true
-// (additionalProperties)
-
-// TODO валидацию для schema_object обновить
 
 struct media_type_object;
 

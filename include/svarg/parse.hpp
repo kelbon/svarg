@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string_view>
+#include <boost/json/value.hpp>
 
 namespace svarg {
 
@@ -15,6 +16,11 @@ struct allow_additional_field {
     // https://spec.openapis.org/oas/v3.1.0#specification-extensions
     return name.starts_with("x-");
   }
+};
+
+template <typename T>
+concept parsable_even_from_not_object = requires(boost::json::value const& v) {
+  { T::parse_if_not_object(v) } -> std::same_as<T>;
 };
 
 }  // namespace svarg
