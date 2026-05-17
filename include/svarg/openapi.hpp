@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "svarg/openapi_object.hpp"
+#include "svarg/utils/fn_ref.hpp"
 
 /*
 в этом файле openapi_object из спецификации openapi 3.1
@@ -14,6 +15,9 @@ namespace svarg {
 std::string yaml2json(std::string_view yaml);
 std::string load_yaml_as_json(std::filesystem::path yaml);
 
+// передаёт в `fn` содержимое файла как json, даже если это yaml
+void pass_as_json(std::filesystem::path path, fn_cref<void(std::string_view) const> fn);
+
 struct svarg_options {
   // для любых ссылок глубина рекурсии ограничена
   // глубина 0 полностью запрещает ссылки
@@ -22,21 +26,27 @@ struct svarg_options {
   // выключено)
   // TODO под это ещё кеш надо сделать, чтобы лишний раз не ходить с запросами
   bool resolve_url_refs = false;
+  // при подаче любого файла на вход все пути всё равно считаются относительно него, так что достаточно одного
+  // любого пути к спецификации для сбора всех нужных
+  std::filesystem::path input_specfile_path;
   // TODO unordered_map<string> known_formats?
 };
 
 // резолвит ссылки без #
-boost::json::value preprocess_openapi_spec(boost::json::value json, const svarg_options& options);
+[[nodiscard]] boost::json::value resolve_raw_references(boost::json::value json,
+                                                        const svarg_options& options);
 
-// ожидается значение прошедшее preprocess_openapi_spec
+// ожидается значение без ссылок не содержащих # (прошедшее resolve_raw_references)
 openapi_object parse_spec(boost::json::value, const svarg_options& options);
 
 // конвертирует из ямла в json
 openapi_object parse_yaml_spec(std::string_view yaml, const svarg_options& options);
+// `spec_path` используется для разрешения ссылок без #
 openapi_object parse_json_spec(std::string_view json, const svarg_options& options);
 
 // может быть YAML (.yaml, .yml) или JSON (.json .jsonc .json5)
-openapi_object parse_spec_file(std::filesystem::path path, const svarg_options& options);
+// `path` выставляется в options.input_specfile_path
+openapi_object parse_spec_file(std::filesystem::path path, svarg_options options);
 
 // TODO в итоговом джсоне уже не должно быть всяких параметерс и тд прочей хуйни
 // должен быть просто список типов, список операций (там прямо перечисленно какие типы в параметрах, их

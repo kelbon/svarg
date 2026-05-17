@@ -140,7 +140,7 @@ struct parse<string_map<T>> {
       try {
         parse<T>{}(val, elem);
       } catch (parse_error const& e) {
-        throw parse_error("while parsing string map key `{}`: {}", std::string(key), e.what());
+        throw parse_error("while parsing string map key `{}`: {}", std::string_view(key), e.what());
       }
       if (out.contains(key))
         throw parse_error("duplicated key `{}` while parsing string map of `{}`", std::string_view(key),

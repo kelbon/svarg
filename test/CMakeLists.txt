@@ -20,3 +20,4 @@ foreach(test_src ${svarg_TESTS})
 endforeach()
 
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_specs" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_raw_links_specs" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")

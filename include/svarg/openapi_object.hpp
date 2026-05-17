@@ -226,7 +226,7 @@ template <>
 struct allow_additional_field<schema_object> {
   static bool allow(std::string_view name) noexcept {
     // $schema/ $id/$defs и прочая гиковская дрянь из метасхем
-    return name.starts_with('$');
+    return name.starts_with('$') || name.starts_with("x-");
   }
 };
 

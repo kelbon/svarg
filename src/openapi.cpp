@@ -1,8 +1,10 @@
 #include "svarg/openapi.hpp"
 
 #include <boost/iostreams/device/mapped_file.hpp>
+#include <iostream>  // TODO rm
 #include <ryml.hpp>
 #include <boost/json.hpp>
+#include "svarg/utils/json_pretty.hpp"
 
 namespace c4 {
 // TODO по какой-то причине нет в символах этого. c4 даунская какая-то либа из ryml
@@ -20,6 +22,19 @@ c4::substr to_substr(std::string& s) noexcept {
 
 namespace svarg {
 
+void pass_as_json(std::filesystem::path path, fn_cref<void(std::string_view) const> fn) {
+  std::filesystem::path ext = path.extension();
+  if (ext == ".yaml" || ext == ".yml") {
+    std::string json = load_yaml_as_json(path);
+    return fn(std::string_view(json));
+  } else if (ext == ".json" || ext == ".jsonc" || ext == "json5") {
+    boost::iostreams::mapped_file_source file(path.string());
+    return fn(std::string_view(file.data(), file.size()));
+  } else {
+    throw std::invalid_argument("invalid spec extensions, allowed extensions .json and .yaml");
+  }
+}
+
 std::string yaml2json(std::string_view yaml) {
   ryml::Tree tree = ryml::parse_in_arena(ryml::csubstr(yaml.data(), yaml.size()));
   return ryml::emitrs_json<std::string>(tree);
@@ -30,22 +45,35 @@ inline std::string load_yaml_as_json(std::filesystem::path yaml) {
   return yaml2json(std::string_view(file.data(), file.size()));
 }
 
+// удаляет всякое лишнее, что по спецификации нужно игнорировать и тд и тп
+void postprocess_openapi_object(openapi_object& obj);
+
+openapi_object parse_spec(boost::json::value v, const svarg_options& options) {
+  openapi_object obj;
+  parse<openapi_object>{}(v, obj);
+  postprocess_openapi_object(obj);
+  return obj;
+}
+
 openapi_object parse_yaml_spec(std::string_view yaml, const svarg_options& options) {
   std::string json = yaml2json(yaml);
   return parse_json_spec(json, options);
 }
 
-openapi_object parse_spec_file(std::filesystem::path path, const svarg_options& options) {
-  std::filesystem::path ext = path.extension();
-  if (ext == ".yaml" || ext == ".yml") {
-    std::string json = load_yaml_as_json(std::move(path));
-    return parse_json_spec(json, options);
-  } else if (ext == ".json" || ext == ".jsonc" || ext == "json5") {
-    boost::iostreams::mapped_file_source file("spec.yaml");
-    return parse_json_spec(std::string_view(file.data(), file.size()), options);
-  } else {
-    throw std::invalid_argument("invalid spec extensions, allowed extensions .json and .yaml");
-  }
+openapi_object parse_json_spec(std::string_view json, const svarg_options& options) {
+  boost::json::value v = boost::json::parse(json);
+  v = resolve_raw_references(std::move(v), options);
+  bool print = false;  // TODO rm
+  if (print)
+    pretty_print(std::cout, v);
+  return parse_spec(std::move(v), options);
+}
+
+openapi_object parse_spec_file(std::filesystem::path path, svarg_options options) {
+  options.input_specfile_path = path;
+  openapi_object obj;
+  pass_as_json(path, [&](std::string_view json) { obj = parse_json_spec(json, options); });
+  return obj;
 }
 
 // TODO в общем вероятно надо принимать все спеки за раз, парсить их и линковать всё в одно
@@ -66,21 +94,5 @@ openapi_object parse_spec_file(std::filesystem::path path, const svarg_options& 
 // бесконечный пиздец. Проще всего просто ограничить этот процесс каким-то максимальным числом вложенных
 // ссылок и регулировать его (иначе можно такого наколупать, что невозможно алгортимически понять что
 // инклудишь уже пиздец)
-
-// удаляет всякое лишнее, что по спецификации нужно игнорировать и тд и тп
-void postprocess_openapi_object(openapi_object& obj);
-
-openapi_object parse_spec(boost::json::value v, const svarg_options& options) {
-  openapi_object obj;
-  parse<openapi_object>{}(v, obj);
-  postprocess_openapi_object(obj);
-  return obj;
-}
-
-openapi_object parse_json_spec(std::string_view json, const svarg_options& options) {
-  boost::json::value v = boost::json::parse(json);
-  v = preprocess_openapi_spec(std::move(v), options);
-  return parse_spec(std::move(v), options);
-}
 
 }  // namespace svarg
