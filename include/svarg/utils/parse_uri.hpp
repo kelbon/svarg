@@ -3,6 +3,7 @@
 #include <charconv>
 #include <string_view>
 #include <stdexcept>
+#include <cstdint>
 
 namespace svarg {
 
