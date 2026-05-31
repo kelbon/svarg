@@ -3,7 +3,7 @@
 #include <filesystem>
 
 #include "svarg/openapi_object.hpp"
-#include "svarg/utils/fn_ref.hpp"
+#include "svarg/utils/jsons_cache.hpp"
 
 /*
 в этом файле openapi_object из спецификации openapi 3.1
@@ -11,12 +11,6 @@
 */
 
 namespace svarg {
-
-std::string yaml2json(std::string_view yaml);
-std::string load_yaml_as_json(std::filesystem::path yaml);
-
-// передаёт в `fn` содержимое файла как json, даже если это yaml
-void pass_as_json(std::filesystem::path path, fn_cref<void(std::string_view) const> fn);
 
 struct svarg_options {
   // для любых ссылок глубина рекурсии ограничена
@@ -35,8 +29,8 @@ struct svarg_options {
 };
 
 // резолвит ссылки без #
-[[nodiscard]] boost::json::value resolve_raw_references(boost::json::value json,
-                                                        const svarg_options& options);
+[[nodiscard]] boost::json::value resolve_raw_references(boost::json::value json, const svarg_options& options,
+                                                        jsons_cache* cache = nullptr);
 
 // ожидается значение без ссылок не содержащих # (прошедшее resolve_raw_references)
 openapi_object parse_spec(boost::json::value, const svarg_options& options);

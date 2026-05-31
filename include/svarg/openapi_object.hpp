@@ -72,6 +72,7 @@ MyResponseType:
 */
 struct discriminator_object {
   string propertyName;
+  // TODO генерировать дефолтный маппинг перед IR, если его нет
   optional<string_map<string>> mapping;
 };
 
@@ -93,7 +94,6 @@ struct schema_object {
     if (!b)
       throw parse_error("`{}` is not a valid schema object, not even boolean...", boost::json::serialize(j));
     return schema_object{._keyfield_boolean_schema = *b};
-    // TODO тест на парсинг такой схемы (additionalProperties например)
   }
 
   // схема пускает кого угодно

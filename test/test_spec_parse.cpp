@@ -1,9 +1,19 @@
 #include "svarg/openapi.hpp"
 #include <moko3/moko3.hpp>
 #include "svarg/serialize.hpp"
+#include "svarg/spec_loader.hpp"
 #include "svarg/utils/json_pretty.hpp"
 #include <fstream>
 
+#include "svarg/ir/ir_object.hpp"
+
+TEST("spec loader") {
+  svarg::spec_loader loader;
+
+  loader.set_specs_dir(std::filesystem::current_path());
+  loader.load_spec("./test_specs/TS29510_Nnrf_NFDiscovery.yaml");
+  svarg::ir::ir_object o = loader.generate();
+}
 TEST("parse_spec") {
   svarg::svarg_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);

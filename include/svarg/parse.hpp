@@ -23,4 +23,11 @@ concept parsable_even_from_not_object = requires(boost::json::value const& v) {
   { T::parse_if_not_object(v) } -> std::same_as<T>;
 };
 
+template <typename T>
+T parse_from_json(boost::json::value const& j) {
+  T value;
+  parse<T>{}(j, value);
+  return value;
+}
+
 }  // namespace svarg

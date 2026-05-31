@@ -1,6 +1,6 @@
 
 #include <boost/json/value.hpp>
-#include "boost/json/parse.hpp"
+#include <boost/json/parse.hpp>
 
 #include "svarg/openapi.hpp"
 #include "svarg/utils/parse_uri.hpp"
@@ -93,7 +93,7 @@ struct load_raw_ref_return {
 // `url` предполагается без #, просто ссылка на файл
 // `curfile` должен быть относительным путём или URL (или также может быть URL, если загрузили файл до этого)
 static load_raw_ref_return load_raw_refered_object(std::string_view url, std::filesystem::path curfile,
-                                                   const svarg_options& options) {
+                                                   const svarg_options& options, jsons_cache* cache) {
   curfile = fixup_path(std::move(curfile));
   // вроде если не обрабатывать путь может получится слишком длинным и в итоге
   // сломается всё. А если обрабатывать - https:// -> https:/ может выйти боком
@@ -124,7 +124,11 @@ static load_raw_ref_return load_raw_refered_object(std::string_view url, std::fi
   }
   boost::json::value result;
   std::filesystem::path path = curfile.parent_path() / url;
-  pass_as_json(path, [&](std::string_view data) { result = boost::json::parse(data); });
+  if (cache) {
+    result = cache->load(path);
+  } else {
+    pass_as_json(path, [&](std::string_view data) { result = boost::json::parse(data); });
+  }
   return load_raw_ref_return(std::move(result), std::move(path));
 }
 
@@ -167,7 +171,7 @@ static void collect_raw_refs(boost::json::value* v, std::vector<raw_ref>& refs) 
 // если depth дошло до 0, то больше погружаться нельзя
 // ссылки разрешаются относительно curfile
 static void include_raw_references(boost::json::value& v, std::filesystem::path curfile, size_t depth,
-                                   const svarg_options& options) {
+                                   const svarg_options& options, jsons_cache* cache) {
   std::vector<raw_ref> refs;
   collect_raw_refs(&v, refs);
   if (refs.empty())
@@ -185,8 +189,8 @@ static void include_raw_references(boost::json::value& v, std::filesystem::path 
   }
 
   for (auto& [ref, parent, value] : refs) {
-    auto [replace, replace_path] = load_raw_refered_object(value, curfile, options);
-    include_raw_references(replace, replace_path, depth - 1, options);
+    auto [replace, replace_path] = load_raw_refered_object(value, curfile, options, cache);
+    include_raw_references(replace, replace_path, depth - 1, options, cache);
     assert(ref && parent);
     if (!replace.is_object())
       *ref = std::move(replace);
@@ -207,8 +211,9 @@ static void include_raw_references(boost::json::value& v, std::filesystem::path 
   }
 }
 
-boost::json::value resolve_raw_references(boost::json::value v, const svarg_options& options) {
-  include_raw_references(v, options.input_specfile_path, options.ref_max_depth, options);
+boost::json::value resolve_raw_references(boost::json::value v, const svarg_options& options,
+                                          jsons_cache* cache) {
+  include_raw_references(v, options.input_specfile_path, options.ref_max_depth, options, cache);
   return v;
 }
 
