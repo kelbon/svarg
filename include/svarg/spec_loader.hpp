@@ -58,8 +58,11 @@ struct spec_loader {
     v = resolve_raw_references(std::move(v), opts);
     return parse_spec(std::move(v), opts);
   }
+  template <typename>
   friend struct vtor;
-  ir::type resolve_ref(reference_object obj, std::filesystem::path file);
+  // используется только в .cpp
+  template <typename T>
+  ir::type resolve_ref_to(reference_object obj, std::filesystem::path file);
   ir::ir_object visit_and_generate_ir(const openapi_object& obj, const std::filesystem::path& obj_file);
 };
 

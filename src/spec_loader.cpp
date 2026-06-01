@@ -1,10 +1,11 @@
 #include "svarg/spec_loader.hpp"
+#include "svarg/utils/json_pretty.hpp"
 #include "svarg/utils/matcher.hpp"
 #include "svarg/ir/ir_object.hpp"
 #include "svarg/utils/parse_ref.hpp"
 
 #include <boost/pfr.hpp>
-#include <iostream>  // TODO rm
+
 namespace svarg {
 
 [[nodiscard]] ir::type_ref schema2type_ref(const schema_object& schema, const std::filesystem::path& file,
@@ -43,7 +44,7 @@ namespace svarg {
 [[nodiscard]] ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesystem::path& file,
                                                std::string_view jsonptr) {
   ir::type res;
-  res.scope = jsonptr;
+  res.scope = std::format("{}#{}", file.generic_string(), jsonptr);
 
   if (!jsonptr.starts_with('/'))
     throw semanatic_error("invalid part of $ref after # (`{}`), must start with /", jsonptr);
@@ -215,29 +216,34 @@ namespace svarg {
 }
 
 // TODO эффективнее
-static std::string scopes2jsonptr(std::span<const std::string_view> scopes) {
-  std::string s;
+static std::string scopes2jsonptr(std::span<const std::string_view> scopes, std::string_view name) {
+  std::string s = "/";
   for (std::string_view str : scopes) {
     s += str;
-    s.push_back('/');
+    if (!str.empty())
+      s.push_back('/');
   }
+  s += name;
   if (s.ends_with('/') && s != "/")
     s.pop_back();
   return s;
 }
 
 // ожидает что file относительно spec dir
-ir::type spec_loader::resolve_ref(reference_object ref, std::filesystem::path file) {
+template <typename T>
+ir::type spec_loader::resolve_ref_to(reference_object ref, std::filesystem::path file) {
   parsed_ref r;
   for (size_t recursion_depth = 0; recursion_depth <= opts.ref_max_depth; ++recursion_depth) {
     r = parse_ref(ref.ref_);
-    std::filesystem::path refered_file = file.parent_path() / r.file;
+    std::filesystem::path refered_file = !r.file.empty()
+                                             ? std::filesystem::canonical(file).parent_path() / r.file
+                                             : std::filesystem::canonical(file);
     const boost::json::value& v = jcache.load(refered_file);
     const boost::json::value& jref = v.at_pointer(r.json_ptr);
+
     auto ref_or_schema = parse_from_json<reference_or<schema_object>>(jref);
-    if (auto* s = std::get_if<schema_object>(&ref_or_schema)) {
+    if (auto* s = std::get_if<schema_object>(&ref_or_schema))
       return frontend_schema2ir_type(*s, std::filesystem::relative(refered_file, specs_dir), r.json_ptr);
-    }
     ref = std::get<reference_object>(std::move(ref_or_schema));
     file = std::move(refered_file);
   }
@@ -245,60 +251,127 @@ ir::type spec_loader::resolve_ref(reference_object ref, std::filesystem::path fi
   // TODO нужно как то не грузить многократно одинаковые ссылки. Кешировать мб файл + json ptr -> type
 }
 
+// TODO хмм.
+// а ведь правда это не типы, а схемы
+// т.к. иногда они используются просто чтобы проверить соответствие
+// и мб опенапи схема распадается на описание того что может лежать и то какие ограничения на это есть
+// т.е. в моей логике это всегда чето типа type: string + require schemaA, schemaB, NOT schemaC и так далее
+// и вероятно ещё || должно быть
+// по сути require A && B && (C || D) это allOf(A, B, anyof(C, D))
+// а всё вместе это schemas
+// а в моём языке по сути это было бы нечто вроде концептов с && || !
+// И TODO? мб моя задача здесь это как раз разбить опенапи схемы на такие части..
+// Крч если делать мой язык, то вероятно нужно туда эту концепцию со схемами перенести. дать возможность
+// определять схему выкинув всё лишнее и просто с упрощённым синтаксисом
+// а ТИП это логическое объединение схем
+// так получается
+
+// крч да, нужно просто реализовать опенапи. Всмысле такой IR сделать, чтобы можно было что-то нагенерировать
+// первый этап это просто типы и операции без особых ограничений
+
+// оборачивает визитор в ссылке с тем же интерфейсом,
+// чтобы копирование результирующей структуры не ломало внутренние данные vtor (н-р если он не умеет
+// копироваться) нужно из-за boost::pfr::for_each<***> которые копируют визитор
+constexpr auto refvtor(auto& vtor) {
+  return [&](std::string_view name, auto&& arg) -> decltype(auto) {
+    return vtor(name, std::forward<decltype(arg)>(arg));
+  };
+}
+
+// посещает все ссылки на `What` и передаёт калбеку json-pointer до элемента и сам элемент
+template <typename What>
 struct vtor {
   std::filesystem::path obj_file;
   spec_loader* loader;
   std::vector<ir::type> types;
   std::vector<std::string_view> scopes;
 
-  template <typename T>
-  void operator()(std::string_view, const array<T>& f) {
+  explicit vtor(std::filesystem::path obj_file, spec_loader& l) : obj_file(std::move(obj_file)), loader(&l) {
+  }
+
+  void dbgprint(std::string_view name) {
+    // for (std::string_view s : scopes)
+    //   std::cout << s << '.';
+    // std::cout << name << '\n';
   }
   template <typename T>
-  void operator()(std::string_view, const string_map<T>& f) {
+  void operator()(std::string_view name, const array<T>& f) {
+    dbgprint(name);
+    scopes.push_back(name);
+    on_scope_exit {
+      scopes.pop_back();
+    };
+    for (size_t i = 0; i < f.size(); ++i)
+      // не смотря на то что скоп может быть захвачен по string_view,
+      // время жизни строки из format здесь должно быть валидно везде
+      (*this)(std::format("{}", i), f[i]);
   }
-  void operator()(std::string_view, const uint64_t& f) {
+  template <typename T>
+  void operator()(std::string_view name, const string_map<T>& f) {
+    dbgprint(name);
+    scopes.push_back(name);
+    on_scope_exit {
+      scopes.pop_back();
+    };
+    for (auto& [key, v] : f)
+      (*this)(std::string_view(key), v);
   }
-  void operator()(std::string_view, const int64_t& f) {
+  void operator()(std::string_view name, const uint64_t& f) {
+    dbgprint(name);
   }
-  void operator()(std::string_view, const number& f) {
+  void operator()(std::string_view name, const int64_t& f) {
+    dbgprint(name);
   }
-  void operator()(std::string_view, const bool& f) {
+  void operator()(std::string_view name, const number& f) {
+    dbgprint(name);
   }
-  void operator()(std::string_view, const Any& f) {
+  void operator()(std::string_view name, const bool& f) {
+    dbgprint(name);
   }
-  void operator()(std::string_view, const string& f) {
+  void operator()(std::string_view name, const Any& f) {
+    dbgprint(name);
   }
-  void operator()(std::string_view, const parameter_location& f) {
+  void operator()(std::string_view name, const string& f) {
+    dbgprint(name);
+  }
+  void operator()(std::string_view name, const parameter_location& f) {
+    dbgprint(name);
   }
   void operator()(std::string_view name, const aggregate auto& x) {
     scopes.push_back(name);
-    std::cout << "->" << name << std::endl;
+    dbgprint(name);
     on_scope_exit {
       scopes.pop_back();
-      std::cout << "<-" << name << std::endl;
     };
-    boost::pfr::for_each_field_with_name(x, *this);
+    boost::pfr::for_each_field_with_name(x, refvtor(*this));
   }
 
-  void operator()(std::string_view, const schema_object& x) {
+  void operator()(std::string_view name, const schema_object& x) {
+    dbgprint(name);
     // TODO O(1)
-    ir::type t = frontend_schema2ir_type(x, obj_file, scopes2jsonptr(scopes));
+    ir::type t = frontend_schema2ir_type(x, obj_file, scopes2jsonptr(scopes, name));
     if (!std::ranges::contains(types, t))
       types.push_back(std::move(t));
   }
 
-  void operator()(std::string_view name, const reference_or<schema_object>& x) {
-    std::visit([&](auto& x) { (*this)(name, x); }, x);
-  }
-  void operator()(std::string_view, const reference_object& x) {
-    ir::type t = loader->resolve_ref(x, obj_file);
-    // TODO O(1)
-    if (!std::ranges::contains(types, t))
-      types.push_back(std::move(t));
+  template <typename T>
+  void operator()(std::string_view name, const reference_or<T>& x) {
+    dbgprint(name);
+
+    if (auto* r = std::get_if<reference_object>(&x)) {
+      if constexpr (!std::is_same_v<T, What>)
+        return;
+      ir::type t = loader->resolve_ref_to<What>(*r, obj_file);
+      // TODO O(1)
+      if (!std::ranges::contains(types, t))
+        types.push_back(std::move(t));
+    } else {
+      (*this)(name, *std::get_if<T>(&x));
+    }
   }
   template <typename T>
   void operator()(std::string_view name, const optional<T>& x) {
+    dbgprint(name);
     if (x)
       (*this)(name, *x);
   }
@@ -306,9 +379,8 @@ struct vtor {
 
 ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
                                                  const std::filesystem::path& obj_file) {
-  vtor v(obj_file);
-  boost::pfr::for_each_field_with_name(obj, v);
-
+  vtor<schema_object> v(obj_file, *this);
+  boost::pfr::for_each_field_with_name(obj, refvtor(v));
   return ir::ir_object{.types = std::move(v.types)};
 }
 

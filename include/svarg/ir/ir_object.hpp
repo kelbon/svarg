@@ -99,8 +99,7 @@ struct type {
     return scope == x.scope && name == x.name;
   }
 };
-// TODO parse<type>
-// TODO parse<type_ref>
+
 struct ir_object {
   // пока примитивно есть просто типы
   // TODO сделать это мапой

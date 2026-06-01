@@ -36,13 +36,13 @@ inline std::string load_yaml_as_json(std::filesystem::path yaml) {
 }
 
 const boost::json::value& jsons_cache::load(std::filesystem::path path) {
-  path = std::filesystem::canonical(path).string();
+  path = std::filesystem::canonical(path);
   auto it = cache.find(path);
   if (it != cache.end())
     return it->second;
   decltype(cache)::iterator res;
 
-  pass_as_json(std::move(path), [&](std::string_view content) {
+  pass_as_json(path, [&](std::string_view content) {
     auto [it, _] = cache.try_emplace(std::move(path), boost::json::parse(content));
     res = std::move(it);
   });
