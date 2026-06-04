@@ -5284,7 +5284,7 @@ components:
             content defined in the present version of this API.
 
     CodeWordInd:
-      description: > 
+      description: >
         Indicates that the codeword shall be checked in UE
         or one or more codeword values to be checked in GMLC.
       anyOf:
@@ -5313,7 +5313,7 @@ components:
             content defined in the present version of this API.
 
     SharedDataTreatmentInstruction:
-      description: > 
+      description: >
         Indicates the presence of this attribute in the individual data.
         Otherwise, the individual data takes precedence, by default.
       anyOf:

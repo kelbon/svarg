@@ -166,6 +166,31 @@ struct parse<parameter_location> {
   }
 };
 
+template <>
+struct parse<reference_object> {
+  void operator()(boost::json::value const& v, reference_object& out) {
+    auto const* obj = v.if_object();
+
+    if (!obj)
+      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+    auto refit = obj->find("$ref");
+    if (refit == obj->end())
+      throw parse_error(" field `$ref` in reference object is REQUIRED but not present");
+    out.ref_ = refit->value().as_string();
+
+    if (auto it = obj->find("summary"); it != obj->end())
+      out.summary = std::string(it->value().as_string());
+
+    if (auto it = obj->find("description"); it != obj->end())
+      out.description = std::string(it->value().as_string());
+
+    for (auto const& [key, val] : *obj) {
+      if (key != "$ref" && key != "summary" && key != "description")
+        out._keyfield_override_fields[std::string(key)] = Any{val};
+    }
+  }
+};
+
 template <typename T>
 concept aggregate = std::is_aggregate_v<std::decay_t<T>>;
 
@@ -227,7 +252,8 @@ struct parse<T> {
         throw parse_error(" not allowed field `{}` in type `{}`", k, type_name<T>());
     }
     noexport::parse_all_fields(*obj, out, std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
-    validate<T>{}(out);
+    postparse<T>{}(out);
+    validate<T>{}(std::as_const(out));
   }
 };
 

@@ -19,5 +19,18 @@ foreach(test_src ${svarg_TESTS})
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
 
+# отслеживаем любое изменение внутри файлов
+file(GLOB TEST_SPEC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/test_specs/*")
+set_property(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${TEST_SPEC_FILES}
+)
+# изменение количества файлов, директории
+set_property(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_specs"
+)
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_specs" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_raw_links_specs" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")

@@ -7,12 +7,20 @@
 
 #include "svarg/ir/ir_object.hpp"
 
+// TODO обновить yaml либу (коммит с исправлением пробелов)
+
 TEST("spec loader") {
   svarg::spec_loader loader;
 
   loader.set_specs_dir(std::filesystem::current_path());
   loader.load_spec("./test_specs/TS29510_Nnrf_NFDiscovery.yaml");
+  loader.load_spec("./test_specs/TS29571_CommonData.yaml");
   svarg::ir::ir_object o = loader.generate();
+  for (auto&& x : o.types) {
+    if (x.spec() == "test_specs/TS29571_CommonData.yaml")
+      std::cout << x.jsonptr() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
+  }
+  std::terminate();
 }
 TEST("parse_spec") {
   svarg::svarg_options options;

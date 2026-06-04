@@ -52,6 +52,19 @@ struct spec_loader {
     assert(specs.empty() && loaded_specs.empty());
   }
 
+  // возвращает первый из существующих файлов из списка specs_dir/filename, -I dirs/filename...
+  // используется для разрешений ссылок
+  // возвращаемый путь всегда относительно specs_dir
+  [[nodiscard]] std::filesystem::path find_existing_file(std::filesystem::path filepart) const {
+    filepart = std::filesystem::relative(filepart, specs_dir);
+    std::filesystem::path p = specs_dir / filepart;
+    if (std::filesystem::exists(p) && std::filesystem::is_regular_file(p))
+      return filepart;
+    // TODO -I
+    // TODO добавить список проверенных путей
+    throw parse_error("no such file: `{}`", filepart.generic_string());
+  }
+
  private:
   openapi_object do_parse_spec_file(std::filesystem::path spec) {
     boost::json::value v = jcache.load(std::move(spec));
@@ -62,7 +75,7 @@ struct spec_loader {
   friend struct vtor;
   // используется только в .cpp
   template <typename T>
-  ir::type resolve_ref_to(reference_object obj, std::filesystem::path file);
+  void resolve_ref_to(reference_object obj, std::filesystem::path file, std::vector<ir::type>& types);
   ir::ir_object visit_and_generate_ir(const openapi_object& obj, const std::filesystem::path& obj_file);
 };
 

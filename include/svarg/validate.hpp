@@ -11,4 +11,11 @@ struct validate {
   }
 };
 
+// вызывается после парсинга перед validate, например чтобы нормализовать результат
+template <typename T>
+struct postparse {
+  void operator()(T&) {
+  }
+};
+
 }  // namespace svarg

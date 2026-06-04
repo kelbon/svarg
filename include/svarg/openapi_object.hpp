@@ -117,6 +117,12 @@ struct schema_object {
   optional<array<Any>> examples;
   // в 3.1 убрано, остановлено чтобы парсилось и эквивалентно "type": ["x", "null"]
   // а оно в свою очередь эквивалентно anyof
+  // Note: svarg считает, что nullable это эквивалент NOT required, а пришедший json null
+  // эквивалентен отсутствию поля.
+  // Также type: [x, null] эквивалентно nullable = true + type: x
+  // Поле nullable типа обозначенное required вызовет предупреждение
+  // Бекенд может считать, что такое поле может не прийти и более того, если придёт null на любое другое
+  // поле, это может считаться эквивалентным его отсутствию
   optional<bool> nullable;
 
   optional<discriminator_object> discriminator;

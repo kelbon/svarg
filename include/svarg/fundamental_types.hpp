@@ -39,6 +39,8 @@ struct reference_object {
   string ref_;  // MUST be URI, в json как $ref
   optional<string> summary;
   optional<string> description;
+  // какие-то дополнительные поля переопределяющие то что лежит по ссылке
+  string_map<Any> _keyfield_override_fields;
 };
 
 // тег для парсинга

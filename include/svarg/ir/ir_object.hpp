@@ -4,6 +4,7 @@
 
 #include "svarg/fundamental_types.hpp"
 #include "svarg/openapi_object.hpp"
+#include "svarg/utils/parse_ref.hpp"
 
 namespace svarg::ir {
 
@@ -65,6 +66,7 @@ struct allof_type {
 };
 
 struct object_type {
+  // TODO? видимо тут как минимум надо ещё указать какие из них требуемые и тд
   array<type_ref> fields;
   optional<type_ref> additional_fields;
 };
@@ -94,6 +96,13 @@ struct type {
   std::variant<fundamental_e, enum_type, oneof_type, anyof_type, allof_type, object_type, array_type,
                not_type, never_type, any_type>
       data;
+
+  std::string_view spec() const noexcept {
+    return parse_ref(scope).file;
+  }
+  std::string_view jsonptr() const noexcept {
+    return parse_ref(scope).json_ptr;
+  }
 
   bool operator==(const type& x) const noexcept {
     return scope == x.scope && name == x.name;
