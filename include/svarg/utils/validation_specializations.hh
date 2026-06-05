@@ -281,13 +281,18 @@ struct validate<schema_object> {
 template <>
 struct postparse<schema_object> {
   void operator()(schema_object& schema) {
-    if (!schema.type)
-      return;
-    auto it = std::ranges::find(schema.type->values, "null");
-    if (it == schema.type->values.end())
-      return;
-    schema.nullable = true;
-    schema.type->values.erase(it);
+    if (schema.type) {
+      auto it = std::ranges::find(schema.type->values, "null");
+      if (it != schema.type->values.end()) {
+        schema.nullable = true;
+        schema.type->values.erase(it);
+      }
+    }
+    if (schema.is_write_only() && schema.is_read_only()) {
+      // бессмысленно (может так просто вышло после складывания ссылок)
+      schema.writeOnly = nullptr;
+      schema.readOnly = nullptr;
+    }
   }
 };
 

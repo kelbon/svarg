@@ -20,7 +20,6 @@ TEST("spec loader") {
     if (x.spec() == "test_specs/TS29571_CommonData.yaml")
       std::cout << x.jsonptr() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
   }
-  std::terminate();
 }
 TEST("parse_spec") {
   svarg::svarg_options options;
@@ -119,12 +118,5 @@ paths:
   REQUIRE(boost::json::parse(expected_json) == svarg::serialize_as_json(o));
 }
 
-struct listener : moko3::gtest_listener {
-  void on_test_case_end(const moko3::test_run_info& t) noexcept override {
-    moko3::gtest_listener::on_test_case_end(t);
-    if (t.failed)
-      std::cout << t.failreason << std::endl;
-  }
-};
-REGISTER_TEST_LISTENER(listener);
+REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;

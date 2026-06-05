@@ -112,7 +112,9 @@ struct schema_object {
   optional<string> description;
   optional<Any> default_;
   optional<bool> deprecated;
+  // может присутствовать только в ответе
   optional<bool> readOnly;
+  // может присутствовать только в запросе
   optional<bool> writeOnly;
   optional<array<Any>> examples;
   // в 3.1 убрано, остановлено чтобы парсилось и эквивалентно "type": ["x", "null"]
@@ -226,6 +228,13 @@ struct schema_object {
   // если есть и false - другие поля неважны, всех НЕ пускаем
   // "_keyfield" специальный префикс для таких костылей
   optional<bool> _keyfield_boolean_schema;
+
+  [[nodiscard]] bool is_write_only() const noexcept {
+    return writeOnly && *writeOnly;
+  }
+  [[nodiscard]] bool is_read_only() const noexcept {
+    return readOnly && *readOnly;
+  }
 };
 
 static_assert(parsable_even_from_not_object<schema_object>);

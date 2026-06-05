@@ -62,7 +62,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME HTTP2
   GIT_REPOSITORY https://github.com/kelbon/http2
-  GIT_TAG v0.9.4
+  GIT_TAG v0.9.5
   OPTIONS "KELHTTP2_USE_CPM ON"
 )
 
@@ -70,7 +70,7 @@ if (svarg_ENABLE_TESTING)
   CPMAddPackage(
     NAME MOKO3
     GITHUB_REPOSITORY kelbon/moko3
-    GIT_TAG v0.9.3
+    GIT_TAG v0.9.4
   )
 endif()
 

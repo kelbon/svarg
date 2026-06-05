@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <utility>
 #include <cassert>
+#include <optional>
 
 #include <zal/zal.hpp>
 
@@ -30,7 +31,8 @@ struct SVARG_TRIVIAL_ABI box {
 
   constexpr box(std::nullptr_t) {
   }
-
+  constexpr box(std::nullopt_t) noexcept : box(nullptr) {
+  }
   constexpr ~box() {
     reset();
   }
@@ -56,6 +58,9 @@ struct SVARG_TRIVIAL_ABI box {
   constexpr box& operator=(std::nullptr_t) noexcept {
     reset();
     return *this;
+  }
+  constexpr box& operator=(std::nullopt_t) noexcept {
+    return *this = nullptr;
   }
 
   template <typename U = T>
@@ -178,6 +183,9 @@ struct SVARG_TRIVIAL_ABI box {
 
   bool operator==(std::nullptr_t) const noexcept {
     return !has_value();
+  }
+  bool operator==(std::nullopt_t) const noexcept {
+    return *this == nullptr;
   }
   friend std::strong_ordering operator<=>(const box& l, const box& r) noexcept {
     return l && r ? *l <=> *r : bool(l) <=> bool(r);

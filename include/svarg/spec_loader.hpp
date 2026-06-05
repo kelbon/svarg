@@ -6,8 +6,14 @@
 #include "svarg/openapi.hpp"
 
 #include "svarg/ir/ir_object.hpp"
+#include <iostream>
 
 namespace svarg {
+
+struct schema_and_type {
+  ir::type type;
+  schema_object schema;
+};
 
 // загружает спецификацию, затем разрешает все ссылки в ней
 // и разрешает видимо сразу в IR структуру (которая позже преобразуется в json)
@@ -24,7 +30,6 @@ struct spec_loader {
   // путь до спек относительно specs_dir, для которых вызвано load_spec явно. Помимо них в specs ещё могут
   // быть просто упомянутые, но не те IR которых пользователь хотел получить
   std::unordered_set<std::filesystem::path> loaded_specs;
-  // unordered_map<std::filesystem::path, svarg_ir> irs;
   svarg_options opts;
   // путь относительно которого в IR написаны все пути до спецификаций
   std::filesystem::path specs_dir;
@@ -65,6 +70,21 @@ struct spec_loader {
     throw parse_error("no such file: `{}`", filepart.generic_string());
   }
 
+  // возвращает тип, но и вставляет его в types (если его там не было)
+  schema_and_type resolve_ref(reference_object obj, std::filesystem::path file, std::vector<ir::type>& types);
+
+  // file - относительно specs dir, jsonptr должен указывать на место где лежит schema
+  // если встречает инлайн схемы - складывает их в types
+  ir::object_type make_object_type(schema_object const& schema, const std::filesystem::path& file,
+                                   std::string_view jsonptr, std::vector<ir::type>& types);
+
+  template <typename... Args>
+  void emit_warn(const std::filesystem::path& where, std::string_view jsonptr,
+                 std::format_string<Args...> fmt, Args&&... args) {
+    std::cout << std::format("in {}#{}. warning: {}\n", where.generic_string(), jsonptr,
+                             std::format(fmt, std::forward<Args>(args)...));
+  }
+
  private:
   openapi_object do_parse_spec_file(std::filesystem::path spec) {
     boost::json::value v = jcache.load(std::move(spec));
@@ -73,9 +93,7 @@ struct spec_loader {
   }
   template <typename>
   friend struct vtor;
-  // используется только в .cpp
-  template <typename T>
-  void resolve_ref_to(reference_object obj, std::filesystem::path file, std::vector<ir::type>& types);
+
   ir::ir_object visit_and_generate_ir(const openapi_object& obj, const std::filesystem::path& obj_file);
 };
 

@@ -41,6 +41,7 @@ struct type_ref {
   optional<string> name;
   // REQUIRED если name есть (не включает имя типа)
   optional<string> scope;
+  // указано если тип это фундаментальный null/boolean/string/number/integer НЕ array/object
   optional<fundamental_e> fundamental;
 
   [[nodiscard]] bool refers_to(const type&) const noexcept;
@@ -60,14 +61,24 @@ struct anyof_type {
   array<type_ref> types;
 };
 
-// TODO? пост процессингом все allof перегенерировать в другие типы
 struct allof_type {
   array<type_ref> types;
 };
 
+struct object_field_info {
+  type_ref type;
+  string name;
+  // поле считается required если
+  // * указано в required: [...]
+  // * тип НЕ nullable
+  // * у типа НЕТ default
+  // * тип НЕ readOnly/writeOnly (там необходимость передавать зависит от запрос/ответ, но тип то один)
+  // if/then/else игнорируются
+  bool required = false;
+};
+
 struct object_type {
-  // TODO? видимо тут как минимум надо ещё указать какие из них требуемые и тд
-  array<type_ref> fields;
+  array<object_field_info> fields;
   optional<type_ref> additional_fields;
 };
 
@@ -102,6 +113,17 @@ struct type {
   }
   std::string_view jsonptr() const noexcept {
     return parse_ref(scope).json_ptr;
+  }
+
+  type_ref ref() const {
+    type_ref r;
+    if (name)
+      r.name = *name;
+    r.scope = scope;
+    if (std::holds_alternative<fundamental_e>(data))
+      r.fundamental = std::get<fundamental_e>(data);
+    assert(r.refers_to(*this));
+    return r;
   }
 
   bool operator==(const type& x) const noexcept {
