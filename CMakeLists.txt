@@ -6,6 +6,7 @@ include(cmake/deps.cmake)
 option(svarg_ENABLE_TESTING "enables testing" OFF)
 option(svarg_ENABLE_ASAN "build ASAN (for CI)" OFF)
 option(svarg_ENABLE_UBSAN "build UNSAN (for CI)" OFF)
+option(svarg_CI "marks that building on CI (for testing)" OFF)
 
 file(GLOB_RECURSE svarg_SRCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 

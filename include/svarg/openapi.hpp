@@ -33,7 +33,7 @@ struct svarg_options {
                                                         jsons_cache* cache = nullptr);
 
 // ожидается значение без ссылок не содержащих # (прошедшее resolve_raw_references)
-openapi_object parse_spec(boost::json::value, const svarg_options& options);
+openapi_object parse_spec(const boost::json::value&, const svarg_options& options);
 
 // конвертирует из ямла в json
 openapi_object parse_yaml_spec(std::string_view yaml, const svarg_options& options);

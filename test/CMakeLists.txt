@@ -16,6 +16,9 @@ foreach(test_src ${svarg_TESTS})
 		CXX_STANDARD 23
 		CMAKE_CXX_STANDARD_REQUIRED ON
 	)
+    if (svarg_CI)
+        target_compile_definitions(${test_name} PRIVATE SVARG_CI)
+    endif()
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
 

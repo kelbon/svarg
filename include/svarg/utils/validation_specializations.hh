@@ -59,6 +59,7 @@ struct validate<header_object> {
 // "If the parameter location is `path`, this property is REQUIRED and its value MUST be `true`."
 // "The `example` field is mutually exclusive of the `examples` field."
 // "A parameter MUST contain either a `schema` property, or a `content` property, but not both."
+// https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#parameter-object
 template <>
 struct validate<parameter_object> {
   void operator()(parameter_object const& v) {
@@ -66,6 +67,12 @@ struct validate<parameter_object> {
       throw validate_error("parameter_object `{}`: `required` must be true when `in` is `path`", v.name);
     if (v.example && v.examples)
       throw validate_error("parameter_object `{}`: `example` and `examples` are mutually exclusive", v.name);
+    if (!v.schema && !v.content) {
+      throw validate_error(
+          "parameter_object `{}`: parameter MUST contain either a `schema` property, or a `content` "
+          "property",
+          v.name);
+    }
     if (v.schema && v.content)
       throw validate_error("parameter_object `{}`: `schema` and `content` are mutually exclusive", v.name);
     if (v.content && v.content->size() != 1)
@@ -240,6 +247,14 @@ struct validate<security_scheme_object> {
       if (!v.openIdConnectUrl)
         throw validate_error("security_scheme_object (openIdConnect): `openIdConnectUrl` is required");
     }
+  }
+};
+
+template <>
+struct validate<openapi_object> {
+  void operator()(const openapi_object& v) {
+    if (!v.components && !v.webhooks && !v.paths)
+      throw validate_error("openapi object must contain atleast one of components/webhooks/paths");
   }
 };
 

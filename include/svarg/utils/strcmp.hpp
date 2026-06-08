@@ -7,7 +7,7 @@
 namespace svarg {
 
 // case insensitive
-inline bool ci_strcmp(std::string_view a, std::string_view b) {
+inline bool is_equal_ci(std::string_view a, std::string_view b) {
   return std::ranges::equal(
       a, b, [](char x, char y) { return std::tolower((unsigned char)x) == std::tolower((unsigned char)y); });
 }

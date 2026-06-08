@@ -13,12 +13,14 @@ namespace svarg {
 }
 
 ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesystem::path& file,
-                                 std::string_view jsonptr, std::vector<ir::type>& types, spec_loader& loader);
+                                 std::string_view jsonptr, std::unordered_set<ir::type>& types,
+                                 spec_loader& loader);
 
 [[nodiscard]] schema_and_type schema_or_ref_to_type_ref(const reference_or<schema_object>& sor,
                                                         const std::filesystem::path& file,
                                                         std::string_view jsonptr, size_t idx,
-                                                        std::vector<ir::type>& types, spec_loader& loader) {
+                                                        std::unordered_set<ir::type>& types,
+                                                        spec_loader& loader) {
   if (auto* ref = std::get_if<reference_object>(&sor)) {
     return loader.resolve_ref(*ref, file, types);
   } else {
@@ -29,7 +31,7 @@ ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesys
 }
 
 ir::object_type spec_loader::make_object_type(schema_object const& schema, const std::filesystem::path& file,
-                                              std::string_view jsonptr, std::vector<ir::type>& types) {
+                                              std::string_view jsonptr, std::unordered_set<ir::type>& types) {
   ir::object_type ot;
   if (schema.properties) {
     size_t i = 0;
@@ -76,7 +78,7 @@ ir::object_type spec_loader::make_object_type(schema_object const& schema, const
 // loader используется для определения директорий и тд
 // file - путь до текущего файла (относительно директории со спеками)
 ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesystem::path& file,
-                                 std::string_view jsonptr, std::vector<ir::type>& types,
+                                 std::string_view jsonptr, std::unordered_set<ir::type>& types,
                                  spec_loader& loader) {
   // TODO добавить кеш видимо (скоуп = файл + ссылка => type)
   if (!jsonptr.starts_with('/'))
@@ -84,9 +86,7 @@ ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesys
   ir::type res;
   res.scope = std::format("{}#{}", file.generic_string(), jsonptr);
   auto ret_res = [&] {
-    // TODO O(1)
-    if (!std::ranges::contains(types, res))
-      types.push_back(res);
+    types.insert(res);
     return std::move(res);
   };
   if (!is_unnamed(jsonptr)) {
@@ -238,7 +238,7 @@ static std::string scopes2jsonptr(std::span<const std::string_view> scopes, std:
 
 // ожидает что file относительно spec dir
 schema_and_type spec_loader::resolve_ref(reference_object ref, std::filesystem::path file,
-                                         std::vector<ir::type>& types) {
+                                         std::unordered_set<ir::type>& types) {
   // TODO cache ссылка + файл в тип
   parsed_ref r;
   // поля со всех ссылок складываются сюда. $ref + override FIELD1
@@ -248,7 +248,7 @@ schema_and_type spec_loader::resolve_ref(reference_object ref, std::filesystem::
     r = parse_ref(ref.ref_);
     std::filesystem::path refered_file =
         std::filesystem::relative(!r.file.empty() ? file.parent_path() / r.file : file);
-    const boost::json::value& v = jcache.load(find_existing_file(refered_file));
+    const boost::json::value& v = load_as_json(find_existing_file(refered_file));
     boost::json::value jref = v.at_pointer(r.json_ptr);
     if (!jref.is_object())
       throw semantic_error("refered by $ref must be json/yaml object, but got {}", e2str(jref.kind()));
@@ -298,7 +298,7 @@ template <typename What>
 struct vtor {
   std::filesystem::path obj_file;
   spec_loader* loader;
-  std::vector<ir::type> types;
+  std::unordered_set<ir::type> types;
   std::vector<std::string_view> scopes;
 
   explicit vtor(std::filesystem::path obj_file, spec_loader& l) : obj_file(std::move(obj_file)), loader(&l) {
@@ -381,6 +381,7 @@ struct vtor {
     dbgprint(name);
 
     if (auto* r = std::get_if<reference_object>(&x)) {
+      // TODO тут явно надо подумать что с другими делать (ссылки на параметры и тд)
       if constexpr (!std::is_same_v<T, What>)
         return;
       loader->resolve_ref(*r, obj_file, types);
@@ -401,6 +402,15 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
                                                  const std::filesystem::path& obj_file) {
   vtor<schema_object> v(obj_file, *this);
   boost::pfr::for_each_field_with_name(obj, refvtor(v));
+  // TODO надо пройти по операциями, калбекам и вебхукам
+  // и конвертировать их в IR. Операции - в operation, калбеки и вебхуки в webhooks
+  // т.е. по сути нужно посещать path item object. Вероятно это нужно вторым циклом делать
+  // операции только в obj.paths. Вебхуки - только в obj.webhooks. А вот калбеки абы где валяются, там визит
+  // и при проходе все ссылки сразу понятно куда. Если относительная - относительно этого файла
+  // если локальная - на этот файл (нужно добавлять эту инфу)
+  // TODO ещё pathItems в которых переиспользуемые в webhooks / paths операции..
+  // крч для pathItems если уж они встречаются - то операция дублируется в webhooks / operations
+  // потому что нахер не хочу ссылки городить и неиспользуемая фича максимально
   return ir::ir_object{.types = std::move(v.types)};
 }
 

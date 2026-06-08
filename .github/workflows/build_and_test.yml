@@ -40,6 +40,7 @@ jobs:
       - name: Configure CMake
         run: |
           cmake . -Dsvarg_ENABLE_TESTING=ON \
+            -Dsvarg_CI=ON                                 \
             -DCMAKE_BUILD_TYPE=${{matrix.build_type}}     \
             -DCMAKE_CXX_COMPILER=${{matrix.compiler}}     \
             -DCMAKE_CXX_STANDARD=${{matrix.cpp_standard}} \
@@ -60,6 +61,7 @@ jobs:
       - name: Configure CMake (ASAN)
         run:  |
           cmake . -Dsvarg_ENABLE_TESTING=ON \
+            -Dsvarg_CI=ON                                 \
             -DCMAKE_BUILD_TYPE=${{matrix.build_type}}     \
             -DCMAKE_CXX_COMPILER=${{matrix.compiler}}     \
             -DCMAKE_CXX_STANDARD=${{matrix.cpp_standard}} \
@@ -80,6 +82,7 @@ jobs:
       - name: Configure CMake (UBSAN)
         run:  |
           cmake . -Dsvarg_ENABLE_TESTING=ON \
+            -Dsvarg_CI=ON                                 \
             -DCMAKE_BUILD_TYPE=${{matrix.build_type}}     \
             -DCMAKE_CXX_COMPILER=${{matrix.compiler}}     \
             -DCMAKE_CXX_STANDARD=${{matrix.cpp_standard}} \

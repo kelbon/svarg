@@ -31,7 +31,7 @@ struct info_object {
 
 struct server_object {
   struct variable {
-    // MUST NOT be empty. Если пусто, значит поля не было
+    // MUST NOT be empty
     optional<array<string>> enum_;
     // если поле enum есть, то значение должно быть оттуда
     string default_;
@@ -184,7 +184,13 @@ struct schema_object {
   // логические операции над схемами
 
   // allOf, anyOf, oneOf должны быть не пустым массивом
+  // если есть одновременно type: и allOf/anyOf/oneOf/ not, то они обозначают требование, а не представление
+  // типа. н-р type: object + anyOf: required [A], required [B]
   optional<array<reference_or<schema_object>>> allOf;
+  // вопреки интуиции anyOf семантически парсит ВСЕ схемы, а не до первой попавшейся и выдаёт все поля,
+  // которые получилось собрать в результате
+  // для этого, вероятно, бекенду стоит объединять все типы в anyOf в некий один тип, либо просто делать это
+  // набором опциональных полей, т.е. anyOf [A, B, C] => struct { optional A, optional B, optional C }
   optional<array<reference_or<schema_object>>> anyOf;
   optional<array<reference_or<schema_object>>> oneOf;
   optional<reference_or<schema_object>> not_;
@@ -317,6 +323,8 @@ struct parameter_object {
   // разрешено только одно поле - example или examples
   optional<Any> example;
   optional<string_map<reference_or<example_object>>> examples;
+  // MUST содержать ровно одно значение
+  // Может быть указано ЛИБО schema ЛИБО content
   optional<string_map<media_type_object>> content;
 };
 
@@ -401,7 +409,7 @@ struct oauth_flows_object {
   optional<oauth_flow_object> clientCredentials;
   optional<oauth_flow_object> authorizationCode;
 };
-// TODO дописать валидацию
+
 struct security_scheme_object {
   // возможные значения: "apiKey", "http", "mutualTLS", "oauth2"
   // "openIdConnect"
@@ -444,7 +452,7 @@ struct path_item_object {
   // ссылка на другой path_item_object
   // "базовый" объхект по сути, поведение зависит от реализации
   // у меня думаю надо чтобы новые поля перекрывали базовые
-  optional<string> $ref;
+  optional<string> ref_;
   optional<string> summary;
   optional<string> description;
   optional<operation_object> get;
@@ -495,6 +503,7 @@ struct openapi_object {
   // если этого поля нет или пустое, то это эквивалентно
   // одному server_object{.url = "/"}
   optional<array<server_object>> servers;
+  // Должно быть хотя бы одно paths/webhooks/components
   optional<paths_object> paths;
   optional<string_map<path_item_object>> webhooks;
   optional<components_object> components;

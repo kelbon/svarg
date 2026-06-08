@@ -3,10 +3,9 @@
 namespace svarg::ir {
 
 void ir_object::merge(ir_object other) {
-  for (auto&& t : other.types) {
-    if (!std::ranges::contains(types, t))
-      types.push_back(std::move(t));
-  }
+  types.merge(std::move(other.types));
+  operations.merge(std::move(other.operations));
+  webhooks.merge(std::move(other.webhooks));
 }
 
 bool type_ref::refers_to(const type& t) const noexcept {

@@ -9,6 +9,8 @@
 
 namespace svarg {
 
+// можно подавать и json тоже, внезапно.
+// так как json это подмножество yaml
 std::string yaml2json(std::string_view yaml);
 std::string load_yaml_as_json(std::filesystem::path yaml);
 
@@ -21,7 +23,12 @@ struct jsons_cache {
   std::unordered_map<std::filesystem::path, boost::json::value> cache;
 
  public:
-  const boost::json::value& load(std::filesystem::path path);
+  const boost::json::value& load(std::filesystem::path path) {
+    return load_mutable(std::move(path));
+  }
+  // нужно использовать осторожно, учитывая что значение лежит в кеше.
+  // но иногда кеш нужно поменять
+  boost::json::value& load_mutable(std::filesystem::path path);
 };
 
 }  // namespace svarg

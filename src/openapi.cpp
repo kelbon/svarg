@@ -6,7 +6,7 @@ namespace svarg {
 // удаляет всякое лишнее, что по спецификации нужно игнорировать и тд и тп
 void postprocess_openapi_object(openapi_object& obj);
 
-openapi_object parse_spec(boost::json::value v, const svarg_options& options) {
+openapi_object parse_spec(const boost::json::value& v, const svarg_options& options) {
   openapi_object obj;
   parse<openapi_object>{}(v, obj);
   postprocess_openapi_object(obj);

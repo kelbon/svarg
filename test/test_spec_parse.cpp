@@ -9,6 +9,12 @@
 
 // TODO обновить yaml либу (коммит с исправлением пробелов)
 
+TEST("json is an yaml") {
+  std::string json = R"({"name":"Alice","age":30,"tags":["dev","cpp"]})";
+  std::string out = svarg::yaml2json(json);
+  REQUIRE(boost::json::parse(json) == boost::json::parse(out));
+}
+
 TEST("spec loader") {
   svarg::spec_loader loader;
 
@@ -20,7 +26,9 @@ TEST("spec loader") {
     if (x.spec() == "test_specs/TS29571_CommonData.yaml")
       std::cout << x.jsonptr() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
   }
+  REQUIRE(o.types.size() == 1740);
 }
+
 TEST("parse_spec") {
   svarg::svarg_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);
@@ -45,6 +53,8 @@ TEST("raw_refs") {
   svarg::pretty_print(f2, svarg::serialize_as_json(o));
 }
 
+// на CI нельзя идти в сеть так напрямую
+#ifndef SVARG_CI
 TEST("network links") {
   svarg::svarg_options options;
   options.resolve_url_refs = true;
@@ -117,6 +127,7 @@ paths:
   svarg::openapi_object o = svarg::parse_yaml_spec(api, options);
   REQUIRE(boost::json::parse(expected_json) == svarg::serialize_as_json(o));
 }
+#endif
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;

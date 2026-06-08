@@ -37,9 +37,11 @@ struct spec_loader {
 
  public:
   void load_spec(std::filesystem::path s) {
-    s = std::filesystem::relative(s, specs_dir);
+    if (!std::filesystem::exists(s) || !std::filesystem::is_regular_file(s))
+      throw parse_error("path `{}` do not refer to file", s.generic_string());
     if (specs_dir.empty())
       specs_dir = s.parent_path();
+    s = std::filesystem::relative(s, specs_dir);
     if (!specs.contains(s))
       specs[s] = do_parse_spec_file(s);
     loaded_specs.insert(std::move(s));
@@ -66,17 +68,18 @@ struct spec_loader {
     if (std::filesystem::exists(p) && std::filesystem::is_regular_file(p))
       return filepart;
     // TODO -I
-    // TODO добавить список проверенных путей
+    // TODO добавить в ошибку список проверенных путей
     throw parse_error("no such file: `{}`", filepart.generic_string());
   }
 
   // возвращает тип, но и вставляет его в types (если его там не было)
-  schema_and_type resolve_ref(reference_object obj, std::filesystem::path file, std::vector<ir::type>& types);
+  schema_and_type resolve_ref(reference_object obj, std::filesystem::path file,
+                              std::unordered_set<ir::type>& types);
 
   // file - относительно specs dir, jsonptr должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
   ir::object_type make_object_type(schema_object const& schema, const std::filesystem::path& file,
-                                   std::string_view jsonptr, std::vector<ir::type>& types);
+                                   std::string_view jsonptr, std::unordered_set<ir::type>& types);
 
   template <typename... Args>
   void emit_warn(const std::filesystem::path& where, std::string_view jsonptr,
@@ -86,10 +89,18 @@ struct spec_loader {
   }
 
  private:
+  const boost::json::value& load_as_json(std::filesystem::path const& p) {
+    // spec_dir != cwd
+    // не включен ассёрт, так как файловую систему могут поменять
+    // assert(std::filesystem::is_directory(specs_dir));
+    return jcache.load(specs_dir / p);
+  }
   openapi_object do_parse_spec_file(std::filesystem::path spec) {
-    boost::json::value v = jcache.load(std::move(spec));
+    // подменяем кеш, чтобы в нём не было незарезолвленных сырых ссылок
+    boost::json::value& v = jcache.load_mutable(specs_dir / spec);
+    // resolve_raw_references НЕ использует jcache, так что это безопасно
     v = resolve_raw_references(std::move(v), opts);
-    return parse_spec(std::move(v), opts);
+    return parse_spec(std::as_const(v), opts);
   }
   template <typename>
   friend struct vtor;

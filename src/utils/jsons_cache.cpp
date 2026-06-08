@@ -35,7 +35,7 @@ inline std::string load_yaml_as_json(std::filesystem::path yaml) {
   return yaml2json(std::string_view(file.data(), file.size()));
 }
 
-const boost::json::value& jsons_cache::load(std::filesystem::path path) {
+boost::json::value& jsons_cache::load_mutable(std::filesystem::path path) {
   path = std::filesystem::canonical(path);
   auto it = cache.find(path);
   if (it != cache.end())

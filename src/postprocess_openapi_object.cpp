@@ -11,7 +11,7 @@ namespace detail {
 static void remove_content_type_header(optional<string_map<reference_or<header_object>>>& headers) {
   if (!headers)
     return;
-  std::erase_if(*headers, [](auto const& kv) { return ci_strcmp(kv.first, "Content-Type"); });
+  std::erase_if(*headers, [](auto const& kv) { return is_equal_ci(kv.first, "Content-Type"); });
 }
 
 // https://spec.openapis.org/oas/v3.1.0#fixed-fields-9
@@ -30,7 +30,7 @@ static void remove_ignored_header_params(optional<array<reference_or<parameter_o
     // по спеке не написано явно как сравнивать хедера, но в HTTP/2 хедера case insensitive
     // поэтому логично не допускать conTeNt-tYpe и тд хедера здесь
     for (auto name : ignored)
-      if (ci_strcmp(p->name, name))
+      if (is_equal_ci(p->name, name))
         return true;
     return false;
   });
