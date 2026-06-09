@@ -4,7 +4,7 @@
 
 namespace svarg {
 
-[[nodiscard]] constexpr std::string_view cut_path_segment(std::string_view& path) noexcept {
+constexpr std::string_view cut_path_segment(std::string_view& path) noexcept {
   auto pos = path.find('/');
   std::string_view segment;
   if (pos != std::string_view::npos) {
@@ -15,6 +15,14 @@ namespace svarg {
     path = {};
   }
   return segment;
+}
+
+// принимает path / json pointer
+[[nodiscard]] constexpr std::string_view last_segment(std::string_view path) noexcept {
+  auto pos = path.find_last_of('/');
+  if (pos == path.npos)
+    return path;
+  return path.substr(pos + 1);
 }
 
 template <typename F>

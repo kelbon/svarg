@@ -4,7 +4,6 @@
 
 using svarg::is_equal_paths_template_insensitve;
 
-// одинаковые пути
 TEST("is_equal_paths_template_insensitve") {
   REQUIRE(is_equal_paths_template_insensitve("/users", "/users"));
   REQUIRE(is_equal_paths_template_insensitve("/users/{id}", "/users/{name}"));

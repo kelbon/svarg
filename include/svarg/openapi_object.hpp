@@ -72,7 +72,6 @@ MyResponseType:
 */
 struct discriminator_object {
   string propertyName;
-  // TODO генерировать дефолтный маппинг перед IR, если его нет
   optional<string_map<string>> mapping;
 };
 

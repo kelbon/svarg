@@ -296,12 +296,24 @@ struct validate<schema_object> {
 template <>
 struct postparse<schema_object> {
   void operator()(schema_object& schema) {
+    if (schema.const_) {
+      if (schema.enum_ && !std::ranges::contains(*schema.enum_, *schema.const_)) {
+        // TODO добавить варн
+        // никогда не сработает
+        schema._keyfield_boolean_schema = false;
+      }
+      schema.enum_.emplace().emplace_back(std::move(*schema.const_));
+      schema.const_ = std::nullopt;
+    }
+
     if (schema.type) {
       auto it = std::ranges::find(schema.type->values, "null");
       if (it != schema.type->values.end()) {
         schema.nullable = true;
         schema.type->values.erase(it);
       }
+    } else if (schema.properties) {
+      schema.type.emplace().values.push_back("object");
     }
     if (schema.is_write_only() && schema.is_read_only()) {
       // бессмысленно (может так просто вышло после складывания ссылок)

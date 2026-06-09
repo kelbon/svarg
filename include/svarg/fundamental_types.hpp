@@ -25,6 +25,8 @@ namespace svarg {
 
 struct Any {
   boost::json::value value;
+
+  bool operator==(const Any&) const = default;
 };
 
 template <typename T>

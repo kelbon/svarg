@@ -11,7 +11,7 @@
 namespace svarg {
 
 struct resolved_schema {
-  ir::schema ir_schema;
+  ir::schema_ref ir_schema;
   schema_object front_schema;
 };
 
@@ -35,7 +35,32 @@ struct spec_loader {
   std::filesystem::path specs_dir;
   jsons_cache jcache;
 
+ public:  // TODO private
+  // схемы создаваемые прямо сейчас (scope + name) => количество активных resolve, чтобы избегать рекурсии
+  std::unordered_map<std::string, size_t> schemas_in_progress;
+
+  struct resolve_ref_cache_key {
+    std::string path;  // generic string пути
+    std::string ref;
+
+    bool operator==(const resolve_ref_cache_key&) const = default;
+  };
+  struct resolve_refs_hasher {
+    size_t operator()(const resolve_ref_cache_key& k) const noexcept {
+      size_t seed = 0;
+      boost::hash_combine(seed, k.path);
+      boost::hash_combine(seed, k.ref);
+      return seed;
+    }
+  };
+  std::unordered_map<resolve_ref_cache_key, resolved_schema, resolve_refs_hasher> resolved_refs_cache;
+
  public:
+  std::string make_schemas_in_progress_key(const std::filesystem::path& file, std::string_view jsonptr,
+                                           std::optional<std::string_view> name = std::nullopt) {
+    return std::format("{}#{}{}", file.generic_string(), jsonptr, name ? "" : *name);
+  }
+
   void load_spec(std::filesystem::path s) {
     if (!std::filesystem::exists(s) || !std::filesystem::is_regular_file(s))
       throw parse_error("path `{}` do not refer to file", s.generic_string());
@@ -87,6 +112,10 @@ struct spec_loader {
     std::cout << std::format("in {}#{}. warning: {}\n", where.generic_string(), jsonptr,
                              std::format(fmt, std::forward<Args>(args)...));
   }
+
+  ir::schema schema_lowering(const schema_object& schema, const std::filesystem::path& file,
+                             std::string_view jsonptr, std::optional<std::string_view> name,
+                             std::unordered_set<ir::schema>& schemas);
 
  private:
   const boost::json::value& load_as_json(std::filesystem::path const& p) {

@@ -53,16 +53,24 @@ struct schema_ref {
 };
 
 struct enum_schema {
+  optional<schema_ref> type;
   array<Any> values;
 };
 
+struct discriminator_desc {
+  string propertyName;
+  // при конвертации с фронтенда здесь оказывается полный маппинг
+  // значение дискриминатора => ссылка на тип который ему соответствует
+  string_map<schema_ref> mapping;
+};
+
 struct oneof_schema {
-  optional<discriminator_object> discriminator;
+  optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct anyof_schema {
-  optional<discriminator_object> discriminator;
+  optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
@@ -92,7 +100,6 @@ struct array_schema {
 };
 
 struct not_schema {
-  // TODO inline parse
   schema_ref type;
 };
 
@@ -109,19 +116,26 @@ struct schema {
   // spec#jsonptr ref на место где определён тип (не включает имя типа)
   string scope;
   optional<string> name;
-  std::variant<fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema, object_schema,
-               array_schema, not_schema, never_schema, any_schema>
+  // представление типа (то что получит пользователь генератора)
+  std::variant<any_schema, fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
+               object_schema, array_schema, not_schema, never_schema>
       data;
-  // TODO? require? типа требования из anyOf/oneOf/allOf/not когда уже указан type?
-  // придётся мб по __inline_schema искать и всё такое
-  // TODO? в схему добавить напрямую not, чтобы прямо в схеме накостылять not...?
-  // TODO в ir должны быть не типы, а схемы всё таки
+  // схемы которые не влияют на представление, только на валидацию
+  // н-р type: string enum: ... это означает что пользователь увидит строку, но она провалидируется по тому
+  // что написано в enum
+  optional<array<schema_ref>> required;
 
   std::string_view spec() const noexcept {
     return parse_ref(scope).file;
   }
   std::string_view jsonptr() const noexcept {
     return parse_ref(scope).json_ptr;
+  }
+
+  void add_requirement(schema_ref s) {
+    if (!required)
+      required.emplace();
+    required->push_back(std::move(s));
   }
 
   schema_ref ref() const {

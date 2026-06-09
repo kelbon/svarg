@@ -26,7 +26,7 @@ TEST("spec loader") {
     if (x.spec() == "test_specs/TS29571_CommonData.yaml")
       std::cout << x.jsonptr() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
   }
-  REQUIRE(o.schemas.size() == 1740);
+  REQUIRE(o.schemas.size() == 1885);
 }
 
 TEST("parse_spec") {
@@ -53,7 +53,6 @@ TEST("raw_refs") {
   svarg::pretty_print(f2, svarg::serialize_as_json(o));
 }
 
-#define SVARG_CI
 // на CI нельзя идти в сеть так напрямую
 #ifndef SVARG_CI
 TEST("network links") {
@@ -132,3 +131,4 @@ paths:
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;
+// TODO тесты на парсинг разных типов. В том числе рекурсивных, с всякими anyof и тд
