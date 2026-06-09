@@ -13,7 +13,7 @@
 
 namespace svarg::ir {
 
-struct type;
+struct schema;
 
 enum struct fundamental_e {
   null,
@@ -42,36 +42,36 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
 }
 
 // fundamental | name + scope
-struct type_ref {
+struct schema_ref {
   optional<string> name;
   // REQUIRED если name есть (не включает имя типа)
   optional<string> scope;
   // указано если тип это фундаментальный null/boolean/string/number/integer НЕ array/object
   optional<fundamental_e> fundamental;
 
-  [[nodiscard]] bool refers_to(const type&) const noexcept;
+  [[nodiscard]] bool refers_to(const schema&) const noexcept;
 };
 
-struct enum_type {
+struct enum_schema {
   array<Any> values;
 };
 
-struct oneof_type {
+struct oneof_schema {
   optional<discriminator_object> discriminator;
-  array<type_ref> types;
+  array<schema_ref> schemas;
 };
 
-struct anyof_type {
+struct anyof_schema {
   optional<discriminator_object> discriminator;
-  array<type_ref> types;
+  array<schema_ref> schemas;
 };
 
-struct allof_type {
-  array<type_ref> types;
+struct allof_schema {
+  array<schema_ref> schemas;
 };
 
 struct object_field_info {
-  type_ref type;
+  schema_ref type;
   string name;
   // поле считается required если
   // * указано в required: [...]
@@ -82,35 +82,35 @@ struct object_field_info {
   bool required = false;
 };
 
-struct object_type {
+struct object_schema {
   array<object_field_info> fields;
-  optional<type_ref> additional_fields;
+  optional<schema_ref> additional_fields;
 };
 
-struct array_type {
-  type_ref element;
+struct array_schema {
+  schema_ref element;
 };
 
-struct not_type {
+struct not_schema {
   // TODO inline parse
-  type_ref type;
+  schema_ref type;
 };
 
 // соответствует схеме false
 // т.е. любой тип должен проваливать проверку
-struct never_type {};
+struct never_schema {};
 
 // соответствует схеме true
 // т.е. любой тип подходит
-struct any_type {};
+struct any_schema {};
 
 // fundamental | enum | object_type | oneof | anyof | allof
-struct type {
+struct schema {
   // spec#jsonptr ref на место где определён тип (не включает имя типа)
   string scope;
   optional<string> name;
-  std::variant<fundamental_e, enum_type, oneof_type, anyof_type, allof_type, object_type, array_type,
-               not_type, never_type, any_type>
+  std::variant<fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema, object_schema,
+               array_schema, not_schema, never_schema, any_schema>
       data;
   // TODO? require? типа требования из anyOf/oneOf/allOf/not когда уже указан type?
   // придётся мб по __inline_schema искать и всё такое
@@ -124,8 +124,8 @@ struct type {
     return parse_ref(scope).json_ptr;
   }
 
-  type_ref ref() const {
-    type_ref r;
+  schema_ref ref() const {
+    schema_ref r;
     if (name)
       r.name = *name;
     r.scope = scope;
@@ -135,7 +135,7 @@ struct type {
     return r;
   }
 
-  bool operator==(const type& x) const noexcept {
+  bool operator==(const schema& x) const noexcept {
     return scope == x.scope && name == x.name;
   }
 };
@@ -152,7 +152,7 @@ using meta_t = string_map<Any>;
 struct operation_parameter {
   parameter_location location = parameter_location::path;
   string name;
-  type_ref schema;
+  schema_ref schema;
   // по умолчанию false
   optional<bool> required;
   // аналогично упрощённому encoding из openapi
@@ -172,7 +172,7 @@ struct header {
   // по умолчанию false
   optional<bool> required;
   // по умолчанию эквивалентно type: string
-  optional<type_ref> schema;
+  optional<schema_ref> schema;
 
   bool operator==(const header& r) const noexcept {
     return is_equal_ci(name, r.name);
@@ -213,7 +213,7 @@ struct body {
   // может быть также media type range */* - любой, image/* (image/x* уже невалидно)
   // выигрывает более специализированный
   string contentType;
-  type_ref schema;
+  schema_ref schema;
   // мапа имя property из schema => как его кодировать конкретно в этом теле
   optional<string_map<string>> membersEncoding;
 
@@ -328,8 +328,8 @@ struct operation {
 namespace std {
 
 template <>
-struct hash<::svarg::ir::type> {
-  size_t operator()(const ::svarg::ir::type& t) const {
+struct hash<::svarg::ir::schema> {
+  size_t operator()(const ::svarg::ir::schema& t) const {
     size_t seed = 0;
     boost::hash_combine(seed, t.scope);
     if (t.name)
@@ -363,8 +363,7 @@ struct hash<::svarg::ir::operation> {
 namespace svarg::ir {
 
 struct ir_object {
-  // пока примитивно есть просто типы
-  std::unordered_set<type> types;
+  std::unordered_set<schema> schemas;
   std::unordered_set<operation> operations;
   // здесь помимо webhooks лежат callbacks (они то же самое, но ещё вычислимый url)
   std::unordered_set<operation> webhooks;

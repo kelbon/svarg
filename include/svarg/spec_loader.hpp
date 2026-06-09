@@ -10,9 +10,9 @@
 
 namespace svarg {
 
-struct schema_and_type {
-  ir::type type;
-  schema_object schema;
+struct resolved_schema {
+  ir::schema ir_schema;
+  schema_object front_schema;
 };
 
 // загружает спецификацию, затем разрешает все ссылки в ней
@@ -73,13 +73,13 @@ struct spec_loader {
   }
 
   // возвращает тип, но и вставляет его в types (если его там не было)
-  schema_and_type resolve_ref(reference_object obj, std::filesystem::path file,
-                              std::unordered_set<ir::type>& types);
+  resolved_schema resolve_ref(reference_object obj, std::filesystem::path file,
+                              std::unordered_set<ir::schema>& types);
 
   // file - относительно specs dir, jsonptr должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
-  ir::object_type make_object_type(schema_object const& schema, const std::filesystem::path& file,
-                                   std::string_view jsonptr, std::unordered_set<ir::type>& types);
+  ir::object_schema make_object_type(schema_object const& schema, const std::filesystem::path& file,
+                                     std::string_view jsonptr, std::unordered_set<ir::schema>& types);
 
   template <typename... Args>
   void emit_warn(const std::filesystem::path& where, std::string_view jsonptr,

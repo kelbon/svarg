@@ -12,27 +12,28 @@ namespace svarg {
   return !jsonptr.starts_with("/components/schemas");
 }
 
-ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesystem::path& file,
-                                 std::string_view jsonptr, std::unordered_set<ir::type>& types,
-                                 spec_loader& loader);
-
-[[nodiscard]] schema_and_type schema_or_ref_to_type_ref(const reference_or<schema_object>& sor,
+ir::schema schema_lowering(const schema_object& schema, const std::filesystem::path& file,
+                           std::string_view jsonptr, std::unordered_set<ir::schema>& schemas,
+                           spec_loader& loader);
+// TODO
+[[nodiscard]] resolved_schema schema_or_ref_to_type_ref(const reference_or<schema_object>& sor,
                                                         const std::filesystem::path& file,
                                                         std::string_view jsonptr, size_t idx,
-                                                        std::unordered_set<ir::type>& types,
+                                                        std::unordered_set<ir::schema>& schemas,
                                                         spec_loader& loader) {
   if (auto* ref = std::get_if<reference_object>(&sor)) {
-    return loader.resolve_ref(*ref, file, types);
+    return loader.resolve_ref(*ref, file, schemas);
   } else {
     std::string synthetic = std::format("{}/__inline_schema_{}", jsonptr, idx);
-    ir::type t = frontend_schema2ir_type(std::get<schema_object>(sor), file, synthetic, types, loader);
+    ir::schema t = schema_lowering(std::get<schema_object>(sor), file, synthetic, schemas, loader);
     return {std::move(t), std::get<schema_object>(sor)};
   }
 }
 
-ir::object_type spec_loader::make_object_type(schema_object const& schema, const std::filesystem::path& file,
-                                              std::string_view jsonptr, std::unordered_set<ir::type>& types) {
-  ir::object_type ot;
+ir::object_schema spec_loader::make_object_type(schema_object const& schema,
+                                                const std::filesystem::path& file, std::string_view jsonptr,
+                                                std::unordered_set<ir::schema>& schemas) {
+  ir::object_schema ot;
   if (schema.properties) {
     size_t i = 0;
     for (auto& [prop_name, prop_sor] : *schema.properties) {
@@ -43,7 +44,7 @@ ir::object_type spec_loader::make_object_type(schema_object const& schema, const
       std::string prop_ptr = std::format("{}/properties/{}", jsonptr, prop_name);
       ir::object_field_info fi;
       fi.name = prop_name;
-      auto [type, field_schema] = schema_or_ref_to_type_ref(prop_sor, file, prop_ptr, i, types, *this);
+      auto [type, field_schema] = schema_or_ref_to_type_ref(prop_sor, file, prop_ptr, i, schemas, *this);
       fi.type = type.ref();
       if (field_schema.nullable || field_schema.default_)
         fi.required = false;
@@ -69,92 +70,94 @@ ir::object_type spec_loader::make_object_type(schema_object const& schema, const
   }
   if (schema.additionalProperties) {
     ot.additional_fields =
-        schema_or_ref_to_type_ref(*schema.additionalProperties, file, jsonptr, 0, types, *this).type.ref();
+        schema_or_ref_to_type_ref(*schema.additionalProperties, file, jsonptr, 0, schemas, *this)
+            .ir_schema.ref();
   }
   return ot;
 }
 
-// добавляет встреченные типы в `types`. Как минимум один из schema + инлайн схемы
+// добавляет встреченные схемы в `schemas`. Как минимум один из schema + инлайн схемы
 // loader используется для определения директорий и тд
 // file - путь до текущего файла (относительно директории со спеками)
-ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesystem::path& file,
-                                 std::string_view jsonptr, std::unordered_set<ir::type>& types,
-                                 spec_loader& loader) {
+ir::schema schema_lowering(const schema_object& schema, const std::filesystem::path& file,
+                           std::string_view jsonptr, std::unordered_set<ir::schema>& schemas,
+                           spec_loader& loader) {
   // TODO добавить кеш видимо (скоуп = файл + ссылка => type)
   if (!jsonptr.starts_with('/'))
     throw semantic_error("invalid part of $ref after # (`{}`), must start with /", jsonptr);
-  ir::type res;
+  ir::schema res;
   res.scope = std::format("{}#{}", file.generic_string(), jsonptr);
   auto ret_res = [&] {
-    types.insert(res);
+    schemas.insert(res);
     return std::move(res);
   };
   if (!is_unnamed(jsonptr)) {
     auto pos = jsonptr.find_last_of('/');
     std::string_view name = jsonptr.substr(pos + 1);
     if (name.empty())
-      throw semantic_error("name of type cannot be empty");
+      throw semantic_error("name of schema cannot be empty");
     res.name = std::string(name);
   }
   // ── boolean schema ──────────────────────────────────────────────────────────
   if (schema.allow_always()) {
-    res.data = ir::any_type{};
+    res.data = ir::any_schema{};
     return ret_res();
   }
   if (schema.allow_never()) {
-    res.data = ir::never_type{};
+    res.data = ir::never_schema{};
     return ret_res();
   }
 
   // ── enum_ / const_ ─────────────────────────────────────────────────────────
   // const_ == enum с одним значением
   if (schema.const_) {
-    res.data = ir::enum_type{.values = {*schema.const_}};
+    res.data = ir::enum_schema{.values = {*schema.const_}};
     return ret_res();
   }
   if (schema.enum_) {
     if (schema.enum_->empty())
       throw semantic_error("enum at `{}` must have at least one value", jsonptr);
-    res.data = ir::enum_type{.values = *schema.enum_};
+    res.data = ir::enum_schema{.values = *schema.enum_};
     return ret_res();
   }
 
   // ── логические комбинаторы ──────────────────────────────────────────────────
   // Проверяем их до type, потому что type может отсутствовать при наличии anyOf и т.п.
 
+  // TODO проверять сначала type. Потому что он важнее, затем уже это просто требование
   if (schema.allOf) {
-    ir::allof_type t;
+    ir::allof_schema t;
     // TODO индекс чтобы не зависел от места
     for (size_t i = 0; i < schema.allOf->size(); ++i)
-      t.types.push_back(
-          schema_or_ref_to_type_ref((*schema.allOf)[i], file, jsonptr, i, types, loader).type.ref());
+      t.schemas.push_back(
+          schema_or_ref_to_type_ref((*schema.allOf)[i], file, jsonptr, i, schemas, loader).ir_schema.ref());
     res.data = std::move(t);
     return ret_res();
   }
 
   if (schema.anyOf) {
-    ir::anyof_type t;
+    ir::anyof_schema t;
     t.discriminator = schema.discriminator;
     for (size_t i = 0; i < schema.anyOf->size(); ++i)
-      t.types.push_back(
-          schema_or_ref_to_type_ref((*schema.anyOf)[i], file, jsonptr, i, types, loader).type.ref());
+      t.schemas.push_back(
+          schema_or_ref_to_type_ref((*schema.anyOf)[i], file, jsonptr, i, schemas, loader).ir_schema.ref());
     res.data = std::move(t);
     return ret_res();
   }
 
   if (schema.oneOf) {
-    ir::oneof_type t;
+    ir::oneof_schema t;
     t.discriminator = schema.discriminator;
     for (size_t i = 0; i < schema.oneOf->size(); ++i)
-      t.types.push_back(
-          schema_or_ref_to_type_ref((*schema.oneOf)[i], file, jsonptr, i, types, loader).type.ref());
+      t.schemas.push_back(
+          schema_or_ref_to_type_ref((*schema.oneOf)[i], file, jsonptr, i, schemas, loader).ir_schema.ref());
     res.data = std::move(t);
     return ret_res();
   }
 
   if (schema.not_) {
-    ir::not_type t;
-    t.type = schema_or_ref_to_type_ref(*schema.not_, file, jsonptr, 0, types, loader).type.ref();
+    ir::not_schema t;
+    t.type = schema_or_ref_to_type_ref(*schema.not_, file, jsonptr, 0, schemas, loader).ir_schema.ref();
     res.data = std::move(t);
     return ret_res();
   }
@@ -171,14 +174,15 @@ ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesys
       const auto& t = rtypes[0];
 
       if (t == "object") {
-        res.data = loader.make_object_type(schema, file, jsonptr, types);
+        res.data = loader.make_object_type(schema, file, jsonptr, schemas);
         return ret_res();
       }
 
       if (t == "array") {
-        ir::array_type at;
+        ir::array_schema at;
         if (schema.items) {
-          at.element = schema_or_ref_to_type_ref(*schema.items, file, jsonptr, 0, types, loader).type.ref();
+          at.element =
+              schema_or_ref_to_type_ref(*schema.items, file, jsonptr, 0, schemas, loader).ir_schema.ref();
         } else {
           throw parse_error("schema with type 'array' must contain 'items'");
         }
@@ -193,9 +197,9 @@ ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesys
       return ret_res();
     }
 
-    // Несколько типов → anyOf из фундаментальных type_ref-ов
+    // Несколько схем → anyOf из фундаментальных schema_ref-ов
     // Например: ["string", "null"] или ["integer", "string"]
-    ir::anyof_type anyof;
+    ir::anyof_schema anyof;
     for (auto& t : rtypes) {
       ir::fundamental_e fe;
       efromstr(t, fe);
@@ -203,9 +207,9 @@ ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesys
         throw semantic_error(
             "field type with several types, where one of them object or array is not supported");
       }
-      ir::type_ref ref;
+      ir::schema_ref ref;
       ref.fundamental = fe;
-      anyof.types.push_back(std::move(ref));
+      anyof.schemas.push_back(std::move(ref));
     }
     res.data = std::move(anyof);
     return ret_res();
@@ -213,12 +217,12 @@ ir::type frontend_schema2ir_type(const schema_object& schema, const std::filesys
 
   // ── нет type, нет комбинаторов, но есть properties → object ───────────────
   if (schema.properties) {
-    res.data = loader.make_object_type(schema, file, jsonptr, types);
+    res.data = loader.make_object_type(schema, file, jsonptr, schemas);
     return ret_res();
   }
 
   // ── полностью пустая схема без type → any ──────────────────────────────────
-  res.data = ir::any_type{};
+  res.data = ir::any_schema{};
   return ret_res();
 }
 
@@ -237,8 +241,8 @@ static std::string scopes2jsonptr(std::span<const std::string_view> scopes, std:
 }
 
 // ожидает что file относительно spec dir
-schema_and_type spec_loader::resolve_ref(reference_object ref, std::filesystem::path file,
-                                         std::unordered_set<ir::type>& types) {
+resolved_schema spec_loader::resolve_ref(reference_object ref, std::filesystem::path file,
+                                         std::unordered_set<ir::schema>& schemas) {
   // TODO cache ссылка + файл в тип
   parsed_ref r;
   // поля со всех ссылок складываются сюда. $ref + override FIELD1
@@ -256,7 +260,7 @@ schema_and_type spec_loader::resolve_ref(reference_object ref, std::filesystem::
       jref.as_object()[k] = j.value;
     auto ref_or_schema = parse_from_json<reference_or<schema_object>>(jref);
     if (auto* schema = std::get_if<schema_object>(&ref_or_schema)) {
-      return {frontend_schema2ir_type(*schema, refered_file, r.json_ptr, types, *this), std::move(*schema)};
+      return {schema_lowering(*schema, refered_file, r.json_ptr, schemas, *this), std::move(*schema)};
     }
     ref = std::get<reference_object>(std::move(ref_or_schema));
     file = std::move(refered_file);
@@ -298,7 +302,7 @@ template <typename What>
 struct vtor {
   std::filesystem::path obj_file;
   spec_loader* loader;
-  std::unordered_set<ir::type> types;
+  std::unordered_set<ir::schema> schemas;
   std::vector<std::string_view> scopes;
 
   explicit vtor(std::filesystem::path obj_file, spec_loader& l) : obj_file(std::move(obj_file)), loader(&l) {
@@ -372,7 +376,7 @@ struct vtor {
 
   void operator()(std::string_view name, const schema_object& x) try {
     dbgprint(name);
-    frontend_schema2ir_type(x, obj_file, scopes2jsonptr(scopes, name), types, *loader);
+    schema_lowering(x, obj_file, scopes2jsonptr(scopes, name), schemas, *loader);
   }
   SVARG_ADD_EXCEPTION_INFO(parse_error, name);
 
@@ -384,7 +388,7 @@ struct vtor {
       // TODO тут явно надо подумать что с другими делать (ссылки на параметры и тд)
       if constexpr (!std::is_same_v<T, What>)
         return;
-      loader->resolve_ref(*r, obj_file, types);
+      loader->resolve_ref(*r, obj_file, schemas);
     } else {
       (*this)(name, *std::get_if<T>(&x));
     }
@@ -411,7 +415,7 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
   // TODO ещё pathItems в которых переиспользуемые в webhooks / paths операции..
   // крч для pathItems если уж они встречаются - то операция дублируется в webhooks / operations
   // потому что нахер не хочу ссылки городить и неиспользуемая фича максимально
-  return ir::ir_object{.types = std::move(v.types)};
+  return ir::ir_object{.schemas = std::move(v.schemas)};
 }
 
 ir::ir_object spec_loader::generate() {
