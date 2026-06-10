@@ -10,6 +10,8 @@
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/path_tools.hpp"
 #include "svarg/utils/strcmp.hpp"
+#include "svarg/utils/combined_hash.hpp"
+#include "svarg/utils/to_underlying.hpp"
 
 namespace svarg::ir {
 
@@ -138,7 +140,7 @@ struct schema {
     required->push_back(std::move(s));
   }
 
-  schema_ref ref() const {
+  schema_ref ref() const& {
     schema_ref r;
     if (name)
       r.name = *name;
@@ -146,6 +148,23 @@ struct schema {
     if (std::holds_alternative<fundamental_e>(data))
       r.fundamental = std::get<fundamental_e>(data);
     assert(r.refers_to(*this));
+    return r;
+  }
+
+  ir::schema_ref ref() const&& {
+    return ref();
+  }
+
+  schema_ref ref() & {
+    return std::as_const(*this).ref();
+  }
+  schema_ref ref() && {
+    schema_ref r;
+    if (name)
+      r.name = std::move(*name);
+    r.scope = std::move(scope);
+    if (std::holds_alternative<fundamental_e>(data))
+      r.fundamental = std::get<fundamental_e>(data);
     return r;
   }
 
@@ -200,21 +219,18 @@ namespace std {
 template <>
 struct hash<::svarg::ir::header> {
   size_t operator()(const ::svarg::ir::header& h) const {
-    size_t seed = 0;
+    svarg::combined_hash hash;
     // без учёта регистра
     for (char c : h.name)
-      boost::hash_combine(seed, std::toupper(c));
-    return seed;
+      hash.add(std::toupper(c));
+    return hash;
   }
 };
 
 template <>
 struct hash<::svarg::ir::operation_parameter> {
   size_t operator()(const ::svarg::ir::operation_parameter& p) const {
-    size_t seed = 0;
-    boost::hash_combine(seed, static_cast<std::underlying_type_t<svarg::parameter_location>>(p.location));
-    boost::hash_combine(seed, p.name);
-    return seed;
+    return ::svarg::hash_combined(to_underlying(p.location), p.name);
   }
 };
 
@@ -243,9 +259,7 @@ namespace std {
 template <>
 struct hash<::svarg::ir::body> {
   size_t operator()(const ::svarg::ir::body& b) const noexcept {
-    size_t seed = 0;
-    boost::hash_combine(seed, b.contentType);
-    return seed;
+    return ::svarg::hash_combined(b.contentType);
   }
 };
 
@@ -289,20 +303,18 @@ namespace std {
 template <>
 struct hash<::svarg::ir::response_desc> {
   size_t operator()(const ::svarg::ir::response_desc& o) const {
-    size_t seed = 0;
     assert(!(o.status && o.statusRange));
     if (o.status) {
       if (*o.status < 100)
         throw ::svarg::parse_error("invalid status");
-      boost::hash_combine(seed, *o.status);
+      return ::svarg::hash_combined(*o.status);
     } else if (o.statusRange) {
       // значения из енама меньше 100, поэтому не должны пересекаться с status никогда
-      boost::hash_combine(seed,
-                          static_cast<std::underlying_type_t<::svarg::ir::status_range_e>>(*o.statusRange));
+      return ::svarg::hash_combined(svarg::to_underlying(*o.statusRange));
     } else {
-      assert(false);  // должен быть status или statusRange
+      // должен быть status или statusRange
+      unreachable();
     }
-    return seed;
   }
 };
 
@@ -344,31 +356,31 @@ namespace std {
 template <>
 struct hash<::svarg::ir::schema> {
   size_t operator()(const ::svarg::ir::schema& t) const {
-    size_t seed = 0;
-    boost::hash_combine(seed, t.scope);
+    svarg::combined_hash hash;
+    hash.add(t.scope);
     if (t.name)
-      boost::hash_combine(seed, *t.name);
-    return seed;
+      hash.add(*t.name);
+    return hash;
   }
 };
 
 template <>
 struct hash<::svarg::ir::operation> {
   size_t operator()(const ::svarg::ir::operation& o) const {
-    size_t seed = 0;
-    boost::hash_combine(seed, o.spec);
+    svarg::combined_hash hash;
+    hash.add(o.spec);
     ::svarg::visit_path_segments(o.path, [&](std::string_view segment) {
       // игнорируем сломанные сегменты типа {{abc} и так далее
       if (segment.starts_with('{')) {
         // игнорируем шаблонизацию, users/{id} == users/{name}
-        boost::hash_combine(seed, "{}");
+        hash.add("{}");
       } else {
-        boost::hash_combine(seed, segment);
+        hash.add(segment);
       }
     });
-    boost::hash_combine(seed, o.path);
-    boost::hash_combine(seed, static_cast<std::underlying_type_t<http2::http_method_e>>(o.method));
-    return seed;
+    hash.add(o.path);
+    hash.add(svarg::to_underlying(o.method));
+    return hash;
   }
 };
 

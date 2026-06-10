@@ -20,23 +20,15 @@ namespace svarg {
   } else {
     if (jsonptr.ends_with('/'))
       jsonptr.remove_suffix(1);
-    // TODO проверить корректность кеша
-    // TODO better
-    std::string scope = std::format("{}#{}", file.generic_string(), jsonptr);
-    std::string cache_key = scope + '/' + std::string(fieldname);
-    if (loader.schemas_in_progress.contains(cache_key))
-      return {ir::schema_ref{.scope = scope}, std::get<schema_object>(sor)};
-    ir::schema t =
-        loader.schema_lowering(std::get<schema_object>(sor), file, std::format("{}/{}", jsonptr, fieldname),
-                               /*name*/ std::nullopt, schemas);
-    return {std::move(t).ref(), std::get<schema_object>(sor)};
+    std::string cur_jsonptr = std::format("{}/{}", jsonptr, fieldname);
+    auto s = loader.schema_lowering(std::get<schema_object>(sor), file, cur_jsonptr, std::nullopt, schemas);
+    return {std::move(s).ref(), std::get<schema_object>(sor)};
   }
 }
 
 ir::object_schema spec_loader::make_object_type(schema_object const& schema,
                                                 const std::filesystem::path& file, std::string_view jsonptr,
                                                 std::unordered_set<ir::schema>& schemas) {
-  std::cout << std::format("IN make_object_type {}#{}\n", file.generic_string(), jsonptr);
   if (jsonptr.ends_with('/'))
     jsonptr.remove_suffix(1);
   ir::object_schema ot;
@@ -46,9 +38,6 @@ ir::object_schema spec_loader::make_object_type(schema_object const& schema,
       std::string prop_ptr = std::format("properties/{}", prop_name);
       ir::object_field_info fi;
       fi.name = prop_name;
-      // TODO для избегания рекурсии здесь возвращать schema ref, а nullable/default проверять... В какой-то
-      // другой момент?
-      // TODO проверить кеш если там значение, а не ссылка
       auto [schemaref, field_schema] = resolve_schema(prop_sor, file, jsonptr, prop_ptr, schemas, *this);
       fi.type = schemaref;
       if (field_schema.nullable || field_schema.default_)
@@ -107,38 +96,29 @@ template <typename... Args>
  * если ничего нет, но есть properties - то как будто неявно type: object
  * если нет ничего, то схема any, но возможно всё ещё с валидацией (н-р required [a, b, c])
 */
-ir::schema spec_loader::schema_lowering(const schema_object& schema, const std::filesystem::path& file,
-                                        std::string_view jsonptr, std::optional<std::string_view> name,
-                                        std::unordered_set<ir::schema>& schemas) {
+schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const std::filesystem::path& file,
+                                           std::string_view jsonptr, std::optional<std::string_view> name,
+                                           std::unordered_set<ir::schema>& schemas) {
   if (!jsonptr.starts_with('/'))
     throw semantic_error("invalid part of $ref after # (`{}`), must start with /", jsonptr);
   ir::schema res;
   res.scope = std::format("{}#{}", file.generic_string(), jsonptr);
   auto ret_res = [&] {
     schemas.insert(res);
-    return std::move(res);
+    return schema_or_ref(std::move(res));
   };
   if (name)
     res.name = *name;
   else
     res.name = std::nullopt;
-  if (auto it = schemas.find(res); it != schemas.end()) {
-    std::cout << "cache used\n";  // TODO rm
-    return *it;
-  } else {
-    // TODO rm
-    std::cout << std::format("IN schema_lowering {}#{}\n", file.generic_string(), jsonptr);
-    if (res.scope == "test_specs/TS29510_Nnrf_NFManagement.yaml#/components/schemas/SelectionConditions")
-      std::cout << "FOUND! " << std::endl;
-  }
-  const std::string cache_key = res.name ? res.scope + *res.name : res.scope;
-  ++schemas_in_progress[cache_key];
-  // TODO если обнаруживается рекурсия возвращаем ссылку на схему
+  if (auto it = schemas.find(res); it != schemas.end())
+    return schema_or_ref{*it};
+  const strpair cache_key{res.scope, name ? *name : ""};
+  if (schemas_in_progress.contains(cache_key))
+    return schema_or_ref(res.ref());
+  schemas_in_progress.insert(cache_key);
   on_scope_exit {
-    auto&& count = schemas_in_progress[cache_key];
-    --count;
-    if (count == 0)
-      schemas_in_progress.erase(cache_key);
+    schemas_in_progress.erase(cache_key);
   };
   // ── boolean schema ──────────────────────────────────────────────────────────
   if (schema.allow_always()) {
@@ -284,12 +264,8 @@ resolved_schema spec_loader::resolve_ref(reference_object ref, std::filesystem::
   // но для этого нужно обрабатывать find_existing_file и тд чтобы понять куда реально ссылаемся и видимо
   // делать абсолютный путь
   resolve_ref_cache_key cache_key{.path = file.generic_string(), .ref = ref.ref_};
-  if (auto it = resolved_refs_cache.find(cache_key); it != resolved_refs_cache.end()) {
-    std::cout << "refs cache used\n";  // TODO rm
+  if (auto it = resolved_refs_cache.find(cache_key); it != resolved_refs_cache.end())
     return it->second;
-  } else {
-    std::cout << std::format("IN resolve_ref {} file: {}\n", ref.ref_, file.generic_string());
-  }
   parsed_ref r;
   // поля со всех ссылок складываются сюда. $ref + override FIELD1
   // ссылается на $ref + override FIELD2 и так далее
@@ -316,17 +292,7 @@ resolved_schema spec_loader::resolve_ref(reference_object ref, std::filesystem::
       if (name.empty())
         throw semantic_error("name of schema cannot be empty. json pointer: {}", r.json_ptr);
       resolved_schema res;
-      // TODO better + check correct cache key
-      // TODO make scope fn
-      // TODO везде одинаково считать ключ
-      if (schemas_in_progress.contains(make_schemas_in_progress_key(refered_file, r.json_ptr, name))) {
-        res.ir_schema = ir::schema_ref{
-            .name = std::string(name),
-            .scope = std::format("{}#{}", refered_file.generic_string(), r.json_ptr),
-        };
-      } else {
-        res.ir_schema = schema_lowering(*schema, refered_file, r.json_ptr, name, schemas).ref();
-      }
+      res.ir_schema = schema_lowering(*schema, refered_file, r.json_ptr, name, schemas).ref();
       res.front_schema = std::move(*schema);
       resolved_refs_cache.try_emplace(std::move(cache_key), res);
       return res;
@@ -364,10 +330,10 @@ struct vtor {
     throw EXTYPE("{}/{}", INFO, e.what());     \
   }
   void dbgprint(std::string_view name) {
-    auto& ss = std::cout;
-    for (std::string_view s : scopes.segments())
-      ss << s << '.';
-    ss << name << '\n';
+    // auto& ss = std::cout;
+    // for (std::string_view s : scopes.segments())
+    //   ss << s << '.';
+    // ss << name << '\n';
   }
   template <typename T>
   void operator()(std::string_view name, const array<T>& f) try {
