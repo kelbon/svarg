@@ -7,8 +7,6 @@
 
 #include "svarg/ir/ir_object.hpp"
 
-// TODO обновить yaml либу (коммит с исправлением пробелов)
-
 TEST("json is an yaml") {
   std::string json = R"({"name":"Alice","age":30,"tags":["dev","cpp"]})";
   std::string out = svarg::yaml2json(json);
@@ -132,3 +130,4 @@ paths:
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;
 // TODO тесты на парсинг разных типов. В том числе рекурсивных, с всякими anyof и тд
+// TODO подключить позже измерялку, чтобы понять где теряется больше всего времени

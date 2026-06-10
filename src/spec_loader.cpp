@@ -84,7 +84,6 @@ template <typename... Args>
 
 /*
 - добавляет встреченные схемы в `schemas`. Как минимум один из schema + инлайн схемы
-- loader используется для определения директорий и тд
 - file - путь до текущего файла (относительно директории со спеками)
 - если name нет, то схема inline. Если есть, то на схему можно сослаться
 Логика работы:
@@ -259,13 +258,6 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const st
 // ожидает что file относительно spec dir
 resolved_schema spec_loader::resolve_ref(reference_object ref, std::filesystem::path file,
                                          std::unordered_set<ir::schema>& schemas) {
-  //  TODO можно сделать получше кеш, сейчас может в разных файлах по разному написанная ссылка несколько раз
-  //  резолвиться
-  // но для этого нужно обрабатывать find_existing_file и тд чтобы понять куда реально ссылаемся и видимо
-  // делать абсолютный путь
-  resolve_ref_cache_key cache_key{.path = file.generic_string(), .ref = ref.ref_};
-  if (auto it = resolved_refs_cache.find(cache_key); it != resolved_refs_cache.end())
-    return it->second;
   parsed_ref r;
   // поля со всех ссылок складываются сюда. $ref + override FIELD1
   // ссылается на $ref + override FIELD2 и так далее
@@ -278,7 +270,11 @@ resolved_schema spec_loader::resolve_ref(reference_object ref, std::filesystem::
     r = parse_ref(ref.ref_);
     std::filesystem::path refered_file =
         std::filesystem::relative(!r.file.empty() ? file.parent_path() / r.file : file);
-    const boost::json::value& v = load_as_json(find_existing_file(refered_file));
+    refered_file = find_existing_file(refered_file);
+    resolve_ref_cache_key cache_key{.path = refered_file.generic_string(), .ref = ref.ref_};
+    if (auto it = resolved_refs_cache.find(cache_key); it != resolved_refs_cache.end())
+      return it->second;
+    const boost::json::value& v = load_as_json(refered_file);
     boost::json::value jref = v.at_pointer(r.json_ptr);
     if (!jref.is_object())
       throw semantic_error("refered by $ref must be json/yaml object, but got {}", e2str(jref.kind()));
@@ -394,7 +390,6 @@ struct vtor {
 
   void operator()(std::string_view name, const schema_object& x) try {
     dbgprint(name);
-    // TODO проверить что правильно передаётся schema name
     // схемы могут встретиться в:
     // * parameter_object/header_object/media_type_object - там они инлайн
     // * components_object (components/schemas) - там они не инлайн

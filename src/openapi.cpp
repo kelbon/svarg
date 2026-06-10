@@ -32,5 +32,3 @@ openapi_object parse_spec_file(std::filesystem::path path, svarg_options options
 }
 
 }  // namespace svarg
-
-// TODO в мой "компилятор" ямлов ввести понятие инклуд директорий
