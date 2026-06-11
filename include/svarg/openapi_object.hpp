@@ -440,6 +440,7 @@ struct operation_object {
   optional<array<reference_or<parameter_object>>> parameters;
   optional<reference_or<request_body_object>> requestBody;
   optional<responses_object> responses;
+  // map name -> callback
   optional<string_map<reference_or<callback_object>>> callbacks;
   // дефолт: false
   optional<bool> deprecated;

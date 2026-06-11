@@ -3,6 +3,7 @@
 #include "svarg/utils/box.hpp"
 #include "svarg/utils/number.hpp"
 #include "svarg/errors.hpp"
+#include "svarg/utils/strcmp.hpp"
 
 #include <string>
 #include <vector>
@@ -35,7 +36,7 @@ using std::string;
 template <typename T>
 using array = std::vector<T>;
 template <typename T>
-using string_map = std::unordered_map<string, T>;
+using string_map = std::unordered_map<string, T, str_hash, str_equal_to>;
 
 struct reference_object {
   string ref_;  // MUST be URI, в json как $ref

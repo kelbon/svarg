@@ -46,13 +46,51 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
 // fundamental | name + scope
 struct schema_ref {
   optional<string> name;
-  // REQUIRED если name есть (не включает имя типа)
+  // REQUIRED если name есть
+  // может быть ссылкой на фундаментал (_#string и тд)
   optional<string> scope;
-  // указано если тип это фундаментальный null/boolean/string/number/integer НЕ array/object
-  optional<fundamental_e> fundamental;
-
+  // TODO тест с refers_to фундаментальные типы и тд
   [[nodiscard]] bool refers_to(const schema&) const noexcept;
 };
+
+// пытается распарсить ссылку на фундаментал
+// (у меня используются "ссылки" на фундаментальные типы для удобства реализации)
+// таких ссылок нет и не может быть в openapi yaml, они есть только на уровне IR
+inline std::optional<fundamental_e> try_parse_as_fundamental_ref(std::string_view ref) {
+  // подчёркивание в начале чтобы избежать ошибки и принять это за локальную ссылку
+  return ss::string_switch<std::optional<fundamental_e>>(ref)
+      .case_("_#null", fundamental_e::null)
+      .case_("_#boolean", fundamental_e::boolean)
+      .case_("_#integer", fundamental_e::integer)
+      .case_("_#number", fundamental_e::number)
+      .case_("_#string", fundamental_e::string)
+      .or_default(std::nullopt);
+}
+
+// precondition: e != array && s != object
+inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
+  schema_ref ref;
+  auto f2scope = [&]() -> std::string_view {
+    switch (e) {
+      case fundamental_e::null:
+        return "_#null";
+      case fundamental_e::boolean:
+        return "_#boolean";
+      case fundamental_e::integer:
+        return "_#integer";
+      case fundamental_e::number:
+        return "_#number";
+      case fundamental_e::string:
+        return "_#string";
+      case fundamental_e::array:
+      case fundamental_e::object:
+        std::unreachable();
+        break;
+    };
+  };
+  ref.scope = std::string(f2scope());
+  return ref;
+}
 
 struct enum_schema {
   optional<schema_ref> type;
@@ -145,8 +183,6 @@ struct schema {
     if (name)
       r.name = *name;
     r.scope = scope;
-    if (std::holds_alternative<fundamental_e>(data))
-      r.fundamental = std::get<fundamental_e>(data);
     assert(r.refers_to(*this));
     return r;
   }
@@ -163,8 +199,6 @@ struct schema {
     if (name)
       r.name = std::move(*name);
     r.scope = std::move(scope);
-    if (std::holds_alternative<fundamental_e>(data))
-      r.fundamental = std::get<fundamental_e>(data);
     return r;
   }
 

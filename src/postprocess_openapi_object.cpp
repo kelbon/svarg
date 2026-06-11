@@ -42,8 +42,11 @@ static void remove_content_type_from_encoding_headers(optional<string_map<encodi
   if (!encoding)
     return;
   for (auto& [_, enc] : *encoding)
-    if (enc.headers)
+    if (enc.headers) {
+      // TODO case insentisive
       enc.headers->erase("Content-Type");
+      enc.headers->erase("content-type");
+    }
 }
 
 static void postprocess_media_type_object(media_type_object& mt) {

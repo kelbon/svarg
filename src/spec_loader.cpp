@@ -70,11 +70,24 @@ ir::object_schema spec_loader::make_object_type(schema_object const& schema,
   return ot;
 }
 
-static ir::discriminator_desc discriminator_lowering(const discriminator_object& d) {
-  // TODO
-  // TODO надо провалидировать дискриминатор и автоматически составить маппинг полностью!
-  // и если в автоматический маппинг попадает инлайн схема то это ошибка (у неё нет имени)
-  return {};  // TODO
+static ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
+                                                     const array<ir::schema_ref>& schemas) {
+  ir::discriminator_desc ird;
+  ird.propertyName = d.propertyName;
+  auto from_mapping_or_just_name = [&](std::string_view name) -> std::string_view {
+    if (!d.mapping)
+      return name;
+    auto it = (*d.mapping).find(name);
+    if (it == d.mapping->end())
+      return name;
+    return std::string_view(it->second);
+  };
+  for (auto& s : schemas) {
+    if (!s.name)
+      throw semantic_error("schema in anyOf/oneOf must have name");
+    ird.mapping[std::string(from_mapping_or_just_name(*s.name))] = s;
+  }
+  return ird;
 }
 
 template <typename... Args>
@@ -182,9 +195,7 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const st
           throw semantic_error(
               "field type with several types, where one of them object or array is not supported");
         }
-        ir::schema_ref ref;
-        ref.fundamental = fe;
-        anyof.schemas.push_back(std::move(ref));
+        anyof.schemas.push_back(make_fundamental_ref(fe));
       }
       res.data = std::move(anyof);
     }
@@ -235,16 +246,16 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const st
   }
   if (schema.anyOf) {
     ir::anyof_schema t;
-    if (schema.discriminator)
-      t.discriminator = discriminator_lowering(*schema.discriminator);
     resolve_array(*schema.anyOf, t.schemas);
+    if (schema.discriminator)
+      t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas);
     collect_result("anyOf", std::move(t));
   }
   if (schema.oneOf) {
     ir::oneof_schema t;
-    if (schema.discriminator)
-      t.discriminator = discriminator_lowering(*schema.discriminator);
     resolve_array(*schema.oneOf, t.schemas);
+    if (schema.discriminator)
+      t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas);
     collect_result("oneOf", std::move(t));
   }
   if (schema.not_) {
@@ -411,6 +422,7 @@ struct vtor {
       // такое
       if constexpr (!std::is_same_v<T, What>)
         return;
+      // вызывается чтобы обойти всё и собрать упоминающиеся ссылки
       loader->resolve_ref(*r, obj_file, schemas);
     } else {
       (*this)(name, *std::get_if<T>(&x));
@@ -419,7 +431,6 @@ struct vtor {
 
   template <typename T>
   void operator()(std::string_view name, const optional<T>& x) {
-    dbgprint(name);
     if (x)
       (*this)(name, *x);
   }
@@ -428,7 +439,34 @@ struct vtor {
 ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
                                                  const std::filesystem::path& obj_file) {
   vtor<schema_object> v(obj_file, *this);
+  // TODO postparse надо на чето заменить видимо, чтобы парс + сериализация не меняли
+  // TODO в моём языке разрешить ссылки на фундаментальные типы: например #string, #number и тд
+  // чтобы например легко писать oneOf: - #string -#number
   boost::pfr::for_each_field_with_name(obj, refvtor(v));
+  // TODO на первом этапе как будто надо переложить калбеки в вебхуки
+  //  калбеки есть только в операциях (которые в paths & components/pathItems и в components/callbacks) и в
+  //  webhooks (тоже в операциях)
+  //  визитим все ref_or_калбеки, если они значения - собираем в мапу (так чтобы одинаковые не попадали
+  //  дважды) если видим ссылку, то если локальная - ничего не делаем, этот калбек соберут итак. Если в другой
+  //  файл и ещё не собрали этот калбек - идём резолвить ссылку и складываем его значение в вебхуки
+  //  исправляя локальные ссылки в нём TODO стоп, не только локальные ссылки, они же все относительные,
+  //  сложнее немного.. Надо для каждой ссылки считать куда указывает file_with_callback/$reffile и если его
+  //  нет искать существующий $reffile и ставить относительно specs_dir
+
+  // второй этап - резолв ссылок в webhooks/paths на pathItems с переносом (дублированием) просто напросто.
+  // третий этап - последовательно преобразовать все path item в webhooks/path (lowering path item)
+  // это включает в себя резолв $ref, резолв параметров и тд. Там вроде рекурсии быть не может... Хотя хз
+  // в общем надо получить просто конечный json распаршенный для параметров, хедеров и тд
+
+  // если с другого файла перенос, то локальные ссылки не меняются, если с другого - меняются
+  // второй этап (хотя желательно ДО) - все pathItems типа переиспользуемые... продублировать в местах где на
+  // них ссылаются (paths/webhooks) чтобы не городить ссылки (хотя мб сделать ссылку на операцию?..). А если
+  // ссылка в другом файле на это... То плевать, надо просто зарезолвить и сделать так чтобы не было ссылок
+  // никаких. НО если втупую продублировать, то сломаются ссылки внутри объекта... Значит именно их надо
+  // поменять (fix local references по сути пройти по всем и поменять ссылки)
+  // TODO: сделать тест на рекурсивные типы (напрямую, косвенно, между файлами)
+  // TODO: сделать тест на парсинг калбеков, вебхуков, pathItems и ссылки и так далее
+  // TODO: записывать тест кейсы везде, чтобы позже реализовать
   // TODO надо пройти по операциями, калбекам и вебхукам
   // и конвертировать их в IR. Операции - в operation, калбеки и вебхуки в webhooks
   // т.е. по сути нужно посещать path item object. Вероятно это нужно вторым циклом делать
