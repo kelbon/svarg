@@ -74,6 +74,9 @@ struct spec_loader {
   };
 
  public:
+  const svarg_options& get_options() const noexcept {
+    return opts;
+  }
   void load_spec(std::filesystem::path s) {
     if (!std::filesystem::exists(s) || !std::filesystem::is_regular_file(s))
       throw parse_error("path `{}` do not refer to file", s.generic_string());
@@ -111,8 +114,10 @@ struct spec_loader {
   }
 
   // возвращает тип, но и вставляет его в types (если его там не было)
-  resolved_schema resolve_ref(reference_object obj, std::filesystem::path file,
-                              std::unordered_set<ir::schema>& types);
+  resolved_schema resolve_schema_ref(reference_object obj, std::filesystem::path file,
+                                     std::unordered_set<ir::schema>& types);
+
+  callback_object resolve_callback(reference_or<callback_object>, std::filesystem::path file);
 
   // file - относительно specs dir, jsonptr должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
@@ -131,6 +136,9 @@ struct spec_loader {
                                 std::unordered_set<ir::schema>& schemas);
 
  private:
+  template <typename T>
+  friend auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& invocable,
+                             spec_loader& loader);
   const boost::json::value& load_as_json(std::filesystem::path const& p) {
     // spec_dir != cwd
     // не включен ассёрт, так как файловую систему могут поменять

@@ -365,6 +365,8 @@ struct operation {
   // path + method + spec должны быть уникальны. Шаблонизированность не учитывается
   // если это webhook/callback, то путь может быть runtime expression
   // если opeartion это вебхук, то путь может быть пустым
+  // TODO генерировать проверки на фронтенде и на бекенде надо делать парсеры путей
+  // н-р если users/{id}, то обязательно должен быть параметр с in: path и именем id
   string path;
   http2::http_method_e method = http2::http_method_e::GET;
   optional<array<operation_parameter>> parameters;

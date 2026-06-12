@@ -3,10 +3,49 @@
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/merge_with_override.hpp"
 #include "svarg/utils/scopes.hpp"
+#include "svarg/utils/all.hpp"
 
 #include <boost/pfr.hpp>
 
 namespace svarg {
+
+// рекурсивно резолвит ссылку и в конце передаёт в invocable объект T, путь в котором он лежал (относительно
+// specs_dir) и json pointer на него в этом файле
+// возвращает то что вернёт вызов invocable(tvalue, file, jsonptr)
+template <typename T>
+static auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& invocable,
+                           spec_loader& loader) {
+  parsed_ref r;
+  // здесь нельзя кешировать, так как с разных мест разные ссылки дают разный результат из-за override fields
+
+  // поля со всех ссылок складываются сюда. $ref + override FIELD1
+  // ссылается на $ref + override FIELD2 и так далее
+  string_map<Any> override_fields = std::move(ref._keyfield_override_fields);
+  for (size_t recursion_depth = 0; recursion_depth <= loader.get_options().ref_max_depth; ++recursion_depth) {
+    if (!ref.ref_.contains("#/components/")) [[unlikely]] {
+      loader.emit_warn(file, r.json_ptr.empty() ? parse_ref(ref.ref_).json_ptr : r.json_ptr,
+                       "$ref should be into /components/, but $ref = {}", ref.ref_);
+    }
+    r = parse_ref(ref.ref_);
+    std::filesystem::path refered_file =
+        std::filesystem::relative(!r.file.empty() ? file.parent_path() / r.file : file);
+    refered_file = loader.find_existing_file(refered_file);
+    const boost::json::value& v = loader.load_as_json(refered_file);
+    boost::json::value jref = v.at_pointer(r.json_ptr);
+    if (!jref.is_object())
+      throw semantic_error("refered by $ref must be json/yaml object, but got {}", e2str(jref.kind()));
+    for (auto& [k, j] : override_fields)
+      jref.as_object()[k] = j.value;
+    auto ref_or_t = parse_from_json<reference_or<T>>(jref);
+    if (auto* val = std::get_if<T>(&ref_or_t))
+      return invocable(std::move(*val), std::move(refered_file), r.json_ptr);
+    ref = std::get<reference_object>(std::move(ref_or_t));
+    file = std::move(refered_file);
+    override_fields =
+        merge_with_override(std::move(override_fields), std::move(ref._keyfield_override_fields));
+  }
+  throw semantic_error("recursion depth max reached");
+}
 
 // jsonptr и fieldname используются только если это инлайн схема для создания уникального scope
 // например jsonptr = /components/schemas и fieldname = "additionalProperties"
@@ -16,7 +55,7 @@ namespace svarg {
                                                     std::unordered_set<ir::schema>& schemas,
                                                     spec_loader& loader) {
   if (auto* ref = std::get_if<reference_object>(&sor)) {
-    return loader.resolve_ref(*ref, file, schemas);
+    return loader.resolve_schema_ref(*ref, file, schemas);
   } else {
     if (jsonptr.ends_with('/'))
       jsonptr.remove_suffix(1);
@@ -267,49 +306,20 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const st
 }
 
 // ожидает что file относительно spec dir
-resolved_schema spec_loader::resolve_ref(reference_object ref, std::filesystem::path file,
-                                         std::unordered_set<ir::schema>& schemas) {
-  parsed_ref r;
-  // поля со всех ссылок складываются сюда. $ref + override FIELD1
-  // ссылается на $ref + override FIELD2 и так далее
-  string_map<Any> override_fields = std::move(ref._keyfield_override_fields);
-  for (size_t recursion_depth = 0; recursion_depth <= opts.ref_max_depth; ++recursion_depth) {
-    if (!ref.ref_.contains("#/components/schemas")) [[unlikely]] {
-      emit_warn(file, r.json_ptr.empty() ? parse_ref(ref.ref_).json_ptr : r.json_ptr,
-                "$ref should be into /components/schemas, but $ref = {}", ref.ref_);
-    }
-    r = parse_ref(ref.ref_);
-    std::filesystem::path refered_file =
-        std::filesystem::relative(!r.file.empty() ? file.parent_path() / r.file : file);
-    refered_file = find_existing_file(refered_file);
-    resolve_ref_cache_key cache_key{.path = refered_file.generic_string(), .ref = ref.ref_};
-    if (auto it = resolved_refs_cache.find(cache_key); it != resolved_refs_cache.end())
-      return it->second;
-    const boost::json::value& v = load_as_json(refered_file);
-    boost::json::value jref = v.at_pointer(r.json_ptr);
-    if (!jref.is_object())
-      throw semantic_error("refered by $ref must be json/yaml object, but got {}", e2str(jref.kind()));
-    for (auto& [k, j] : override_fields)
-      jref.as_object()[k] = j.value;
-    auto ref_or_schema = parse_from_json<reference_or<schema_object>>(jref);
-    if (auto* schema = std::get_if<schema_object>(&ref_or_schema)) {
-      // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
-      // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
-      std::string_view name = last_segment(r.json_ptr);
-      if (name.empty())
-        throw semantic_error("name of schema cannot be empty. json pointer: {}", r.json_ptr);
-      resolved_schema res;
-      res.ir_schema = schema_lowering(*schema, refered_file, r.json_ptr, name, schemas).ref();
-      res.front_schema = std::move(*schema);
-      resolved_refs_cache.try_emplace(std::move(cache_key), res);
-      return res;
-    }
-    ref = std::get<reference_object>(std::move(ref_or_schema));
-    file = std::move(refered_file);
-    override_fields =
-        merge_with_override(std::move(override_fields), std::move(ref._keyfield_override_fields));
-  }
-  throw semantic_error("recursion depth max reached");
+resolved_schema spec_loader::resolve_schema_ref(reference_object ref, std::filesystem::path file,
+                                                std::unordered_set<ir::schema>& schemas) {
+  auto doschema = [&](schema_object schema, std::filesystem::path refered_file, std::string_view jsonptr) {
+    // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
+    // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
+    std::string_view name = last_segment(jsonptr);
+    if (name.empty())
+      throw semantic_error("name of schema cannot be empty. json pointer: {}", jsonptr);
+    resolved_schema res;
+    res.ir_schema = schema_lowering(schema, refered_file, jsonptr, name, schemas).ref();
+    res.front_schema = std::move(schema);
+    return res;
+  };
+  return resolve_ref_to<schema_object>(std::move(ref), std::move(file), doschema, *this);
 }
 
 // оборачивает визитор в ссылке с тем же интерфейсом,
@@ -321,6 +331,7 @@ constexpr auto refvtor(auto& vtor) {
   };
 }
 
+// TODO? RM What?
 // посещает все ссылки на `What` и передаёт калбеку json-pointer до элемента и сам элемент
 template <typename What>
 struct vtor {
@@ -423,7 +434,7 @@ struct vtor {
       if constexpr (!std::is_same_v<T, What>)
         return;
       // вызывается чтобы обойти всё и собрать упоминающиеся ссылки
-      loader->resolve_ref(*r, obj_file, schemas);
+      loader->resolve_schema_ref(*r, obj_file, schemas);
     } else {
       (*this)(name, *std::get_if<T>(&x));
     }
@@ -436,13 +447,99 @@ struct vtor {
   }
 };
 
+static void visit_path_item_callbacks(const path_item_object& item, auto&& visitor) {
+  for (auto& op :
+       all(item.get, item.put, item.post, item.delete_, item.options, item.head, item.patch, item.trace)) {
+    if (op && op->callbacks) {
+      for (auto& [name, cb] : *op->callbacks)
+        visitor(name, cb);
+    }
+  }
+}
+
+// посещает все калбеки и передаёт визитору имя + reference_or<callback>
+// Note: может быть много калбеков с одинаковым именем. Они отличаются по методу и тд
+static void visit_all_callbacks(const openapi_object& api, auto&& visitor) {
+  // components/callbacks
+  if (api.components && api.components->callbacks) {
+    for (auto& [name, cb] : *api.components->callbacks)
+      visitor(name, cb);
+  }
+
+  // components/pathItems
+  if (api.components->pathItems) {
+    for (auto& [name, item] : *api.components->pathItems)
+      visit_path_item_callbacks(item, visitor);
+  }
+
+  // paths -> operations -> callbacks
+  if (api.paths) {
+    for (auto& [path, item] : *api.paths)
+      visit_path_item_callbacks(item, visitor);
+  }
+
+  // webhooks -> operations -> callbacks
+  if (api.webhooks) {
+    for (auto& [name, item] : *api.webhooks)
+      visit_path_item_callbacks(item, visitor);
+  }
+}
+
+// TODO: реюз resolve_ref
+// TODO: path item ставим где надо | reference и меняем его парсинг в обычные правила
+
+// возвращает path_item_object где точно нет $ref
+path_item_object resolve_path_item_object(const path_item_object& item, const std::filesystem::path& file) {
+  // TODO
+  return {};
+}
+
+// name - operationId для операций, имя калбека/вебхука для калбека или вебхука
+// path - путь относительно сервера для операции, runtime expr для калбека
+ir::operation path_item_object_lowering(std::string_view path, std::optional<std::string_view> name,
+                                        path_item_object) {
+  // TODO
+  return {};
+}
+
+callback_object spec_loader::resolve_callback(reference_or<callback_object> cb, std::filesystem::path file) {
+  if (auto* r = std::get_if<reference_object>(&cb)) {
+    auto getcb = [](callback_object obj, std::filesystem::path file, std::string_view jsonptr) {
+      return obj;
+    };
+    return resolve_ref_to<callback_object>(std::move(*r), std::move(file), getcb, *this);
+  } else {
+    return std::move(std::get<callback_object>(cb));
+  }
+}
+
 ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
                                                  const std::filesystem::path& obj_file) {
+  ir::ir_object result;
+
+  // собираем все схемы, в том числе из калбеков, вебхуков и paths
   vtor<schema_object> v(obj_file, *this);
   // TODO postparse надо на чето заменить видимо, чтобы парс + сериализация не меняли
   // TODO в моём языке разрешить ссылки на фундаментальные типы: например #string, #number и тд
   // чтобы например легко писать oneOf: - #string -#number
   boost::pfr::for_each_field_with_name(obj, refvtor(v));
+  result.schemas = std::move(v.schemas);
+
+  visit_all_callbacks(obj, [&](std::string_view name, const reference_or<callback_object>& cb) {
+    auto getcb = [](callback_object obj, std::filesystem::path file, std::string_view jsonptr) {
+      return obj;
+    };
+    callback_object obj = resolve_callback(cb, obj_file);
+    // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
+    for (auto&& [expr, pathItem] : obj) {
+      path_item_object rpi = resolve_path_item_object(pathItem, obj_file);
+      ir::operation op = path_item_object_lowering(expr, name, std::move(rpi));
+      result.webhooks.insert(std::move(op));
+    }
+  });
+
+  // ! либо не перекладывать никуда калбеки, просто их обойти. И складывать в webhooks
+  // TODO надо операции сравнение и хеш сделать
   // TODO на первом этапе как будто надо переложить калбеки в вебхуки
   //  калбеки есть только в операциях (которые в paths & components/pathItems и в components/callbacks) и в
   //  webhooks (тоже в операциях)
@@ -476,7 +573,7 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
   // TODO ещё pathItems в которых переиспользуемые в webhooks / paths операции..
   // крч для pathItems если уж они встречаются - то операция дублируется в webhooks / operations
   // потому что нахер не хочу ссылки городить и неиспользуемая фича максимально
-  return ir::ir_object{.schemas = std::move(v.schemas)};
+  return result;
 }
 
 ir::ir_object spec_loader::generate() {
@@ -494,3 +591,5 @@ ir::ir_object spec_loader::generate() {
 }
 
 }  // namespace svarg
+
+// TODO перенести файлы в openapi_frontend
