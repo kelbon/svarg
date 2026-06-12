@@ -11,7 +11,7 @@ struct parsed_ref {
 };
 
 // file#jsonptr
-inline parsed_ref parse_ref(std::string_view ref) {
+[[nodiscard]] inline parsed_ref parse_ref(std::string_view ref) {
   auto pos = ref.find('#');
   if (pos == ref.npos)
     throw parse_error("invalid $ref: `{}`", ref);

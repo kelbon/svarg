@@ -9,6 +9,50 @@
 
 namespace svarg {
 
+// посещает все значения с ключом $ref в json
+static void visit_refs(boost::json::value& val, auto&& visitor) {
+  switch (val.kind()) {
+    case boost::json::kind::object: {
+      for (auto& [key, child] : val.get_object()) {
+        if (key == "$ref")
+          visitor(child);
+        else
+          visit_refs(child, visitor);
+      }
+      break;
+    }
+    case boost::json::kind::array: {
+      for (auto& elem : val.get_array())
+        visit_refs(elem, visitor);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// TODO namespace fs
+
+// curfile - файл внутри которого написаны ссылки в fields (куда ссылается например локальное #ref)
+// loader - используется чтобы найти существующие файлы, т.е. учесть инклуд директории
+// Note: ссылки ремапятся в абсолютные пути, хотя это и запрещено в $ref. Но у меня поддержано чтобы не
+// возиться
+static void remap_references(string_map<Any>& fields, const std::filesystem::path& curfile,
+                             const spec_loader& loader) {
+  for (auto& [key, a] : fields) {
+    auto remap_ref = [&](boost::json::value& ref) {
+      if (!ref.is_string())
+        throw parse_error("invalid reference, expected string, but got {}", e2str(ref.kind()));
+      parsed_ref r = parse_ref(ref.as_string());
+      std::filesystem::path p = loader.find_file_from_ref(r.file, curfile);
+      ref.as_string() = std::format("{}#{}", p.generic_string(), r.json_ptr);
+    };
+    visit_refs(a.value, remap_ref);
+  }
+}
+
+// TODO тест на ремап ссылок в resolve_ref_to учитывая инклуд директории и так далее
+
 // рекурсивно резолвит ссылку и в конце передаёт в invocable объект T, путь в котором он лежал (относительно
 // specs_dir) и json pointer на него в этом файле
 // возвращает то что вернёт вызов invocable(tvalue, file, jsonptr)
@@ -20,15 +64,16 @@ auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& inv
   // поля со всех ссылок складываются сюда. $ref + override FIELD1
   // ссылается на $ref + override FIELD2 и так далее
   string_map<Any> override_fields = std::move(ref._keyfield_override_fields);
+  // override fields написаны в одном файле, а резолвится будут возможно в контексте
+  // другого поэтому их нужно перемапить на "универсальную" основу не зависящую от конкретного файла
+  remap_references(override_fields, file, loader);
   for (size_t recursion_depth = 0; recursion_depth <= loader.get_options().ref_max_depth; ++recursion_depth) {
     if (!ref.ref_.contains("#/components/")) [[unlikely]] {
       loader.emit_warn(file, r.json_ptr.empty() ? parse_ref(ref.ref_).json_ptr : r.json_ptr,
                        "$ref should be into /components/, but $ref = {}", ref.ref_);
     }
     r = parse_ref(ref.ref_);
-    std::filesystem::path refered_file =
-        std::filesystem::relative(!r.file.empty() ? file.parent_path() / r.file : file);
-    refered_file = loader.find_existing_file(refered_file);
+    std::filesystem::path refered_file = loader.find_file_from_ref(r.file, file);
     const boost::json::value& v = loader.load_as_json(refered_file);
     boost::json::value jref = v.at_pointer(r.json_ptr);
     if (!jref.is_object())
@@ -40,6 +85,7 @@ auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& inv
       return invocable(std::move(*val), std::move(refered_file), r.json_ptr);
     ref = std::get<reference_object>(std::move(ref_or_t));
     file = std::move(refered_file);
+    remap_references(ref._keyfield_override_fields, file, loader);
     override_fields =
         merge_with_override(std::move(override_fields), std::move(ref._keyfield_override_fields));
   }
@@ -457,15 +503,22 @@ static void visit_path_item_callbacks(const path_item_object& item, auto&& visit
 }
 
 // возвращает path_item_object где точно нет $ref
-path_item_object resolve_path_item_object(reference_or<path_item_object> item,
-                                          const std::filesystem::path& file) {
-  // TODO
-  return {};
+path_item_object spec_loader::resolve_path_item_object(reference_or<path_item_object> item,
+                                                       std::filesystem::path file) {
+  if (auto* r = std::get_if<reference_object>(&item)) {
+    auto getcb = [](path_item_object obj, std::filesystem::path file, std::string_view jsonptr) {
+      return obj;
+    };
+    return resolve_ref_to<path_item_object>(std::move(*r), std::move(file), getcb, *this);
+  } else {
+    return std::move(std::get<path_item_object>(item));
+  }
 }
 
 // посещает все калбеки и передаёт визитору имя + reference_or<callback>
 // Note: может быть много калбеков с одинаковым именем. Они отличаются по методу и тд
-static void visit_all_callbacks(const openapi_object& api, std::filesystem::path file, auto&& visitor) {
+static void visit_all_callbacks(const openapi_object& api, std::filesystem::path file, spec_loader& loader,
+                                auto&& visitor) {
   // components/callbacks
   if (api.components && api.components->callbacks) {
     for (auto& [name, cb] : *api.components->callbacks)
@@ -475,7 +528,7 @@ static void visit_all_callbacks(const openapi_object& api, std::filesystem::path
   // components/pathItems
   if (api.components->pathItems) {
     for (auto& [name, item] : *api.components->pathItems) {
-      path_item_object ritem = resolve_path_item_object(item, file);
+      path_item_object ritem = loader.resolve_path_item_object(item, file);
       visit_path_item_callbacks(ritem, visitor);
     }
   }
@@ -483,7 +536,7 @@ static void visit_all_callbacks(const openapi_object& api, std::filesystem::path
   // paths -> operations -> callbacks
   if (api.paths) {
     for (auto& [path, item] : *api.paths) {
-      path_item_object ritem = resolve_path_item_object(item, file);
+      path_item_object ritem = loader.resolve_path_item_object(item, file);
       visit_path_item_callbacks(ritem, visitor);
     }
   }
@@ -491,16 +544,15 @@ static void visit_all_callbacks(const openapi_object& api, std::filesystem::path
   // webhooks -> operations -> callbacks
   if (api.webhooks) {
     for (auto& [name, item] : *api.webhooks) {
-      path_item_object ritem = resolve_path_item_object(item, file);
+      path_item_object ritem = loader.resolve_path_item_object(item, file);
       visit_path_item_callbacks(ritem, visitor);
     }
   }
 }
 
-// name - operationId для операций, имя калбека/вебхука для калбека или вебхука
-// path - путь относительно сервера для операции, runtime expr для калбека
-ir::operation path_item_object_lowering(std::string_view path, std::optional<std::string_view> name,
-                                        path_item_object) {
+ir::operation spec_loader::path_item_object_lowering(std::string_view path, std::filesystem::path spec,
+                                                     std::optional<std::string_view> name,
+                                                     path_item_object item) {
   // TODO
   return {};
 }
@@ -528,18 +580,24 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
   boost::pfr::for_each_field_with_name(obj, refvtor(v));
   result.schemas = std::move(v.schemas);
 
-  visit_all_callbacks(obj, obj_file, [&](std::string_view name, const reference_or<callback_object>& cb) {
-    callback_object obj = resolve_callback(cb, obj_file);
-    // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
-    for (auto&& [expr, pathItem] : obj) {
-      path_item_object rpi = resolve_path_item_object(pathItem, obj_file);
-      ir::operation op = path_item_object_lowering(expr, name, std::move(rpi));
-      result.webhooks.insert(std::move(op));
-    }
-  });
-
-  // ! либо не перекладывать никуда калбеки, просто их обойти. И складывать в webhooks
-  // TODO надо операции сравнение и хеш сделать
+  visit_all_callbacks(
+      obj, obj_file, *this, [&](std::string_view name, const reference_or<callback_object>& cb) {
+        callback_object obj = resolve_callback(cb, obj_file);
+        // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
+        for (auto&& [expr, pathItem] : obj) {
+          // используется путь obj_file, не смотря на то что калбек мог быть из другого файла
+          // но resolve_ref_to перемапило в таком случае все ссылки на универсальные и они должны зарезолвится
+          // корректно
+          path_item_object rpi = resolve_path_item_object(pathItem, obj_file);
+          // используется obj_file, так как даже если path item был ссылкой он мог переопределить поле и уже
+          // стал другой операцией
+          ir::operation op = path_item_object_lowering(/*path=*/"", obj_file, name, std::move(rpi));
+          if (result.webhooks.contains(op))
+            emit_warn(op.spec, "", "callback with name `{}` and method `{}` already exist, ignoring second",
+                      op.id ? *op.id : "<unnamed>", op.method);
+          result.webhooks.insert(std::move(op));
+        }
+      });
   // TODO на первом этапе как будто надо переложить калбеки в вебхуки
   //  калбеки есть только в операциях (которые в paths & components/pathItems и в components/callbacks) и в
   //  webhooks (тоже в операциях)

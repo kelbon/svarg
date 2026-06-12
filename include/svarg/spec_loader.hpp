@@ -39,6 +39,7 @@ struct schema_or_ref {
   }
 };
 
+// TODO общий интерфейс для фронтенда и это реализация для опенапи
 // загружает спецификацию, затем разрешает все ссылки в ней
 // и разрешает видимо сразу в IR структуру (которая позже преобразуется в json)
 // Загружается спека одна, но она тащит за собой все другие (в ссылках и тд)
@@ -60,18 +61,6 @@ struct spec_loader {
   jsons_cache jcache;
   // схемы создаваемые прямо сейчас (scope + name), чтобы избегать рекурсии
   std::unordered_set<strpair> schemas_in_progress;
-
-  struct resolve_ref_cache_key {
-    std::string path;  // generic string пути
-    std::string ref;
-
-    bool operator==(const resolve_ref_cache_key&) const = default;
-  };
-  struct resolve_refs_hasher {
-    size_t operator()(const resolve_ref_cache_key& k) const noexcept {
-      return hash_combined(k.path, k.ref);
-    }
-  };
 
  public:
   const svarg_options& get_options() const noexcept {
@@ -100,6 +89,18 @@ struct spec_loader {
     assert(specs.empty() && loaded_specs.empty());
   }
 
+  // reffile - файл где написана ссылка
+  // filefromref - файл до # в ссылке (в том числе пустой)
+  [[nodiscard]] std::filesystem::path find_file_from_ref(std::filesystem::path filefromref,
+                                                         const std::filesystem::path& reffile) const {
+    // даже для абсолютных делаем relative чтобы правильно запрашивать файлы в кеше (единообразно)
+    // поддерживаем абсолютные пути не смотря на то что их вроде как нельзя в $ref
+    // т.к. имплементация сама создаёт такие ссылки внутри resolve_ref
+    if (!filefromref.is_absolute())
+      filefromref = !filefromref.empty() ? reffile.parent_path() / filefromref : reffile;
+    filefromref = std::filesystem::relative(std::filesystem::absolute(filefromref), specs_dir);
+    return find_existing_file(filefromref);
+  }
   // возвращает первый из существующих файлов из списка specs_dir/filename, -I dirs/filename...
   // используется для разрешений ссылок
   // возвращаемый путь всегда относительно specs_dir
@@ -118,6 +119,7 @@ struct spec_loader {
                                      std::unordered_set<ir::schema>& types);
 
   callback_object resolve_callback(reference_or<callback_object>, std::filesystem::path file);
+  path_item_object resolve_path_item_object(reference_or<path_item_object> item, std::filesystem::path file);
 
   // file - относительно specs dir, jsonptr должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
@@ -134,6 +136,13 @@ struct spec_loader {
   schema_or_ref schema_lowering(const schema_object& schema, const std::filesystem::path& file,
                                 std::string_view jsonptr, std::optional<std::string_view> name,
                                 std::unordered_set<ir::schema>& schemas);
+
+  // name - operationId для операций, имя калбека/вебхука для калбека или вебхука
+  // path - путь относительно сервера для операции, runtime expr для калбека
+  // spec - где определена операция. Даже если операция была ссылкой, она могла перекрыть какие-то филды
+  // и поэтому стала новой операцией в том файле где написана ссылка
+  ir::operation path_item_object_lowering(std::string_view path, std::filesystem::path spec,
+                                          std::optional<std::string_view> name, path_item_object);
 
  private:
   template <typename T>
