@@ -24,7 +24,7 @@ TEST("spec loader") {
     if (x.spec() == "test_specs/TS29571_CommonData.yaml")
       std::cout << x.jsonptr() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
   }
-  REQUIRE(o.schemas.size() == 1885);
+  REQUIRE(o.schemas.size() == 1889);
 }
 
 TEST("parse_spec") {

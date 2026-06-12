@@ -53,6 +53,8 @@ static void remap_references(string_map<Any>& fields, const fs::path& curfile, c
 // рекурсивно резолвит ссылку и в конце передаёт в invocable объект T, путь в котором он лежал (относительно
 // specs_dir) и json pointer на него в этом файле
 // возвращает то что вернёт вызов invocable(tvalue, file, jsonptr)
+// в поданном в конце объекте все ссылки относительно его файла ЛИБО абсолютные
+// (те которые прицепились к нему по дороге)
 template <typename T>
 auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, spec_loader& loader) {
   parsed_ref r;
@@ -87,6 +89,18 @@ auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, spec_
         merge_with_override(std::move(override_fields), std::move(ref._keyfield_override_fields));
   }
   throw semantic_error("recursion depth max reached");
+}
+
+template <typename T>
+std::pair<T, fs::path> resolve_ref_and_ret(reference_or<T> x, fs::path file, spec_loader& loader) {
+  if (auto* r = std::get_if<reference_object>(&x)) {
+    auto getcb = [](T obj, fs::path file, std::string_view /*jsonptr*/) {
+      return std::make_pair(std::move(obj), std::move(file));
+    };
+    return resolve_ref_to<T>(std::move(*r), std::move(file), getcb, loader);
+  } else {
+    return std::make_pair(std::move(std::get<T>(x)), std::move(file));
+  }
 }
 
 // jsonptr и fieldname используются только если это инлайн схема для создания уникального scope
@@ -373,16 +387,18 @@ constexpr auto refvtor(auto& vtor) {
   };
 }
 
-// TODO? RM What?
-// посещает все ссылки на `What` и передаёт калбеку json-pointer до элемента и сам элемент
-template <typename What>
-struct vtor {
-  fs::path obj_file;
+// пылесосит объект в поисках всех схем, в том числе в других файлах на которые ссылаются $ref
+struct schemas_collector {
+ private:
+  const fs::path& obj_file;
   spec_loader* loader;
-  std::unordered_set<ir::schema> schemas;
+  std::unordered_set<ir::schema>& schemas;
   scopes_t scopes;
 
-  explicit vtor(fs::path obj_file, spec_loader& l) : obj_file(std::move(obj_file)), loader(&l) {
+ public:
+  explicit schemas_collector(const fs::path& obj_file, std::unordered_set<ir::schema>& schemas,
+                             spec_loader& l)
+      : obj_file(obj_file), loader(&l), schemas(schemas) {
   }
 
 #define SVARG_ADD_EXCEPTION_INFO(EXTYPE, INFO) \
@@ -470,13 +486,17 @@ struct vtor {
     dbgprint(name);
 
     if (auto* r = std::get_if<reference_object>(&x)) {
-      // TODO тут явно надо подумать что с другими делать (ссылки на параметры и тд)
-      // TODO как минимум нужно заходить в ссылки на параметры и хедеры, чтобы там инлайн схемы искать или чёт
-      // такое
-      if constexpr (!std::is_same_v<T, What>)
+      if constexpr (!std::is_same_v<T, schema_object>) {
+        // проходимся на зарезолвленном объекте, чтобы собрать всё что упомянуто там
+        auto [resolved, path] = resolve_ref_and_ret(x, obj_file, *loader);
+        schemas_collector inner(path, schemas, *loader);
+        // inner.scopes - пустые, начинаются с корня файла
+        inner(name, resolved);
         return;
-      // вызывается чтобы обойти всё и собрать упоминающиеся ссылки
-      loader->resolve_schema_ref(*r, obj_file, schemas);
+      } else {
+        // вызывается чтобы обойти всё и собрать упоминающиеся ссылки
+        loader->resolve_schema_ref(*r, obj_file, schemas);
+      }
     } else {
       (*this)(name, *std::get_if<T>(&x));
     }
@@ -496,16 +516,6 @@ static void visit_path_item_callbacks(const path_item_object& item, auto&& visit
       for (auto& [name, cb] : *op->callbacks)
         visitor(name, cb);
     }
-  }
-}
-
-// возвращает path_item_object где точно нет $ref
-path_item_object spec_loader::resolve_path_item_object(reference_or<path_item_object> item, fs::path file) {
-  if (auto* r = std::get_if<reference_object>(&item)) {
-    auto getcb = [](path_item_object obj, fs::path file, std::string_view jsonptr) { return obj; };
-    return resolve_ref_to<path_item_object>(std::move(*r), std::move(file), getcb, *this);
-  } else {
-    return std::move(std::get<path_item_object>(item));
   }
 }
 
@@ -552,24 +562,22 @@ ir::operation spec_loader::path_item_object_lowering(std::string_view path, fs::
 }
 
 callback_object spec_loader::resolve_callback(reference_or<callback_object> cb, fs::path file) {
-  if (auto* r = std::get_if<reference_object>(&cb)) {
-    auto getcb = [](callback_object obj, fs::path file, std::string_view jsonptr) { return obj; };
-    return resolve_ref_to<callback_object>(std::move(*r), std::move(file), getcb, *this);
-  } else {
-    return std::move(std::get<callback_object>(cb));
-  }
+  return resolve_ref_and_ret(std::move(cb), std::move(file), *this).first;
+}
+
+path_item_object spec_loader::resolve_path_item_object(reference_or<path_item_object> item, fs::path file) {
+  return resolve_ref_and_ret(std::move(item), std::move(file), *this).first;
 }
 
 ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj, const fs::path& obj_file) {
   ir::ir_object result;
 
   // собираем все схемы, в том числе из калбеков, вебхуков и paths
-  vtor<schema_object> v(obj_file, *this);
+  schemas_collector collector(obj_file, result.schemas, *this);
   // TODO postparse надо на чето заменить видимо, чтобы парс + сериализация не меняли
   // TODO в моём языке разрешить ссылки на фундаментальные типы: например #string, #number и тд
   // чтобы например легко писать oneOf: - #string -#number
-  boost::pfr::for_each_field_with_name(obj, refvtor(v));
-  result.schemas = std::move(v.schemas);
+  boost::pfr::for_each_field_with_name(obj, refvtor(collector));
 
   visit_all_callbacks(
       obj, obj_file, *this, [&](std::string_view name, const reference_or<callback_object>& cb) {
