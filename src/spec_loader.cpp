@@ -31,20 +31,17 @@ static void visit_refs(boost::json::value& val, auto&& visitor) {
   }
 }
 
-// TODO namespace fs
-
 // curfile - файл внутри которого написаны ссылки в fields (куда ссылается например локальное #ref)
 // loader - используется чтобы найти существующие файлы, т.е. учесть инклуд директории
 // Note: ссылки ремапятся в абсолютные пути, хотя это и запрещено в $ref. Но у меня поддержано чтобы не
 // возиться
-static void remap_references(string_map<Any>& fields, const std::filesystem::path& curfile,
-                             const spec_loader& loader) {
+static void remap_references(string_map<Any>& fields, const fs::path& curfile, const spec_loader& loader) {
   for (auto& [key, a] : fields) {
     auto remap_ref = [&](boost::json::value& ref) {
       if (!ref.is_string())
         throw parse_error("invalid reference, expected string, but got {}", e2str(ref.kind()));
       parsed_ref r = parse_ref(ref.as_string());
-      std::filesystem::path p = loader.find_file_from_ref(r.file, curfile);
+      fs::path p = loader.find_file_from_ref(r.file, curfile);
       ref.as_string() = std::format("{}#{}", p.generic_string(), r.json_ptr);
     };
     visit_refs(a.value, remap_ref);
@@ -57,7 +54,7 @@ static void remap_references(string_map<Any>& fields, const std::filesystem::pat
 // specs_dir) и json pointer на него в этом файле
 // возвращает то что вернёт вызов invocable(tvalue, file, jsonptr)
 template <typename T>
-auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& invocable, spec_loader& loader) {
+auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, spec_loader& loader) {
   parsed_ref r;
   // здесь нельзя кешировать, так как с разных мест разные ссылки дают разный результат из-за override fields
 
@@ -73,7 +70,7 @@ auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& inv
                        "$ref should be into /components/, but $ref = {}", ref.ref_);
     }
     r = parse_ref(ref.ref_);
-    std::filesystem::path refered_file = loader.find_file_from_ref(r.file, file);
+    fs::path refered_file = loader.find_file_from_ref(r.file, file);
     const boost::json::value& v = loader.load_as_json(refered_file);
     boost::json::value jref = v.at_pointer(r.json_ptr);
     if (!jref.is_object())
@@ -95,8 +92,8 @@ auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& inv
 // jsonptr и fieldname используются только если это инлайн схема для создания уникального scope
 // например jsonptr = /components/schemas и fieldname = "additionalProperties"
 [[nodiscard]] static resolved_schema resolve_schema(const reference_or<schema_object>& sor,
-                                                    const std::filesystem::path& file,
-                                                    std::string_view jsonptr, std::string_view fieldname,
+                                                    const fs::path& file, std::string_view jsonptr,
+                                                    std::string_view fieldname,
                                                     std::unordered_set<ir::schema>& schemas,
                                                     spec_loader& loader) {
   if (auto* ref = std::get_if<reference_object>(&sor)) {
@@ -110,8 +107,8 @@ auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& inv
   }
 }
 
-ir::object_schema spec_loader::make_object_type(schema_object const& schema,
-                                                const std::filesystem::path& file, std::string_view jsonptr,
+ir::object_schema spec_loader::make_object_type(schema_object const& schema, const fs::path& file,
+                                                std::string_view jsonptr,
                                                 std::unordered_set<ir::schema>& schemas) {
   if (jsonptr.ends_with('/'))
     jsonptr.remove_suffix(1);
@@ -192,7 +189,7 @@ template <typename... Args>
  * если ничего нет, но есть properties - то как будто неявно type: object
  * если нет ничего, то схема any, но возможно всё ещё с валидацией (н-р required [a, b, c])
 */
-schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const std::filesystem::path& file,
+schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const fs::path& file,
                                            std::string_view jsonptr, std::optional<std::string_view> name,
                                            std::unordered_set<ir::schema>& schemas) {
   if (!jsonptr.starts_with('/'))
@@ -351,9 +348,9 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const st
 }
 
 // ожидает что file относительно spec dir
-resolved_schema spec_loader::resolve_schema_ref(reference_object ref, std::filesystem::path file,
+resolved_schema spec_loader::resolve_schema_ref(reference_object ref, fs::path file,
                                                 std::unordered_set<ir::schema>& schemas) {
-  auto doschema = [&](schema_object schema, std::filesystem::path refered_file, std::string_view jsonptr) {
+  auto doschema = [&](schema_object schema, fs::path refered_file, std::string_view jsonptr) {
     // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
     // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
     std::string_view name = last_segment(jsonptr);
@@ -380,12 +377,12 @@ constexpr auto refvtor(auto& vtor) {
 // посещает все ссылки на `What` и передаёт калбеку json-pointer до элемента и сам элемент
 template <typename What>
 struct vtor {
-  std::filesystem::path obj_file;
+  fs::path obj_file;
   spec_loader* loader;
   std::unordered_set<ir::schema> schemas;
   scopes_t scopes;
 
-  explicit vtor(std::filesystem::path obj_file, spec_loader& l) : obj_file(std::move(obj_file)), loader(&l) {
+  explicit vtor(fs::path obj_file, spec_loader& l) : obj_file(std::move(obj_file)), loader(&l) {
   }
 
 #define SVARG_ADD_EXCEPTION_INFO(EXTYPE, INFO) \
@@ -503,12 +500,9 @@ static void visit_path_item_callbacks(const path_item_object& item, auto&& visit
 }
 
 // возвращает path_item_object где точно нет $ref
-path_item_object spec_loader::resolve_path_item_object(reference_or<path_item_object> item,
-                                                       std::filesystem::path file) {
+path_item_object spec_loader::resolve_path_item_object(reference_or<path_item_object> item, fs::path file) {
   if (auto* r = std::get_if<reference_object>(&item)) {
-    auto getcb = [](path_item_object obj, std::filesystem::path file, std::string_view jsonptr) {
-      return obj;
-    };
+    auto getcb = [](path_item_object obj, fs::path file, std::string_view jsonptr) { return obj; };
     return resolve_ref_to<path_item_object>(std::move(*r), std::move(file), getcb, *this);
   } else {
     return std::move(std::get<path_item_object>(item));
@@ -517,7 +511,7 @@ path_item_object spec_loader::resolve_path_item_object(reference_or<path_item_ob
 
 // посещает все калбеки и передаёт визитору имя + reference_or<callback>
 // Note: может быть много калбеков с одинаковым именем. Они отличаются по методу и тд
-static void visit_all_callbacks(const openapi_object& api, std::filesystem::path file, spec_loader& loader,
+static void visit_all_callbacks(const openapi_object& api, fs::path file, spec_loader& loader,
                                 auto&& visitor) {
   // components/callbacks
   if (api.components && api.components->callbacks) {
@@ -550,26 +544,23 @@ static void visit_all_callbacks(const openapi_object& api, std::filesystem::path
   }
 }
 
-ir::operation spec_loader::path_item_object_lowering(std::string_view path, std::filesystem::path spec,
+ir::operation spec_loader::path_item_object_lowering(std::string_view path, fs::path spec,
                                                      std::optional<std::string_view> name,
                                                      path_item_object item) {
   // TODO
   return {};
 }
 
-callback_object spec_loader::resolve_callback(reference_or<callback_object> cb, std::filesystem::path file) {
+callback_object spec_loader::resolve_callback(reference_or<callback_object> cb, fs::path file) {
   if (auto* r = std::get_if<reference_object>(&cb)) {
-    auto getcb = [](callback_object obj, std::filesystem::path file, std::string_view jsonptr) {
-      return obj;
-    };
+    auto getcb = [](callback_object obj, fs::path file, std::string_view jsonptr) { return obj; };
     return resolve_ref_to<callback_object>(std::move(*r), std::move(file), getcb, *this);
   } else {
     return std::move(std::get<callback_object>(cb));
   }
 }
 
-ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
-                                                 const std::filesystem::path& obj_file) {
+ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj, const fs::path& obj_file) {
   ir::ir_object result;
 
   // собираем все схемы, в том числе из калбеков, вебхуков и paths

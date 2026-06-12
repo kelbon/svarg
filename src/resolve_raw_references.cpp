@@ -15,15 +15,15 @@ namespace svarg {
 
 // преобразует путь(который также может быть url) к нормальному виду без ./ и прочей фигни относительной
 // при этом оставляя https:// и не убирая //
-static std::string fixup_path(std::filesystem::path p) {
+static std::string fixup_path(fs::path p) {
   std::string gs = p.generic_string();
   if (is_net_ref(gs)) {
     parsed_uri u = parse_uri(gs);
-    std::string newpath = std::filesystem::path(u.path).lexically_normal().generic_string();
+    std::string newpath = fs::path(u.path).lexically_normal().generic_string();
     u.path = newpath;
     return u.to_string();
   } else {
-    return std::filesystem::absolute(p).lexically_normal().generic_string();
+    return fs::absolute(p).lexically_normal().generic_string();
   }
 }
 
@@ -87,12 +87,12 @@ static boost::json::value request_refered_object(std::string_view uri) {
 struct load_raw_ref_return {
   boost::json::value value;
   // путь до файла с value
-  std::filesystem::path path;
+  fs::path path;
 };
 
 // `url` предполагается без #, просто ссылка на файл
 // `curfile` должен быть относительным путём или URL (или также может быть URL, если загрузили файл до этого)
-static load_raw_ref_return load_raw_refered_object(std::string_view url, std::filesystem::path curfile,
+static load_raw_ref_return load_raw_refered_object(std::string_view url, fs::path curfile,
                                                    const svarg_options& options, jsons_cache* cache) {
   curfile = fixup_path(std::move(curfile));
   // вроде если не обрабатывать путь может получится слишком длинным и в итоге
@@ -119,11 +119,11 @@ static load_raw_ref_return load_raw_refered_object(std::string_view url, std::fi
           "path: `{}`",
           url, curfile.generic_string());
     }
-    std::filesystem::path path = curfile.parent_path() / url;
+    fs::path path = curfile.parent_path() / url;
     return load_raw_ref_return(request_refered_object(path.generic_string()), path.generic_string());
   }
   boost::json::value result;
-  std::filesystem::path path = curfile.parent_path() / url;
+  fs::path path = curfile.parent_path() / url;
   if (cache) {
     result = cache->load(path);
   } else {
@@ -170,7 +170,7 @@ static void collect_raw_refs(boost::json::value* v, std::vector<raw_ref>& refs) 
 
 // если depth дошло до 0, то больше погружаться нельзя
 // ссылки разрешаются относительно curfile
-static void include_raw_references(boost::json::value& v, std::filesystem::path curfile, size_t depth,
+static void include_raw_references(boost::json::value& v, fs::path curfile, size_t depth,
                                    const svarg_options& options, jsons_cache* cache) {
   std::vector<raw_ref> refs;
   collect_raw_refs(&v, refs);

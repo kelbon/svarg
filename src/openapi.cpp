@@ -24,7 +24,7 @@ openapi_object parse_json_spec(std::string_view json, const svarg_options& optio
   return parse_spec(std::move(v), options);
 }
 
-openapi_object parse_spec_file(std::filesystem::path path, svarg_options options) {
+openapi_object parse_spec_file(fs::path path, svarg_options options) {
   options.input_specfile_path = path;
   openapi_object obj;
   pass_as_json(path, [&](std::string_view json) { obj = parse_json_spec(json, options); });

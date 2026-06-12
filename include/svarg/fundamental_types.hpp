@@ -16,6 +16,8 @@
 
 namespace svarg {
 
+namespace fs = std::filesystem;
+
 // data types
 
 // integer, string, number

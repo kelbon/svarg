@@ -12,8 +12,8 @@
 
 namespace svarg {
 
-void pass_as_json(std::filesystem::path path, fn_cref<void(std::string_view) const> fn) {
-  std::filesystem::path ext = path.extension();
+void pass_as_json(fs::path path, fn_cref<void(std::string_view) const> fn) {
+  fs::path ext = path.extension();
   if (ext == ".yaml" || ext == ".yml") {
     std::string json = load_yaml_as_json(path);
     return fn(std::string_view(json));
@@ -30,13 +30,13 @@ std::string yaml2json(std::string_view yaml) {
   return ryml::emitrs_json<std::string>(tree);
 }
 
-inline std::string load_yaml_as_json(std::filesystem::path yaml) {
+inline std::string load_yaml_as_json(fs::path yaml) {
   boost::iostreams::mapped_file_source file(yaml.string());
   return yaml2json(std::string_view(file.data(), file.size()));
 }
 
-boost::json::value& jsons_cache::load_mutable(std::filesystem::path path) {
-  path = std::filesystem::canonical(path);
+boost::json::value& jsons_cache::load_mutable(fs::path path) {
+  path = fs::canonical(path);
   auto it = cache.find(path);
   if (it != cache.end())
     return it->second;

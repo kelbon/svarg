@@ -24,7 +24,7 @@ struct svarg_options {
   bool resolve_url_refs = false;
   // при подаче любого файла на вход все пути всё равно считаются относительно него, так что достаточно одного
   // любого пути к спецификации для сбора всех нужных
-  std::filesystem::path input_specfile_path;
+  fs::path input_specfile_path;
   // TODO unordered_map<string> known_formats?
 };
 
@@ -49,7 +49,7 @@ openapi_object parse_json_spec(std::string_view json, const svarg_options& optio
 //      - $ref: './User.yaml' <- рекурсия на файлах, не поддерживается.
 // все ссылки без # работают как просто include того что написано файле с конвертацией в json value
 // при ссылке внутри объекта на другой объект в $ref лежащие рядом поля переопределяют поля объекта по ссылке
-openapi_object parse_spec_file(std::filesystem::path path, svarg_options options);
+openapi_object parse_spec_file(fs::path path, svarg_options options);
 
 // TODO в итоговом джсоне уже не должно быть всяких параметерс и тд прочей хуйни
 // должен быть просто список типов, список операций (там прямо перечисленно какие типы в параметрах, их
