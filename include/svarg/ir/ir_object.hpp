@@ -11,7 +11,6 @@
 #include "svarg/utils/path_tools.hpp"
 #include "svarg/utils/strcmp.hpp"
 #include "svarg/utils/combined_hash.hpp"
-#include "svarg/utils/to_underlying.hpp"
 
 namespace svarg::ir {
 
@@ -264,7 +263,7 @@ struct hash<::svarg::ir::header> {
 template <>
 struct hash<::svarg::ir::operation_parameter> {
   size_t operator()(const ::svarg::ir::operation_parameter& p) const {
-    return ::svarg::hash_combined(to_underlying(p.location), p.name);
+    return ::svarg::hash_combined(std::to_underlying(p.location), p.name);
   }
 };
 
@@ -344,7 +343,7 @@ struct hash<::svarg::ir::response_desc> {
       return ::svarg::hash_combined(*o.status);
     } else if (o.statusRange) {
       // значения из енама меньше 100, поэтому не должны пересекаться с status никогда
-      return ::svarg::hash_combined(svarg::to_underlying(*o.statusRange));
+      return ::svarg::hash_combined(std::to_underlying(*o.statusRange));
     } else {
       // должен быть status или statusRange
       unreachable();
@@ -356,7 +355,6 @@ struct hash<::svarg::ir::response_desc> {
 
 namespace svarg::ir {
 
-// TODO $ref резолвить все всегда
 struct operation {
   // operationId, если нет, используется method + путь (каким-то образом)
   // лучше бы было
@@ -413,7 +411,7 @@ struct hash<::svarg::ir::operation> {
       }
     });
     hash.add(o.path);
-    hash.add(svarg::to_underlying(o.method));
+    hash.add(std::to_underlying(o.method));
     return hash;
   }
 };

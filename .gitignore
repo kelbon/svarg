@@ -8,6 +8,7 @@ compile_commands.json
 .vs/
 .vscode/
 .trash/
+.clangd
 
 build/
 build_release/

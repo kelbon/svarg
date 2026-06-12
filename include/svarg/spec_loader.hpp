@@ -72,7 +72,6 @@ struct spec_loader {
       return hash_combined(k.path, k.ref);
     }
   };
-  std::unordered_map<resolve_ref_cache_key, resolved_schema, resolve_refs_hasher> resolved_refs_cache;
 
  public:
   void load_spec(std::filesystem::path s) {
