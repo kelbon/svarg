@@ -13,8 +13,7 @@ namespace svarg {
 // specs_dir) и json pointer на него в этом файле
 // возвращает то что вернёт вызов invocable(tvalue, file, jsonptr)
 template <typename T>
-static auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& invocable,
-                           spec_loader& loader) {
+auto resolve_ref_to(reference_object ref, std::filesystem::path file, auto&& invocable, spec_loader& loader) {
   parsed_ref r;
   // здесь нельзя кешировать, так как с разных мест разные ссылки дают разный результат из-за override fields
 
@@ -457,9 +456,16 @@ static void visit_path_item_callbacks(const path_item_object& item, auto&& visit
   }
 }
 
+// возвращает path_item_object где точно нет $ref
+path_item_object resolve_path_item_object(reference_or<path_item_object> item,
+                                          const std::filesystem::path& file) {
+  // TODO
+  return {};
+}
+
 // посещает все калбеки и передаёт визитору имя + reference_or<callback>
 // Note: может быть много калбеков с одинаковым именем. Они отличаются по методу и тд
-static void visit_all_callbacks(const openapi_object& api, auto&& visitor) {
+static void visit_all_callbacks(const openapi_object& api, std::filesystem::path file, auto&& visitor) {
   // components/callbacks
   if (api.components && api.components->callbacks) {
     for (auto& [name, cb] : *api.components->callbacks)
@@ -468,30 +474,27 @@ static void visit_all_callbacks(const openapi_object& api, auto&& visitor) {
 
   // components/pathItems
   if (api.components->pathItems) {
-    for (auto& [name, item] : *api.components->pathItems)
-      visit_path_item_callbacks(item, visitor);
+    for (auto& [name, item] : *api.components->pathItems) {
+      path_item_object ritem = resolve_path_item_object(item, file);
+      visit_path_item_callbacks(ritem, visitor);
+    }
   }
 
   // paths -> operations -> callbacks
   if (api.paths) {
-    for (auto& [path, item] : *api.paths)
-      visit_path_item_callbacks(item, visitor);
+    for (auto& [path, item] : *api.paths) {
+      path_item_object ritem = resolve_path_item_object(item, file);
+      visit_path_item_callbacks(ritem, visitor);
+    }
   }
 
   // webhooks -> operations -> callbacks
   if (api.webhooks) {
-    for (auto& [name, item] : *api.webhooks)
-      visit_path_item_callbacks(item, visitor);
+    for (auto& [name, item] : *api.webhooks) {
+      path_item_object ritem = resolve_path_item_object(item, file);
+      visit_path_item_callbacks(ritem, visitor);
+    }
   }
-}
-
-// TODO: реюз resolve_ref
-// TODO: path item ставим где надо | reference и меняем его парсинг в обычные правила
-
-// возвращает path_item_object где точно нет $ref
-path_item_object resolve_path_item_object(const path_item_object& item, const std::filesystem::path& file) {
-  // TODO
-  return {};
 }
 
 // name - operationId для операций, имя калбека/вебхука для калбека или вебхука
@@ -525,10 +528,7 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj,
   boost::pfr::for_each_field_with_name(obj, refvtor(v));
   result.schemas = std::move(v.schemas);
 
-  visit_all_callbacks(obj, [&](std::string_view name, const reference_or<callback_object>& cb) {
-    auto getcb = [](callback_object obj, std::filesystem::path file, std::string_view jsonptr) {
-      return obj;
-    };
+  visit_all_callbacks(obj, obj_file, [&](std::string_view name, const reference_or<callback_object>& cb) {
     callback_object obj = resolve_callback(cb, obj_file);
     // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
     for (auto&& [expr, pathItem] : obj) {

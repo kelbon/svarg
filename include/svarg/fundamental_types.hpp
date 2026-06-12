@@ -56,11 +56,7 @@ struct one_or_array {
   }
 };
 
-struct path_item_object;
-// Note: T НЕ ДОЛЖНО БЫТЬ path_item_object. Это только на уровне спеки написано ref | path item
-// на деле же у них одинаковые поля и это формальность
 template <typename T>
-  requires(!std::is_same_v<path_item_object, T>)
 using reference_or = std::variant<reference_object, T>;
 
 enum struct parameter_location : uint8_t {
@@ -68,6 +64,7 @@ enum struct parameter_location : uint8_t {
   query,
   header,
   cookie,
+  // TODO querystring (openapi 3.2)?
 };
 
 inline std::string_view e2str(parameter_location l) noexcept {

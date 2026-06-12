@@ -260,8 +260,6 @@ struct parse<T> {
 template <typename T>
 struct parse<reference_or<T>> {
   void operator()(boost::json::value const& v, reference_or<T>& out) {
-    // path_item_object содержит в себе опциональную ссылку, его так парсить было бы неверно и бессмысленно
-    static_assert(!std::is_same_v<T, path_item_object>);
     auto const* obj = v.if_object();
     if (!obj) {
       if constexpr (parsable_even_from_not_object<T>) {

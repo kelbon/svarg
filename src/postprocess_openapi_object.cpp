@@ -76,20 +76,25 @@ static void postprocess_operation_object(operation_object& op) {
   }
 }
 
-static void postprocess_path_item_object(path_item_object& pi) {
-  remove_ignored_header_params(pi.parameters);
+static void postprocess_path_item_object(reference_or<path_item_object>& pir) {
+  auto* pi = std::get_if<path_item_object>(&pir);
+  if (!pi)
+    // TODO вообще-то там могут рядом со ссылкой лежать всякие данные, которые требуют обработки.
+    // Пока игнорируется
+    return;
+  remove_ignored_header_params(pi->parameters);
   auto visit_op = [](optional<operation_object>& op) {
     if (op)
       postprocess_operation_object(*op);
   };
-  visit_op(pi.get);
-  visit_op(pi.put);
-  visit_op(pi.post);
-  visit_op(pi.delete_);
-  visit_op(pi.options);
-  visit_op(pi.head);
-  visit_op(pi.patch);
-  visit_op(pi.trace);
+  visit_op(pi->get);
+  visit_op(pi->put);
+  visit_op(pi->post);
+  visit_op(pi->delete_);
+  visit_op(pi->options);
+  visit_op(pi->head);
+  visit_op(pi->patch);
+  visit_op(pi->trace);
 }
 
 }  // namespace detail

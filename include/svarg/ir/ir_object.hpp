@@ -4,7 +4,6 @@
 #include <boost/container_hash/hash.hpp>
 #include <unordered_set>
 
-#include <http2/http_base.hpp>
 #include "svarg/fundamental_types.hpp"
 #include "svarg/openapi_object.hpp"
 #include "svarg/utils/parse_ref.hpp"
@@ -279,6 +278,10 @@ struct body {
   schema_ref schema;
   // мапа имя property из schema => как его кодировать конкретно в этом теле
   optional<string_map<string>> membersEncoding;
+  // означает, что schema применяется не ко всему телу, а к единице стрима
+  // (например openapi 3.2 itemsSchema)
+  // по умолчанию false
+  optional<bool> streaming;
 
   bool operator==(const body& b) const noexcept {
     return contentType == b.contentType;
@@ -367,8 +370,12 @@ struct operation {
   // если opeartion это вебхук, то путь может быть пустым
   // TODO генерировать проверки на фронтенде и на бекенде надо делать парсеры путей
   // н-р если users/{id}, то обязательно должен быть параметр с in: path и именем id
+  // TODO использовать правила валидации из openapie 3.2
+  // https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.2.0.md#path-templating
   string path;
-  http2::http_method_e method = http2::http_method_e::GET;
+  // GET/POST и тд, регистронезависимо.
+  // строкой для поддержки кастомных методов (openapi 3.2)
+  string method;
   optional<array<operation_parameter>> parameters;
   // на каждый contentType своё тело
   optional<std::unordered_set<body>> bodies;
@@ -402,7 +409,7 @@ template <>
 struct hash<::svarg::ir::operation> {
   size_t operator()(const ::svarg::ir::operation& o) const {
     svarg::combined_hash hash;
-    hash.add(o.spec);
+    hash.add(o.spec, o.method);
     ::svarg::visit_path_segments(o.path, [&](std::string_view segment) {
       // игнорируем сломанные сегменты типа {{abc} и так далее
       if (segment.starts_with('{')) {
@@ -412,8 +419,6 @@ struct hash<::svarg::ir::operation> {
         hash.add(segment);
       }
     });
-    hash.add(o.path);
-    hash.add(std::to_underlying(o.method));
     return hash;
   }
 };

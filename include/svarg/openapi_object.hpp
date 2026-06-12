@@ -383,7 +383,7 @@ struct path_item_object;
 // мапа возможных калбеков связанных с родительской операцией
 // ключом должны быть {expression}
 // https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#runtime-expressions
-using callback_object = string_map<path_item_object>;
+using callback_object = string_map<reference_or<path_item_object>>;
 
 // список требуемых security схем для выполнения операции
 // имена ДОЛЖНЫ соответствовать схемам декларированным в Security Schemas под Components Object
@@ -449,10 +449,10 @@ struct operation_object {
 };
 
 struct path_item_object {
-  // ссылка на другой path_item_object
-  // "базовый" объхект по сути, поведение зависит от реализации
-  // у меня думаю надо чтобы новые поля перекрывали базовые
-  optional<string> ref_;
+  // в спецификации нормально написано, что reference_object и path_item_object полностью пересекаются по
+  // полям но для парсинга здесь нет $ref (любой объект с $ref парсит все остальные поля в override fields)
+  // при этом summary и description остаются здесь для соответствия спеке
+  // optional<string> ref_;
   optional<string> summary;
   optional<string> description;
   optional<operation_object> get;
@@ -468,13 +468,17 @@ struct path_item_object {
   optional<array<reference_or<parameter_object>>> parameters;
 };
 
+// TODO здесь надо специальную мапу со сравнением без учёта шаблонизирования?
 // хранит пути относительно url сервера
 // все пути должны начинаться с '/'
 // при поиске подходящего пути приоритет у тех
 // которые НЕ шаблонизированы
 // пути должны быть уникальны не учитывая имена в шаблонах, т.е.
 // /pets/{name} == /pets/{id}
-using paths_object = string_map<path_item_object>;
+// Note: формально в спеке не написано что это reference object | path item object
+// а просто указано path item object, непонятно почему так (в отличие от других мест)
+// но в path item object ссылка просто включена в сам объект, поэтому так
+using paths_object = string_map<reference_or<path_item_object>>;
 
 struct components_object {
   optional<string_map<reference_or<schema_object>>> schemas;
@@ -486,7 +490,7 @@ struct components_object {
   optional<string_map<reference_or<security_scheme_object>>> securitySchemes;
   optional<string_map<reference_or<link_object>>> links;
   optional<string_map<reference_or<callback_object>>> callbacks;
-  optional<string_map<path_item_object>> pathItems;
+  optional<string_map<reference_or<path_item_object>>> pathItems;
 };
 
 struct tag_object {
@@ -505,7 +509,7 @@ struct openapi_object {
   optional<array<server_object>> servers;
   // Должно быть хотя бы одно paths/webhooks/components
   optional<paths_object> paths;
-  optional<string_map<path_item_object>> webhooks;
+  optional<string_map<reference_or<path_item_object>>> webhooks;
   optional<components_object> components;
   optional<array<security_requirement_object>> security;
   optional<array<tag_object>> tags;
