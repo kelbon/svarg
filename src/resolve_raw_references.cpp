@@ -23,7 +23,7 @@ static std::string fixup_path(fs::path p) {
     u.path = newpath;
     return u.to_string();
   } else {
-    return fs::absolute(p).lexically_normal().generic_string();
+    return fs::canonical(p).lexically_normal().generic_string();
   }
 }
 

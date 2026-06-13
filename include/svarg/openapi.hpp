@@ -23,7 +23,9 @@ struct svarg_options {
   // TODO под это ещё кеш надо сделать, чтобы лишний раз не ходить с запросами
   bool resolve_url_refs = false;
   // TODO unordered_map<string> known_formats?
-  // TODO include dirs
+  // Зависят от порядка. При резолве ссылки берётся первый существующий файл
+  // spec dir это тоже include dir и она имеет приоритет
+  std::vector<fs::path> include_dirs;
 };
 
 // резолвит ссылки без #

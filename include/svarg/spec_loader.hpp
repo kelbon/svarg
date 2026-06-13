@@ -6,7 +6,6 @@
 #include "svarg/openapi.hpp"
 
 #include "svarg/ir/ir_object.hpp"
-#include "svarg/utils/combined_hash.hpp"
 #include "svarg/utils/scopes.hpp"
 #include "svarg/utils/strpair.hpp"
 
@@ -47,15 +46,6 @@ struct object_and_path {
   scopes_t jsonptr;
 };
 
-// TODO общий интерфейс для фронтенда и это реализация для опенапи
-// загружает спецификацию, затем разрешает все ссылки в ней
-// и разрешает видимо сразу в IR структуру (которая позже преобразуется в json)
-// Загружается спека одна, но она тащит за собой все другие (в ссылках и тд)
-// каждая встреченная спека также полностью загружается и складывается в кеш
-// а дальше generate уже идёт конкретных спек (только из тех что загружены), т.е. не все иногда нужны
-// например одна спека ссылается на другие, но paths и тд из других не нужны
-// TODO АХ да, надо разделить явно на fronend / IR / backend
-
 struct lowering_context {
  private:
   svarg_options opts;
@@ -80,7 +70,7 @@ struct lowering_context {
     // подготовка
     if (!fs::exists(specsdir) || !fs::is_directory(specsdir))
       throw parse_error("specs directory not exist, provided path: {}", specsdir.generic_string());
-    specs_dir = fs::absolute(specsdir);
+    specs_dir = fs::canonical(specsdir);
     std::unordered_set<fs::path> loaded_specs;
     std::unordered_map<fs::path, openapi_object> specs;
 
@@ -114,7 +104,7 @@ struct lowering_context {
     // т.к. имплементация сама создаёт такие ссылки внутри resolve_ref
     if (!filefromref.is_absolute())
       filefromref = !filefromref.empty() ? reffile.parent_path() / filefromref : reffile;
-    filefromref = fs::relative(fs::absolute(filefromref), specs_dir);
+    filefromref = fs::relative(fs::canonical(filefromref), specs_dir);
     return find_existing_file(filefromref);
   }
 
@@ -122,12 +112,15 @@ struct lowering_context {
   // используется для разрешений ссылок
   // возвращаемый путь всегда относительно specs_dir
   [[nodiscard]] fs::path find_existing_file(fs::path filepart) const {
-    filepart = fs::relative(filepart, specs_dir);
-    fs::path p = specs_dir / filepart;
-    if (fs::exists(p) && fs::is_regular_file(p))
+    filepart = filepart.lexically_normal();
+    fs::path file = specs_dir / filepart;
+    if (fs::exists(file) && fs::is_regular_file(file))
       return filepart;
-    // TODO -I
-    // TODO добавить в ошибку список проверенных путей
+    for (auto&& dir : opts.include_dirs) {
+      file = dir / filepart;
+      if (fs::exists(file) && fs::is_regular_file(file))
+        return fs::relative(filepart, specs_dir);
+    }
     throw parse_error("no such file: `{}`", filepart.generic_string());
   }
 
