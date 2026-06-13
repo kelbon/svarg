@@ -1,7 +1,5 @@
 #pragma once
 
-#include "svarg/fundamental_types.hpp"
-
 namespace svarg {
 
 template <typename T>

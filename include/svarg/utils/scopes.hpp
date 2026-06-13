@@ -113,8 +113,7 @@ struct scopes_t {
     return *this;
   }
   scopes_t& operator/=(int64_t num) {
-    add_scope(std::to_string(num));
-    return *this;
+    return *this /= std::to_string(num);
   }
   template <typename Me>
   scopes_t operator/(this Me&& self, std::string_view seg) {
@@ -124,9 +123,7 @@ struct scopes_t {
   }
   template <typename Me>
   scopes_t operator/(this Me&& self, int64_t num) {
-    scopes_t s = std::forward<Me>(self);
-    s.add_scope(std::to_string(num));
-    return s;
+    return std::forward<Me>(self) / std::to_string(num);
   }
 };
 

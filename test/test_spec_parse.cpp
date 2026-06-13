@@ -1,7 +1,7 @@
-#include "svarg/openapi.hpp"
+#include "svarg/frontend/openapi/openapi.hpp"
 #include <moko3/moko3.hpp>
 #include "svarg/serialize.hpp"
-#include "svarg/spec_loader.hpp"
+#include "svarg/frontend/openapi/generate_ir.hpp"
 #include "svarg/utils/json_pretty.hpp"
 #include <fstream>
 
@@ -13,10 +13,8 @@ TEST("json is an yaml") {
   REQUIRE(boost::json::parse(json) == boost::json::parse(out));
 }
 
-TEST("spec loader") {
-  svarg::lowering_context loader;
-
-  svarg::ir::ir_object o = loader.generate_specs(
+TEST("generate ir from openapi") {
+  svarg::ir::ir_object o = svarg::openapi2ir(
       std::filesystem::current_path(),
       {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"});
   for (auto&& x : o.schemas) {
@@ -27,17 +25,16 @@ TEST("spec loader") {
 }
 
 TEST("parse_spec") {
-  svarg::svarg_options options;
+  svarg::openapi_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);
   svarg::openapi_object o2 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFManagement.yaml", options);
   (void)o1, (void)o2;
 
-  // svarg::pretty_print(std::cout, serialize_as_json(o1));
   // пока просто должно распарситься
 }
 
 TEST("raw_refs") {
-  svarg::svarg_options options;
+  svarg::openapi_options options;
   std::filesystem::path p = "./test_raw_links_specs/openapi/openapi.yaml";
   boost::json::value v;
   svarg::pass_as_json(p, [&](std::string_view str) { v = boost::json::parse(str); });
@@ -46,13 +43,13 @@ TEST("raw_refs") {
   svarg::pretty_print(f, v);
   svarg::openapi_object o = svarg::parse_spec(std::move(v), options);
   std::ofstream f2("mdamdaout.json");
-  svarg::pretty_print(f2, svarg::serialize_as_json(o));
+  f2 << svarg::to_json_string(o);
 }
 
 // на CI нельзя идти в сеть так напрямую
 #ifndef SVARG_CI
 TEST("network links") {
-  svarg::svarg_options options;
+  svarg::openapi_options options;
   options.resolve_url_refs = true;
 
   constexpr std::string_view api = R"(
@@ -121,7 +118,7 @@ paths:
 }
     )";
   svarg::openapi_object o = svarg::parse_yaml_spec(api, /*specfile=*/{}, options);
-  REQUIRE(boost::json::parse(expected_json) == svarg::serialize_as_json(o));
+  REQUIRE(boost::json::parse(expected_json) == svarg::to_json(o));
 }
 #endif
 

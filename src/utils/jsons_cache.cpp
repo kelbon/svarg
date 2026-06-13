@@ -1,7 +1,5 @@
 #include "svarg/utils/jsons_cache.hpp"
 
-#include "svarg/openapi.hpp"
-
 #include <boost/json/parse.hpp>
 #include <boost/json.hpp>
 

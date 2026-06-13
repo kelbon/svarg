@@ -4,8 +4,6 @@
 #include <boost/container_hash/hash.hpp>
 #include <unordered_set>
 
-#include "svarg/fundamental_types.hpp"
-#include "svarg/openapi_object.hpp"
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/path_tools.hpp"
 #include "svarg/utils/strcmp.hpp"

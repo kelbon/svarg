@@ -1,7 +1,7 @@
 #pragma once
 
 #include "svarg/utils/all.hpp"
-#include "svarg/utils/parse_json.hpp"
+#include "svarg/frontend/openapi/fundamental_types.hpp"
 
 #include <boost/json/serialize.hpp>
 #include <ranges>
@@ -372,13 +372,26 @@ struct parse<responses_object> {
   void operator()(boost::json::value const& v, responses_object& out) {
     // responses это по сути стринг мапа с ключами 200/201 и тд + возможный default
     responses_object res;
-    parse<decltype(res._responses)>{}(v, res._responses);
+    parse_from_json(v, res._responses);
     if (auto it = res._responses.find("default"); it != res._responses.end()) {
       res.default_.emplace(std::move(it->second));
       res._responses.erase(it);
     }
     out = std::move(res);
     // имена провалидируются позже (2XX ...)
+  }
+};
+
+template <>
+struct serialize<responses_object> {
+  boost::json::value operator()(responses_object const& in) {
+    // собираем всё обратно в плоскую string_map
+    boost::json::object out;
+    if (in.default_.has_value())
+      out.emplace("default", serialize<reference_or<response_object>>{}(*in.default_));
+    for (auto const& [code, resp] : in._responses)
+      out.emplace(code, serialize<reference_or<response_object>>{}(resp));
+    return out;
   }
 };
 

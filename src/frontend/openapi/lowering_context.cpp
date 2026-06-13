@@ -1,9 +1,8 @@
-#include "svarg/spec_loader.hpp"
+#include "svarg/frontend/openapi/lowering_context.hpp"
 #include "svarg/ir/ir_object.hpp"
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/merge_with_override.hpp"
 #include "svarg/utils/scopes.hpp"
-#include "svarg/utils/all.hpp"
 
 #include <boost/pfr.hpp>
 
@@ -32,7 +31,7 @@ static void visit_refs(boost::json::value& val, auto&& visitor) {
 }
 
 // curfile - файл внутри которого написаны ссылки в fields (куда ссылается например локальное #ref)
-// loader - используется чтобы найти существующие файлы, т.е. учесть инклуд директории
+// ctx - используется чтобы найти существующие файлы, т.е. учесть инклуд директории
 // Note: ссылки ремапятся в абсолютные пути, хотя это и запрещено в $ref. Но у меня поддержано чтобы не
 // возиться
 static void remap_references(string_map<Any>& fields, const fs::path& curfile, const lowering_context& ctx) {
@@ -66,7 +65,7 @@ auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lower
   // override fields написаны в одном файле, а резолвится будут возможно в контексте
   // другого поэтому их нужно перемапить на "универсальную" основу не зависящую от конкретного файла
   remap_references(override_fields, file, ctx);
-  for (size_t recursion_depth = 0; recursion_depth <= ctx.get_options().ref_max_depth; ++recursion_depth) {
+  for (size_t recursion_depth = 0; recursion_depth <= ctx.opts.ref_max_depth; ++recursion_depth) {
     if (!ref.ref_.contains("#/components/")) [[unlikely]] {
       ctx.emit_warn(file, r.json_ptr.empty() ? parse_ref(ref.ref_).json_ptr : r.json_ptr,
                     "$ref should be into /components/, but $ref = {}", ref.ref_);
@@ -156,8 +155,8 @@ ir::object_schema lowering_context::make_object_type(schema_object const& schema
   return ot;
 }
 
-static ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
-                                                     const array<ir::schema_ref>& schemas) {
+ir::discriminator_desc lowering_context::discriminator_lowering(const discriminator_object& d,
+                                                                const array<ir::schema_ref>& schemas) {
   ir::discriminator_desc ird;
   ird.propertyName = d.propertyName;
   auto from_mapping_or_just_name = [&](std::string_view name) -> std::string_view {
@@ -545,23 +544,24 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
 // и затем generate, в итоге один метод есть просто
 
 // statusstr пустой для дефолтного респонса
-ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
-                                    fs::path file, scopes_t jsonptr, lowering_context& ctx) {
+ir::response_desc lowering_context::response_lowering(std::optional<std::string_view> statusstr,
+                                                      const response_object& rsp, fs::path file,
+                                                      scopes_t jsonptr) {
   ir::response_desc result;
   if (statusstr)
     result.set_status(*statusstr);
   else
     result.make_default();
-  result.bodies;   // rsp.content;
+  result.bodies;   // rsp.content
   result.headers;  // rsp.headers
 
   if (rsp.headers) {
     for (auto& [name, hdr] : *rsp.headers) {
       ir::header result_hdr;
       result_hdr.name = name;
-      auto [hdrobj, reffile, refjsonptr] = resolve_ref_and_ret(hdr, file, jsonptr / "headers" / name, ctx);
+      auto [hdrobj, reffile, refjsonptr] = resolve_ref_and_ret(hdr, file, jsonptr / "headers" / name, *this);
       if (hdrobj.schema) {
-        resolved_schema rs = resolve_schema(*hdrobj.schema, reffile, refjsonptr, ctx);
+        resolved_schema rs = resolve_schema(*hdrobj.schema, reffile, refjsonptr, *this);
       }
     }
   }
@@ -570,10 +570,11 @@ ir::response_desc response_lowering(std::optional<std::string_view> statusstr, c
 }
 
 // TODO сделать required по дефолту если присутствует в path и валидировать что оно есть в строке path
-static ir::operation_parameter parameter_lowering(const parameter_object& param, std::string_view path) {
+ir::operation_parameter lowering_context::parameter_lowering(const parameter_object& param,
+                                                             std::string_view path) {
   return {};  // TODO
 }
-static std::unordered_set<ir::body> body_lowering(request_body_object) {
+std::unordered_set<ir::body> lowering_context::body_lowering(request_body_object) {
   return {};  // TODO
 }
 
@@ -598,15 +599,13 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
       if (o.responses->default_) {
         auto [obj, reffile, refjsonptr] = resolve_ref_and_ret(*o.responses->default_, resolve_ref_file,
                                                               jsonptr / "responses" / "default", *this);
-        op.defaultResponse =
-            response_lowering(std::nullopt, obj, std::move(reffile), std::move(refjsonptr), *this);
+        op.defaultResponse = response_lowering(std::nullopt, obj, std::move(reffile), std::move(refjsonptr));
       }
       op.responses.emplace();
       for (auto&& [status, r] : o.responses->_responses) {
         auto [obj, reffile, refjsonptr] =
             resolve_ref_and_ret(r, resolve_ref_file, jsonptr / "responses" / status, *this);
-        ir::response_desc rsp =
-            response_lowering(status, obj, std::move(reffile), std::move(refjsonptr), *this);
+        ir::response_desc rsp = response_lowering(status, obj, std::move(reffile), std::move(refjsonptr));
         op.responses->insert(std::move(rsp));
       }
       if (op.responses->empty())

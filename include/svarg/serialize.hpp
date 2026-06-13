@@ -1,17 +1,32 @@
 #pragma once
 
+#include <sstream>
+
 #include <boost/pfr.hpp>
 #include <boost/json.hpp>
 
-#include "svarg/fundamental_types.hpp"
-#include "svarg/openapi_object.hpp"
-#include "svarg/utils/parse_json.hpp"
+#include "svarg/common_types.hpp"
 #include "svarg/utils/unescape_field_name.hpp"
+#include "svarg/utils/json_pretty.hpp"
 
 namespace svarg {
 
 template <typename T>
 struct serialize {};
+
+template <typename T>
+boost::json::value to_json(const T& x) {
+  return serialize<T>{}(x);
+}
+
+std::string to_json_string(const auto& x, bool pretty = true) {
+  if (pretty) {
+    std::stringstream ss;
+    pretty_print(ss, to_json(x));
+    return std::move(ss).str();
+  }
+  return boost::json::serialize(to_json(x));
+}
 
 template <>
 struct serialize<bool> {
@@ -68,7 +83,7 @@ struct serialize<array<T>> {
     boost::json::array out;
     out.reserve(arr.size());
     for (auto const& elem : arr)
-      out.push_back(serialize<T>{}(elem));
+      out.push_back(to_json(elem));
     return out;
   }
 };
@@ -78,7 +93,7 @@ struct serialize<string_map<T>> {
   boost::json::value operator()(string_map<T> const& map) {
     boost::json::object out;
     for (auto const& [key, val] : map)
-      out.emplace(key, serialize<T>{}(val));
+      out.emplace(key, to_json(val));
     return out;
   }
 };
@@ -89,7 +104,7 @@ struct serialize<optional<T>> {
   boost::json::value operator()(optional<T> const& opt) {
     if (!opt)
       return nullptr;
-    return serialize<T>{}(*opt);
+    return to_json(*opt);
   }
 };
 
@@ -97,20 +112,8 @@ template <typename T>
 struct serialize<one_or_array<T>> {
   boost::json::value operator()(one_or_array<T> const& v) {
     if (v.values.size() == 1)
-      return serialize<T>{}(v.values[0]);
-    return serialize<array<T>>{}(v.values);
-  }
-};
-
-template <typename T>
-struct serialize<reference_or<T>> {
-  boost::json::value operator()(reference_or<T> const& v) {
-    return std::visit(
-        [](auto const& x) -> boost::json::value {
-          using U = std::decay_t<decltype(x)>;
-          return serialize<U>{}(x);
-        },
-        v);
+      return to_json(v.values[0]);
+    return to_json(v.values);
   }
 };
 
@@ -118,7 +121,6 @@ namespace noexport {
 
 template <aggregate T, size_t I>
 void serialize_field(T const& in, boost::json::object& out) {
-  using Field = std::decay_t<decltype(boost::pfr::get<I>(in))>;
   constexpr std::string_view raw_name = boost::pfr::get_name<I, T>();
   constexpr std::string_view name = unescape_field_name(raw_name);
 
@@ -131,9 +133,9 @@ void serialize_field(T const& in, boost::json::object& out) {
   if constexpr (requires { field.has_value(); }) {
     if (!field.has_value())
       return;
-    out.emplace(name, serialize<typename Field::value_type>{}(*field));
+    out.emplace(name, to_json(*field));
   } else {
-    out.emplace(name, serialize<Field>{}(field));
+    out.emplace(name, to_json(field));
   }
 }
 
@@ -160,23 +162,5 @@ struct serialize<T> {
     return out;
   }
 };
-
-template <>
-struct serialize<responses_object> {
-  boost::json::value operator()(responses_object const& in) {
-    // собираем всё обратно в плоскую string_map
-    boost::json::object out;
-    if (in.default_.has_value())
-      out.emplace("default", serialize<reference_or<response_object>>{}(*in.default_));
-    for (auto const& [code, resp] : in._responses)
-      out.emplace(code, serialize<reference_or<response_object>>{}(resp));
-    return out;
-  }
-};
-
-template <typename T>
-boost::json::value serialize_as_json(const T& x) {
-  return serialize<T>{}(x);
-}
 
 }  // namespace svarg

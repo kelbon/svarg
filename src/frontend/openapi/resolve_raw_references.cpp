@@ -2,7 +2,7 @@
 #include <boost/json/value.hpp>
 #include <boost/json/parse.hpp>
 
-#include "svarg/openapi.hpp"
+#include "svarg/frontend/openapi/openapi.hpp"
 #include "svarg/utils/parse_uri.hpp"
 
 #include <http2/http2_client.hpp>
@@ -93,7 +93,7 @@ struct load_raw_ref_return {
 // `url` предполагается без #, просто ссылка на файл
 // `curfile` должен быть относительным путём или URL (или также может быть URL, если загрузили файл до этого)
 static load_raw_ref_return load_raw_refered_object(std::string_view url, fs::path curfile,
-                                                   const svarg_options& options, jsons_cache* cache) {
+                                                   const openapi_options& options, jsons_cache* cache) {
   curfile = fixup_path(std::move(curfile));
   // вроде если не обрабатывать путь может получится слишком длинным и в итоге
   // сломается всё. А если обрабатывать - https:// -> https:/ может выйти боком
@@ -171,7 +171,7 @@ static void collect_raw_refs(boost::json::value* v, std::vector<raw_ref>& refs) 
 // если depth дошло до 0, то больше погружаться нельзя
 // ссылки разрешаются относительно curfile
 static void include_raw_references(boost::json::value& v, fs::path curfile, size_t depth,
-                                   const svarg_options& options, jsons_cache* cache) {
+                                   const openapi_options& options, jsons_cache* cache) {
   std::vector<raw_ref> refs;
   collect_raw_refs(&v, refs);
   if (refs.empty())
@@ -212,7 +212,7 @@ static void include_raw_references(boost::json::value& v, fs::path curfile, size
 }
 
 boost::json::value resolve_raw_references(boost::json::value v, fs::path specfile,
-                                          const svarg_options& options, jsons_cache* cache) {
+                                          const openapi_options& options, jsons_cache* cache) {
   include_raw_references(v, std::move(specfile), options.ref_max_depth, options, cache);
   return v;
 }

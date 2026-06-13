@@ -1,9 +1,9 @@
 #pragma once
 
 #include <unordered_set>
-#include <iostream>
+#include <print>
 
-#include "svarg/openapi.hpp"
+#include "svarg/frontend/openapi/openapi.hpp"
 
 #include "svarg/ir/ir_object.hpp"
 #include "svarg/utils/scopes.hpp"
@@ -19,23 +19,12 @@ struct resolved_schema {
 struct schema_or_ref {
   std::variant<ir::schema_ref, ir::schema> data;
 
-  ir::schema_ref ref() const& {
-    if (auto* r = std::get_if<ir::schema_ref>(&data))
-      return *r;
+  template <typename Me>
+  ir::schema_ref ref(this Me&& self) {
+    if (auto* r = std::get_if<ir::schema_ref>(&self.data))
+      return std::forward_like<Me>(*r);
     else
-      return std::get<ir::schema>(data).ref();
-  }
-  ir::schema_ref ref() const&& {
-    return ref();
-  }
-  ir::schema_ref ref() & {
-    return std::as_const(*this).ref();
-  }
-  ir::schema_ref ref() && {
-    if (auto* r = std::get_if<ir::schema_ref>(&data))
-      return std::move(*r);
-    else
-      return std::move(std::get<ir::schema>(data)).ref();
+      return std::get<ir::schema>(std::forward_like<Me>(self.data)).ref();
   }
 };
 
@@ -47,26 +36,21 @@ struct object_and_path {
 };
 
 struct lowering_context {
- private:
-  svarg_options opts;
+  openapi_options opts;
   // путь относительно которого в IR написаны все пути до спецификаций
   fs::path specs_dir;
+  // не используется напрямую, только через load_as_json
   jsons_cache jcache;
   // схемы создаваемые прямо сейчас (scope + name), чтобы избегать рекурсии
   std::unordered_set<strpair> schemas_in_progress;
   // просто хранится здесь как в контексте
   ir::ir_object ir;
 
- public:
-  const svarg_options& get_options() const noexcept {
-    return opts;
-  }
-
   // принимает путь до директории спек и пути до всех спецификаций кодогенерацию для которых нужно сделать
   // пути могут быть или относительно spec dir или абсолютные
   // Note: инклуд директории из опций распространяются на specs
   [[nodiscard]] ir::ir_object generate_specs(fs::path specsdir, std::vector<fs::path> specs2generate,
-                                             svarg_options options = {}) {
+                                             openapi_options options = {}) {
     // подготовка
     if (!fs::exists(specsdir) || !fs::is_directory(specsdir))
       throw parse_error("specs directory not exist, provided path: {}", specsdir.generic_string());
@@ -78,15 +62,15 @@ struct lowering_context {
 
     for (fs::path& s : specs2generate) {
       s = find_existing_file(std::move(s));
-      if (!specs.contains(s))
+      if (!specs.contains(s)) {
         specs[s] = do_parse_spec_file(s);
-      loaded_specs.insert(std::move(s));
+        loaded_specs.insert(std::move(s));
+      }
     }
 
     // перевод в IR
 
     for (auto& p : loaded_specs) {
-      assert(specs.contains(p));
       try {
         ir.merge(visit_and_generate_ir(specs.at(p), p));
       } catch (std ::exception& e) {
@@ -134,8 +118,8 @@ struct lowering_context {
   template <typename... Args>
   void emit_warn(const fs::path& where, std::string_view jsonptr, std::format_string<Args...> fmt,
                  Args&&... args) {
-    std::cout << std::format("in {}#{}. warning: {}\n", where.generic_string(), jsonptr,
-                             std::format(fmt, std::forward<Args>(args)...));
+    std::print("in {}#{}. warning: {}\n", where.generic_string(), jsonptr,
+               std::format(fmt, std::forward<Args>(args)...));
   }
 
   schema_or_ref schema_lowering(const schema_object& schema, const fs::path& file, scopes_t jsonptr,
@@ -155,10 +139,16 @@ struct lowering_context {
                                                       fs::path resolve_ref_file, scopes_t jsonptr,
                                                       std::string_view name, path_item_object);
 
-  // TODO внести сюда все ловеринги
+  ir::operation_parameter parameter_lowering(const parameter_object& param, std::string_view path);
+  std::unordered_set<ir::body> body_lowering(request_body_object);
+  ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
+                                      fs::path file, scopes_t jsonptr);
+  ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
+                                                const array<ir::schema_ref>& schemas);
+
  private:
   template <typename T>
-  friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lowering_context& loader);
+  friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lowering_context&);
   const boost::json::value& load_as_json(fs::path const& p) {
     // spec_dir != cwd
     // не включен ассёрт, так как файловую систему могут поменять

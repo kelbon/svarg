@@ -1,20 +1,16 @@
 #pragma once
 
-#include <format>
+// этот файл - часть common_types.hpp (здесь #include common_types.hpp для подсветки)
 
 #include <boost/pfr.hpp>
-
-#include "svarg/fundamental_types.hpp"
+#include "svarg/common_types.hpp"
+#include "svarg/errors.hpp"
 #include "svarg/utils/type_name.hpp"
 #include "svarg/utils/unescape_field_name.hpp"
 #include "svarg/validate.hpp"
 #include "svarg/parse.hpp"
 
 namespace svarg {
-
-inline std::string_view e2str(boost::json::kind k) {
-  return boost::json::to_string(k);
-}
 
 template <>
 struct parse<bool> {
@@ -129,7 +125,6 @@ struct parse<array<T>> {
 template <typename T>
 struct parse<string_map<T>> {
   void operator()(boost::json::value const& v, string_map<T>& out) {
-    // TODO? проверять что ключ один раз встречается каждый?
     auto const* obj = v.if_object();
     if (!obj)
       throw parse_error(" object expected, got `{}`", e2str(v.kind()));
@@ -163,31 +158,6 @@ struct parse<parameter_location> {
       efromstr(s->subview(), out);
     else
       throw parse_error(" string expected for parameter_location, got `{}`", e2str(v.kind()));
-  }
-};
-
-template <>
-struct parse<reference_object> {
-  void operator()(boost::json::value const& v, reference_object& out) {
-    auto const* obj = v.if_object();
-
-    if (!obj)
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
-    auto refit = obj->find("$ref");
-    if (refit == obj->end())
-      throw parse_error(" field `$ref` in reference object is REQUIRED but not present");
-    out.ref_ = refit->value().as_string();
-
-    if (auto it = obj->find("summary"); it != obj->end())
-      out.summary = std::string(it->value().as_string());
-
-    if (auto it = obj->find("description"); it != obj->end())
-      out.description = std::string(it->value().as_string());
-
-    for (auto const& [key, val] : *obj) {
-      if (key != "$ref" && key != "summary" && key != "description")
-        out._keyfield_override_fields[std::string(key)] = Any{val};
-    }
   }
 };
 
@@ -254,29 +224,6 @@ struct parse<T> {
     noexport::parse_all_fields(*obj, out, std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
     postparse<T>{}(out);
     validate<T>{}(std::as_const(out));
-  }
-};
-
-template <typename T>
-struct parse<reference_or<T>> {
-  void operator()(boost::json::value const& v, reference_or<T>& out) {
-    auto const* obj = v.if_object();
-    if (!obj) {
-      if constexpr (parsable_even_from_not_object<T>) {
-        out = T::parse_if_not_object(v);
-        return;
-      }
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
-    }
-    if (obj->contains("$ref")) {
-      reference_object ref{};
-      parse<reference_object>{}(v, ref);
-      out = std::move(ref);
-    } else {
-      T val{};
-      parse<T>{}(v, val);
-      out = std::move(val);
-    }
   }
 };
 

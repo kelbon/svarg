@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <unordered_map>
 
-#include "svarg/fundamental_types.hpp"
+#include "svarg/common_types.hpp"
 #include "svarg/utils/fn_ref.hpp"
 
 namespace svarg {

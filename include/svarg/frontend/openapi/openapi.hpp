@@ -2,7 +2,7 @@
 
 #include <filesystem>
 
-#include "svarg/openapi_object.hpp"
+#include "svarg/frontend/openapi/openapi_object.hpp"
 #include "svarg/utils/jsons_cache.hpp"
 
 /*
@@ -12,7 +12,7 @@
 
 namespace svarg {
 
-struct svarg_options {
+struct openapi_options {
   // для любых ссылок глубина рекурсии ограничена
   // глубина 0 полностью запрещает ссылки
   size_t ref_max_depth = 10;
@@ -30,16 +30,16 @@ struct svarg_options {
 
 // резолвит ссылки без #
 [[nodiscard]] boost::json::value resolve_raw_references(boost::json::value json, fs::path specfile,
-                                                        const svarg_options& options,
+                                                        const openapi_options& options,
                                                         jsons_cache* cache = nullptr);
 
 // ожидается значение без ссылок не содержащих # (прошедшее resolve_raw_references)
-openapi_object parse_spec(const boost::json::value&, const svarg_options& options);
+openapi_object parse_spec(const boost::json::value&, const openapi_options& options);
 
 // конвертирует из ямла в json
-openapi_object parse_yaml_spec(std::string_view yaml, fs::path specfile, const svarg_options& options);
+openapi_object parse_yaml_spec(std::string_view yaml, fs::path specfile, const openapi_options& options);
 // `spec_path` используется для разрешения ссылок без #
-openapi_object parse_json_spec(std::string_view json, fs::path specfile, const svarg_options& options);
+openapi_object parse_json_spec(std::string_view json, fs::path specfile, const openapi_options& options);
 
 // может быть YAML (.yaml, .yml) или JSON (.json .jsonc .json5)
 // рекурсивные сырые(без #) ссылки не поддерживаются
@@ -49,7 +49,7 @@ openapi_object parse_json_spec(std::string_view json, fs::path specfile, const s
 //      - $ref: './User.yaml' <- рекурсия на файлах, не поддерживается.
 // все ссылки без # работают как просто include того что написано файле с конвертацией в json value
 // при ссылке внутри объекта на другой объект в $ref лежащие рядом поля переопределяют поля объекта по ссылке
-openapi_object parse_spec_file(fs::path path, svarg_options options);
+openapi_object parse_spec_file(fs::path path, openapi_options options);
 
 }  // namespace svarg
 
@@ -57,4 +57,4 @@ openapi_object parse_spec_file(fs::path path, svarg_options options);
 /// ВАЛИДАЦИЯ
 ///
 
-#include "svarg/utils/validation_specializations.hh"
+#include "svarg/frontend/openapi/openapi_validation.hh"

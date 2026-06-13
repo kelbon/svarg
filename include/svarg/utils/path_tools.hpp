@@ -3,7 +3,9 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include "svarg/fundamental_types.hpp"
+#include "svarg/errors.hpp"
+
+#include "svarg/common_types.hpp"
 
 namespace svarg {
 

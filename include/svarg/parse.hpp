@@ -30,4 +30,9 @@ T parse_from_json(boost::json::value const& j) {
   return value;
 }
 
+template <typename T>
+void parse_from_json(boost::json::value const& j, T& out) {
+  parse<T>{}(j, out);
+}
+
 }  // namespace svarg

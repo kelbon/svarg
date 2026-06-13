@@ -1,9 +1,9 @@
+#pragma once
 
-/*
-    инклудится в openapi.hpp, чтобы все перегрузки валидации были видны
-*/
+// этот файл - часть openapi.hpp
+
 #include <set>
-#include "svarg/openapi_object.hpp"
+#include "svarg/frontend/openapi/openapi_object.hpp"
 
 namespace svarg {
 
