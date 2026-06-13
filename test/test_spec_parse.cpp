@@ -39,10 +39,9 @@ TEST("parse_spec") {
 TEST("raw_refs") {
   svarg::svarg_options options;
   std::filesystem::path p = "./test_raw_links_specs/openapi/openapi.yaml";
-  options.input_specfile_path = p;
   boost::json::value v;
   svarg::pass_as_json(p, [&](std::string_view str) { v = boost::json::parse(str); });
-  v = svarg::resolve_raw_references(std::move(v), options);
+  v = svarg::resolve_raw_references(std::move(v), p, options);
   std::ofstream f("mdamda.json");
   svarg::pretty_print(f, v);
   svarg::openapi_object o = svarg::parse_spec(std::move(v), options);
@@ -121,7 +120,7 @@ paths:
     }
 }
     )";
-  svarg::openapi_object o = svarg::parse_yaml_spec(api, options);
+  svarg::openapi_object o = svarg::parse_yaml_spec(api, /*specfile=*/{}, options);
   REQUIRE(boost::json::parse(expected_json) == svarg::serialize_as_json(o));
 }
 #endif

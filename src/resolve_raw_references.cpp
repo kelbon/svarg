@@ -211,9 +211,9 @@ static void include_raw_references(boost::json::value& v, fs::path curfile, size
   }
 }
 
-boost::json::value resolve_raw_references(boost::json::value v, const svarg_options& options,
-                                          jsons_cache* cache) {
-  include_raw_references(v, options.input_specfile_path, options.ref_max_depth, options, cache);
+boost::json::value resolve_raw_references(boost::json::value v, fs::path specfile,
+                                          const svarg_options& options, jsons_cache* cache) {
+  include_raw_references(v, std::move(specfile), options.ref_max_depth, options, cache);
   return v;
 }
 

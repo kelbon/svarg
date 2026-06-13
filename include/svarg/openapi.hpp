@@ -22,27 +22,24 @@ struct svarg_options {
   // выключено)
   // TODO под это ещё кеш надо сделать, чтобы лишний раз не ходить с запросами
   bool resolve_url_refs = false;
-  // при подаче любого файла на вход все пути всё равно считаются относительно него, так что достаточно одного
-  // любого пути к спецификации для сбора всех нужных
-  fs::path input_specfile_path;
   // TODO unordered_map<string> known_formats?
   // TODO include dirs
 };
 
 // резолвит ссылки без #
-[[nodiscard]] boost::json::value resolve_raw_references(boost::json::value json, const svarg_options& options,
+[[nodiscard]] boost::json::value resolve_raw_references(boost::json::value json, fs::path specfile,
+                                                        const svarg_options& options,
                                                         jsons_cache* cache = nullptr);
 
 // ожидается значение без ссылок не содержащих # (прошедшее resolve_raw_references)
 openapi_object parse_spec(const boost::json::value&, const svarg_options& options);
 
 // конвертирует из ямла в json
-openapi_object parse_yaml_spec(std::string_view yaml, const svarg_options& options);
+openapi_object parse_yaml_spec(std::string_view yaml, fs::path specfile, const svarg_options& options);
 // `spec_path` используется для разрешения ссылок без #
-openapi_object parse_json_spec(std::string_view json, const svarg_options& options);
+openapi_object parse_json_spec(std::string_view json, fs::path specfile, const svarg_options& options);
 
 // может быть YAML (.yaml, .yml) или JSON (.json .jsonc .json5)
-// `path` выставляется в options.input_specfile_path
 // рекурсивные сырые(без #) ссылки не поддерживаются
 // Например (в файле User.yaml)
 //   recursiveProperty:

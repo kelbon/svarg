@@ -177,7 +177,7 @@ struct spec_loader {
     // подменяем кеш, чтобы в нём не было незарезолвленных сырых ссылок
     boost::json::value& v = jcache.load_mutable(specs_dir / spec);
     // resolve_raw_references НЕ использует jcache, так что это безопасно
-    v = resolve_raw_references(std::move(v), opts);
+    v = resolve_raw_references(std::move(v), specs_dir / spec, opts);
     return parse_spec(std::as_const(v), opts);
   }
 

@@ -661,7 +661,7 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& api, cons
                               resolve_ref_and_ret(pathItem, cbpath, cbjsonptr, *this);
                           // используется путь откуда операция взялась, но она всё ещё декларирована в
                           // obj_file и является операцией этого апи
-                          string_map ops = path_item_object_lowering(
+                          auto ops = path_item_object_lowering(
                               /*path=*/"", obj_file, rpipath, std::move(rpijsonptr), name, std::move(rpi));
                           for (auto& [method, op] : ops)
                             result.webhooks.insert(std::move(op));
@@ -676,8 +676,8 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& api, cons
       string_map<std::string> name2path;
       string_map<std::string> path2name;
       std::string generatedname = path_to_name(path, name2path, path2name);
-      string_map ops = path_item_object_lowering(path, obj_file, file, std::move(itemjsonptr), generatedname,
-                                                 std::move(ritem));
+      auto ops = path_item_object_lowering(path, obj_file, file, std::move(itemjsonptr), generatedname,
+                                           std::move(ritem));
       for (auto& [method, op] : ops)
         result.operations.insert(op);
     }
