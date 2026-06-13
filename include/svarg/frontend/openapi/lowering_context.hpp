@@ -9,6 +9,7 @@
 #include "svarg/ir/ir_object.hpp"
 #include "svarg/utils/scopes.hpp"
 #include "svarg/utils/strpair.hpp"
+#include "svarg/utils/forward_like.hpp"
 
 namespace svarg {
 
@@ -23,9 +24,9 @@ struct schema_or_ref {
   template <typename Me>
   ir::schema_ref ref(this Me&& self) {
     if (auto* r = std::get_if<ir::schema_ref>(&self.data))
-      return std::forward_like<Me>(*r);
+      return forwardLike<Me>(*r);
     else
-      return std::get<ir::schema>(std::forward_like<Me>(self.data)).ref();
+      return std::get<ir::schema>(forwardLike<Me>(self.data)).ref();
   }
 };
 
