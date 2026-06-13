@@ -556,6 +556,7 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
   result.headers;  // rsp.headers
 
   if (rsp.headers) {
+    // TODO in header
     for (auto& [name, hdr] : *rsp.headers) {
       ir::header result_hdr;
       result_hdr.name = name;

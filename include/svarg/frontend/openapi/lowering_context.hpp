@@ -2,6 +2,7 @@
 
 #include <unordered_set>
 #include <print>
+#include <utility>
 
 #include "svarg/frontend/openapi/openapi.hpp"
 
