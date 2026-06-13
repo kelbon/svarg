@@ -1,11 +1,11 @@
 #pragma once
 
-#include <array>
+#include <iterator>
 
 namespace svarg {
 
-template <typename T, std::size_t N>
-class ref_range {
+template <typename T, size_t N>
+struct ref_range {
   T* ptrs_[N];
 
  public:

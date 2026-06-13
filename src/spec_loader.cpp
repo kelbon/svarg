@@ -92,60 +92,52 @@ auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, spec_
 }
 
 template <typename T>
-std::pair<T, fs::path> resolve_ref_and_ret(reference_or<T> x, fs::path file, spec_loader& loader) {
+object_and_path<T> resolve_ref_and_ret(reference_or<T> x, fs::path file, scopes_t jsonptr,
+                                       spec_loader& loader) {
   if (auto* r = std::get_if<reference_object>(&x)) {
-    auto getcb = [](T obj, fs::path file, std::string_view /*jsonptr*/) {
-      return std::make_pair(std::move(obj), std::move(file));
+    auto getcb = [](T obj, fs::path file, std::string_view rjsonptr) {
+      return object_and_path(std::move(obj), std::move(file), rjsonptr);
     };
     return resolve_ref_to<T>(std::move(*r), std::move(file), getcb, loader);
   } else {
-    return std::make_pair(std::move(std::get<T>(x)), std::move(file));
+    return object_and_path(std::move(std::get<T>(x)), std::move(file), std::move(jsonptr));
   }
 }
 
-// jsonptr и fieldname используются только если это инлайн схема для создания уникального scope
+// jsonptr используется только если это инлайн схема для создания уникального scope
 // например jsonptr = /components/schemas и fieldname = "additionalProperties"
 [[nodiscard]] static resolved_schema resolve_schema(const reference_or<schema_object>& sor,
-                                                    const fs::path& file, std::string_view jsonptr,
-                                                    std::string_view fieldname,
-                                                    std::unordered_set<ir::schema>& schemas,
+                                                    const fs::path& file, scopes_t jsonptr,
                                                     spec_loader& loader) {
   if (auto* ref = std::get_if<reference_object>(&sor)) {
-    return loader.resolve_schema_ref(*ref, file, schemas);
+    return loader.resolve_schema_ref(*ref, file);
   } else {
-    if (jsonptr.ends_with('/'))
-      jsonptr.remove_suffix(1);
-    std::string cur_jsonptr = std::format("{}/{}", jsonptr, fieldname);
-    auto s = loader.schema_lowering(std::get<schema_object>(sor), file, cur_jsonptr, std::nullopt, schemas);
+    auto s = loader.schema_lowering(std::get<schema_object>(sor), file, std::move(jsonptr), std::nullopt);
     return {std::move(s).ref(), std::get<schema_object>(sor)};
   }
 }
 
 ir::object_schema spec_loader::make_object_type(schema_object const& schema, const fs::path& file,
-                                                std::string_view jsonptr,
-                                                std::unordered_set<ir::schema>& schemas) {
-  if (jsonptr.ends_with('/'))
-    jsonptr.remove_suffix(1);
+                                                scopes_t jsonptr) {
   ir::object_schema ot;
   if (schema.properties) {
     for (auto& [prop_name, prop_sor] : *schema.properties) {
-      // synthetic jsonptr для свойства: jsonptr + "/properties/" + prop_name
-      std::string prop_ptr = std::format("properties/{}", prop_name);
       ir::object_field_info fi;
       fi.name = prop_name;
-      auto [schemaref, field_schema] = resolve_schema(prop_sor, file, jsonptr, prop_ptr, schemas, *this);
+      auto [schemaref, field_schema] =
+          resolve_schema(prop_sor, file, jsonptr / "properties" / prop_name, *this);
       fi.type = schemaref;
       if (field_schema.nullable || field_schema.default_)
         fi.required = false;
       else if (schema.required) {
         if (field_schema.nullable || field_schema.default_) {
-          emit_warn(file, jsonptr, "property {}` marked as required, but {}. `required` ignored", prop_name,
-                    field_schema.nullable ? "has nullable type" : "has default");
+          emit_warn(file, jsonptr.view(), "property {}` marked as required, but {}. `required` ignored",
+                    prop_name, field_schema.nullable ? "has nullable type" : "has default");
         } else if (field_schema.is_write_only() || field_schema.is_read_only()) {
           // readOnly/writeOnly означает, что по сути есть два типа - для запроса и ответа и required зависит
           // от этого здесь генерируется только один тип, поэтому оба readOnly/writeOnly означают по факту
           // опциональность поля
-          emit_warn(file, jsonptr, "property {} marked as {}, `required` ignored", prop_name,
+          emit_warn(file, jsonptr.view(), "property {} marked as {}, `required` ignored", prop_name,
                     field_schema.is_write_only() ? "writeOnly" : "readOnly");
         } else {
           for (string const& x : *schema.required) {
@@ -159,8 +151,7 @@ ir::object_schema spec_loader::make_object_type(schema_object const& schema, con
   }
   if (schema.additionalProperties) {
     ot.additional_fields =
-        resolve_schema(*schema.additionalProperties, file, jsonptr, "additionalProperties", schemas, *this)
-            .ir_schema;
+        resolve_schema(*schema.additionalProperties, file, jsonptr / "additionalProperties", *this).ir_schema;
   }
   return ot;
 }
@@ -204,21 +195,18 @@ template <typename... Args>
  * если нет ничего, то схема any, но возможно всё ещё с валидацией (н-р required [a, b, c])
 */
 schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const fs::path& file,
-                                           std::string_view jsonptr, std::optional<std::string_view> name,
-                                           std::unordered_set<ir::schema>& schemas) {
-  if (!jsonptr.starts_with('/'))
-    throw semantic_error("invalid part of $ref after # (`{}`), must start with /", jsonptr);
+                                           scopes_t jsonptr, std::optional<std::string_view> name) {
   ir::schema res;
-  res.scope = std::format("{}#{}", file.generic_string(), jsonptr);
+  res.scope = std::format("{}#{}", file.generic_string(), jsonptr.view());
   auto ret_res = [&] {
-    schemas.insert(res);
+    ir.schemas.insert(res);
     return schema_or_ref(std::move(res));
   };
   if (name)
     res.name = *name;
   else
     res.name = std::nullopt;
-  if (auto it = schemas.find(res); it != schemas.end())
+  if (auto it = ir.schemas.find(res); it != ir.schemas.end())
     return schema_or_ref{*it};
   const strpair cache_key{res.scope, name ? *name : ""};
   if (schemas_in_progress.contains(cache_key))
@@ -247,7 +235,7 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const fs
 
   if (schema.enum_) {
     if (schema.enum_->empty())
-      throw semantic_error("enum at `{}` must have at least one value", jsonptr);
+      throw semantic_error("enum at `{}` must have at least one value", jsonptr.view());
     ir::enum_schema es{.values = *schema.enum_};
     if (schema.type) {
       // как будто ссылка на самого себя, на самом деле ссылаемся на тип репрезентации
@@ -266,12 +254,12 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const fs
       const auto& t = rtypes[0];
 
       if (t == "object") {
-        res.data = make_object_type(schema, file, jsonptr, schemas);
+        res.data = make_object_type(schema, file, jsonptr);
       } else if (t == "array") {
         ir::array_schema at;
         if (!schema.items)
           throw parse_error("schema with type 'array' must contain 'items'");
-        at.element = resolve_schema(*schema.items, file, jsonptr, "items", schemas, *this).ir_schema;
+        at.element = resolve_schema(*schema.items, file, jsonptr / "items", *this).ir_schema;
         res.data = std::move(at);
       } else {
         // Всё остальное — фундаментальный тип
@@ -318,52 +306,50 @@ schema_or_ref spec_loader::schema_lowering(const schema_object& schema, const fs
       s.name = std::nullopt;
       s.data = std::move(schema);
       ir::schema_ref r = s.ref();
-      schemas.insert(std::move(s));
+      ir.schemas.insert(std::move(s));
       res.add_requirement(std::move(r));
     }
   };
 
   // ── логические комбинаторы ──────────────────────────────────────────────────
 
-  auto resolve_array = [&](const array<reference_or<schema_object>>& from, array<ir::schema_ref>& to) {
+  auto resolve_array = [&](std::string_view ptr, const array<reference_or<schema_object>>& from,
+                           array<ir::schema_ref>& to) {
     for (size_t i = 0; i < from.size(); ++i) {
-      // _{index} чтобы имя было валидно в языках программирования
-      std::string inline_name = std::format("_{}", i);
-      resolved_schema s = resolve_schema(from[i], file, jsonptr, inline_name, schemas, *this);
+      resolved_schema s = resolve_schema(from[i], file, jsonptr / ptr / i, *this);
       to.push_back(s.ir_schema);
     }
   };
 
   if (schema.allOf) {
     ir::allof_schema t;
-    resolve_array(*schema.allOf, t.schemas);
+    resolve_array("allOf", *schema.allOf, t.schemas);
     collect_result("allOf", std::move(t));
   }
   if (schema.anyOf) {
     ir::anyof_schema t;
-    resolve_array(*schema.anyOf, t.schemas);
+    resolve_array("anyOf", *schema.anyOf, t.schemas);
     if (schema.discriminator)
       t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas);
     collect_result("anyOf", std::move(t));
   }
   if (schema.oneOf) {
     ir::oneof_schema t;
-    resolve_array(*schema.oneOf, t.schemas);
+    resolve_array("oneOf", *schema.oneOf, t.schemas);
     if (schema.discriminator)
       t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas);
     collect_result("oneOf", std::move(t));
   }
   if (schema.not_) {
     ir::not_schema t;
-    t.type = resolve_schema(*schema.not_, file, jsonptr, "not", schemas, *this).ir_schema;
+    t.type = resolve_schema(*schema.not_, file, jsonptr / "not", *this).ir_schema;
     collect_result("not", std::move(t));
   }
   return ret_res();
 }
 
 // ожидает что file относительно spec dir
-resolved_schema spec_loader::resolve_schema_ref(reference_object ref, fs::path file,
-                                                std::unordered_set<ir::schema>& schemas) {
+resolved_schema spec_loader::resolve_schema_ref(reference_object ref, fs::path file) {
   auto doschema = [&](schema_object schema, fs::path refered_file, std::string_view jsonptr) {
     // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
     // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
@@ -371,7 +357,7 @@ resolved_schema spec_loader::resolve_schema_ref(reference_object ref, fs::path f
     if (name.empty())
       throw semantic_error("name of schema cannot be empty. json pointer: {}", jsonptr);
     resolved_schema res;
-    res.ir_schema = schema_lowering(schema, refered_file, jsonptr, name, schemas).ref();
+    res.ir_schema = schema_lowering(schema, refered_file, jsonptr, name).ref();
     res.front_schema = std::move(schema);
     return res;
   };
@@ -477,7 +463,7 @@ struct schemas_collector {
     std::optional<std::string_view> schema_name;
     if (scopes.view().ends_with("/components/schemas"))
       schema_name = name;
-    loader->schema_lowering(x, obj_file, std::format("{}/{}", scopes.view(), name), schema_name, schemas);
+    loader->schema_lowering(x, obj_file, std::format("{}/{}", scopes.view(), name), schema_name);
   }
   SVARG_ADD_EXCEPTION_INFO(parse_error, name);
 
@@ -488,14 +474,14 @@ struct schemas_collector {
     if (auto* r = std::get_if<reference_object>(&x)) {
       if constexpr (!std::is_same_v<T, schema_object>) {
         // проходимся на зарезолвленном объекте, чтобы собрать всё что упомянуто там
-        auto [resolved, path] = resolve_ref_and_ret(x, obj_file, *loader);
+        auto [resolved, path, _] = resolve_ref_and_ret(x, obj_file, scopes, *loader);
         schemas_collector inner(path, schemas, *loader);
         // inner.scopes - пустые, начинаются с корня файла
         inner(name, resolved);
         return;
       } else {
         // вызывается чтобы обойти всё и собрать упоминающиеся ссылки
-        loader->resolve_schema_ref(*r, obj_file, schemas);
+        loader->resolve_schema_ref(*r, obj_file);
       }
     } else {
       (*this)(name, *std::get_if<T>(&x));
@@ -509,67 +495,152 @@ struct schemas_collector {
   }
 };
 
-static void visit_path_item_callbacks(const path_item_object& item, auto&& visitor) {
-  for (auto& op :
-       all(item.get, item.put, item.post, item.delete_, item.options, item.head, item.patch, item.trace)) {
+static void visit_path_item_callbacks(const path_item_object& item, auto&& visitor, fs::path file,
+                                      scopes_t jsonptr) {
+  for (auto& op : item.all_operations()) {
     if (op && op->callbacks) {
       for (auto& [name, cb] : *op->callbacks)
-        visitor(name, cb);
+        visitor(name, cb, std::move(file), std::move(jsonptr) / "callbacks" / name);
     }
   }
 }
 
-// посещает все калбеки и передаёт визитору имя + reference_or<callback>
+// посещает все калбеки и передаёт визитору имя + reference_or<callback> + json ptr где он лежит
 // Note: может быть много калбеков с одинаковым именем. Они отличаются по методу и тд
 static void visit_all_callbacks(const openapi_object& api, fs::path file, spec_loader& loader,
                                 auto&& visitor) {
   // components/callbacks
   if (api.components && api.components->callbacks) {
     for (auto& [name, cb] : *api.components->callbacks)
-      visitor(name, cb);
+      visitor(name, cb, file, "/components/callbacks");
   }
 
   // components/pathItems
   if (api.components->pathItems) {
     for (auto& [name, item] : *api.components->pathItems) {
-      path_item_object ritem = loader.resolve_path_item_object(item, file);
-      visit_path_item_callbacks(ritem, visitor);
+      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, "/components/pathItems", loader);
+      visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjsonptr));
     }
   }
 
   // paths -> operations -> callbacks
   if (api.paths) {
     for (auto& [path, item] : *api.paths) {
-      path_item_object ritem = loader.resolve_path_item_object(item, file);
-      visit_path_item_callbacks(ritem, visitor);
+      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, scopes_t("/paths") / path, loader);
+      visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjsonptr));
     }
   }
 
   // webhooks -> operations -> callbacks
   if (api.webhooks) {
     for (auto& [name, item] : *api.webhooks) {
-      path_item_object ritem = loader.resolve_path_item_object(item, file);
-      visit_path_item_callbacks(ritem, visitor);
+      auto [ritem, reffile, refjsonptr] =
+          resolve_ref_and_ret(item, file, scopes_t("/webhooks") / name, loader);
+      visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjsonptr));
     }
   }
 }
+// TODO?  если вообще все ссылки ремапить сразу, то как будто легче код становится сразу
+// TODO в интерфейс принимать сразу все файлы которые нужно сгенерировать и объединить процесс
+// загрузки всех файлов, предобработки (и там ремап ссылок абсолютно всех даже в файлах НА которые ссылки)
+// и затем generate, в итоге один метод есть просто
 
-ir::operation spec_loader::path_item_object_lowering(std::string_view path, fs::path spec,
-                                                     std::optional<std::string_view> name,
-                                                     path_item_object item) {
-  // TODO
-  return {};
+// statusstr пустой для дефолтного респонса
+ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
+                                    fs::path file, scopes_t jsonptr, spec_loader& loader) {
+  ir::response_desc result;
+  if (statusstr)
+    result.set_status(*statusstr);
+  else
+    result.make_default();
+  result.bodies;   // rsp.content;
+  result.headers;  // rsp.headers
+
+  if (rsp.headers) {
+    for (auto& [name, hdr] : *rsp.headers) {
+      ir::header result_hdr;
+      result_hdr.name = name;
+      auto [hdrobj, reffile, refjsonptr] = resolve_ref_and_ret(hdr, file, jsonptr / "headers" / name, loader);
+      if (hdrobj.schema) {
+        resolved_schema rs = resolve_schema(*hdrobj.schema, reffile, refjsonptr, loader);
+      }
+    }
+  }
+
+  return result;  // TODO
 }
 
-callback_object spec_loader::resolve_callback(reference_or<callback_object> cb, fs::path file) {
-  return resolve_ref_and_ret(std::move(cb), std::move(file), *this).first;
+// TODO сделать required по дефолту если присутствует в path и валидировать что оно есть в строке path
+static ir::operation_parameter parameter_lowering(const parameter_object& param, std::string_view path) {
+  return {};  // TODO
+}
+static std::unordered_set<ir::body> body_lowering(request_body_object) {
+  return {};  // TODO
 }
 
-path_item_object spec_loader::resolve_path_item_object(reference_or<path_item_object> item, fs::path file) {
-  return resolve_ref_and_ret(std::move(item), std::move(file), *this).first;
+string_map<ir::operation> spec_loader::path_item_object_lowering(std::string_view path, fs::path spec,
+                                                                 fs::path resolve_ref_file, scopes_t jsonptr,
+                                                                 std::string_view name,
+                                                                 path_item_object item) {
+  string_map<ir::operation> result;
+
+  for (auto [o, methodstr] : item.all_operations_with_method()) {
+    ir::operation op;
+    op.spec = spec.generic_string();
+    if (o.operationId)
+      op.id = *o.operationId;
+    else {
+      op.id = std::string(methodstr);
+      *op.id += name;
+    }
+    op.method = methodstr;
+    op.path = path;
+    if (o.responses) {
+      if (o.responses->default_) {
+        auto [obj, reffile, refjsonptr] = resolve_ref_and_ret(*o.responses->default_, resolve_ref_file,
+                                                              jsonptr / "responses" / "default", *this);
+        op.defaultResponse =
+            response_lowering(std::nullopt, obj, std::move(reffile), std::move(refjsonptr), *this);
+      }
+      op.responses.emplace();
+      for (auto&& [status, r] : o.responses->_responses) {
+        auto [obj, reffile, refjsonptr] =
+            resolve_ref_and_ret(r, resolve_ref_file, jsonptr / "responses" / status, *this);
+        ir::response_desc rsp =
+            response_lowering(status, obj, std::move(reffile), std::move(refjsonptr), *this);
+        op.responses->insert(std::move(rsp));
+      }
+      if (op.responses->empty())
+        op.responses.reset();
+    }
+    if (o.parameters) {
+      op.parameters.emplace();
+      size_t i = 0;
+      for (auto& param : *o.parameters) {
+        ir::operation_parameter p = parameter_lowering(
+            resolve_ref_and_ret(param, resolve_ref_file, jsonptr / "parameters" / i, *this).object, path);
+        op.parameters->push_back(std::move(p));
+        ++i;
+      }
+      if (op.parameters->empty())
+        op.parameters.reset();
+    }
+    if (o.requestBody) {
+      op.bodies = body_lowering(
+          resolve_ref_and_ret(*o.requestBody, resolve_ref_file, jsonptr / "requestBody", *this).object);
+      if (op.bodies->empty())
+        op.bodies.reset();
+    }
+
+    // не зависит от порядка если чё
+    result.try_emplace(op.method, std::move(op));
+  }
+  // TODO op.meta
+
+  return result;
 }
 
-ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj, const fs::path& obj_file) {
+ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& api, const fs::path& obj_file) {
   ir::ir_object result;
 
   // собираем все схемы, в том числе из калбеков, вебхуков и paths
@@ -577,74 +648,41 @@ ir::ir_object spec_loader::visit_and_generate_ir(const openapi_object& obj, cons
   // TODO postparse надо на чето заменить видимо, чтобы парс + сериализация не меняли
   // TODO в моём языке разрешить ссылки на фундаментальные типы: например #string, #number и тд
   // чтобы например легко писать oneOf: - #string -#number
-  boost::pfr::for_each_field_with_name(obj, refvtor(collector));
+  boost::pfr::for_each_field_with_name(api, refvtor(collector));
 
-  visit_all_callbacks(
-      obj, obj_file, *this, [&](std::string_view name, const reference_or<callback_object>& cb) {
-        callback_object obj = resolve_callback(cb, obj_file);
-        // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
-        for (auto&& [expr, pathItem] : obj) {
-          // используется путь obj_file, не смотря на то что калбек мог быть из другого файла
-          // но resolve_ref_to перемапило в таком случае все ссылки на универсальные и они должны зарезолвится
-          // корректно
-          path_item_object rpi = resolve_path_item_object(pathItem, obj_file);
-          // используется obj_file, так как даже если path item был ссылкой он мог переопределить поле и уже
-          // стал другой операцией
-          ir::operation op = path_item_object_lowering(/*path=*/"", obj_file, name, std::move(rpi));
-          if (result.webhooks.contains(op))
-            emit_warn(op.spec, "", "callback with name `{}` and method `{}` already exist, ignoring second",
-                      op.id ? *op.id : "<unnamed>", op.method);
-          result.webhooks.insert(std::move(op));
-        }
-      });
-  // TODO на первом этапе как будто надо переложить калбеки в вебхуки
-  //  калбеки есть только в операциях (которые в paths & components/pathItems и в components/callbacks) и в
-  //  webhooks (тоже в операциях)
-  //  визитим все ref_or_калбеки, если они значения - собираем в мапу (так чтобы одинаковые не попадали
-  //  дважды) если видим ссылку, то если локальная - ничего не делаем, этот калбек соберут итак. Если в другой
-  //  файл и ещё не собрали этот калбек - идём резолвить ссылку и складываем его значение в вебхуки
-  //  исправляя локальные ссылки в нём TODO стоп, не только локальные ссылки, они же все относительные,
-  //  сложнее немного.. Надо для каждой ссылки считать куда указывает file_with_callback/$reffile и если его
-  //  нет искать существующий $reffile и ставить относительно specs_dir
+  visit_all_callbacks(api, obj_file, *this,
+                      [&](std::string_view name, const reference_or<callback_object>& cb, fs::path cbpath_,
+                          scopes_t jsonptr) {
+                        auto [rcb, cbpath, cbjsonptr] = resolve_ref_and_ret(cb, cbpath_, jsonptr, *this);
+                        // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
+                        for (auto&& [expr, pathItem] : rcb) {
+                          // используем cbpath, т.к. ссылки могут указывать туда если он загружен оттуда
+                          auto [rpi, rpipath, rpijsonptr] =
+                              resolve_ref_and_ret(pathItem, cbpath, cbjsonptr, *this);
+                          // используется путь откуда операция взялась, но она всё ещё декларирована в
+                          // obj_file и является операцией этого апи
+                          string_map ops = path_item_object_lowering(
+                              /*path=*/"", obj_file, rpipath, std::move(rpijsonptr), name, std::move(rpi));
+                          for (auto& [method, op] : ops)
+                            result.webhooks.insert(std::move(op));
+                        }
+                      });
 
-  // второй этап - резолв ссылок в webhooks/paths на pathItems с переносом (дублированием) просто напросто.
-  // третий этап - последовательно преобразовать все path item в webhooks/path (lowering path item)
-  // это включает в себя резолв $ref, резолв параметров и тд. Там вроде рекурсии быть не может... Хотя хз
-  // в общем надо получить просто конечный json распаршенный для параметров, хедеров и тд
-
-  // если с другого файла перенос, то локальные ссылки не меняются, если с другого - меняются
-  // второй этап (хотя желательно ДО) - все pathItems типа переиспользуемые... продублировать в местах где на
-  // них ссылаются (paths/webhooks) чтобы не городить ссылки (хотя мб сделать ссылку на операцию?..). А если
-  // ссылка в другом файле на это... То плевать, надо просто зарезолвить и сделать так чтобы не было ссылок
-  // никаких. НО если втупую продублировать, то сломаются ссылки внутри объекта... Значит именно их надо
-  // поменять (fix local references по сути пройти по всем и поменять ссылки)
-  // TODO: сделать тест на рекурсивные типы (напрямую, косвенно, между файлами)
-  // TODO: сделать тест на парсинг калбеков, вебхуков, pathItems и ссылки и так далее
-  // TODO: записывать тест кейсы везде, чтобы позже реализовать
-  // TODO надо пройти по операциями, калбекам и вебхукам
-  // и конвертировать их в IR. Операции - в operation, калбеки и вебхуки в webhooks
-  // т.е. по сути нужно посещать path item object. Вероятно это нужно вторым циклом делать
-  // операции только в obj.paths. Вебхуки - только в obj.webhooks. А вот калбеки абы где валяются, там визит
-  // и при проходе все ссылки сразу понятно куда. Если относительная - относительно этого файла
-  // если локальная - на этот файл (нужно добавлять эту инфу)
-  // TODO ещё pathItems в которых переиспользуемые в webhooks / paths операции..
-  // крч для pathItems если уж они встречаются - то операция дублируется в webhooks / operations
-  // потому что нахер не хочу ссылки городить и неиспользуемая фича максимально
-  return result;
-}
-
-ir::ir_object spec_loader::generate() {
-  ir::ir_object res;
-  for (auto& p : loaded_specs) {
-    assert(specs.contains(p));
-    ir::ir_object ir;
-    try {
-      ir = visit_and_generate_ir(specs.at(p), p);
+  if (api.paths) {
+    // если были pathItems и на них ссылались и в paths и в webhooks, то они продублируются на уровне IR
+    // но это нормально
+    for (auto& [path, item] : *api.paths) {
+      auto [ritem, file, itemjsonptr] = resolve_ref_and_ret(item, obj_file, scopes_t("/paths") / path, *this);
+      string_map<std::string> name2path;
+      string_map<std::string> path2name;
+      std::string generatedname = path_to_name(path, name2path, path2name);
+      string_map ops = path_item_object_lowering(path, obj_file, file, std::move(itemjsonptr), generatedname,
+                                                 std::move(ritem));
+      for (auto& [method, op] : ops)
+        result.operations.insert(op);
     }
-    SVARG_ADD_EXCEPTION_INFO(parse_error, p.generic_string());
-    res.merge(std::move(ir));
   }
-  return res;
+  return result;
 }
 
 }  // namespace svarg

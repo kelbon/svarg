@@ -7,6 +7,7 @@
 
 #include "svarg/ir/ir_object.hpp"
 #include "svarg/utils/combined_hash.hpp"
+#include "svarg/utils/scopes.hpp"
 #include "svarg/utils/strpair.hpp"
 
 namespace svarg {
@@ -39,6 +40,13 @@ struct schema_or_ref {
   }
 };
 
+template <typename T>
+struct object_and_path {
+  T object;
+  fs::path path;  // путь где лежал в итоге объект
+  scopes_t jsonptr;
+};
+
 // TODO общий интерфейс для фронтенда и это реализация для опенапи
 // загружает спецификацию, затем разрешает все ссылки в ней
 // и разрешает видимо сразу в IR структуру (которая позже преобразуется в json)
@@ -46,47 +54,57 @@ struct schema_or_ref {
 // каждая встреченная спека также полностью загружается и складывается в кеш
 // а дальше generate уже идёт конкретных спек (только из тех что загружены), т.е. не все иногда нужны
 // например одна спека ссылается на другие, но paths и тд из других не нужны
-// АХ да, надо разделить явно на fronend / IR / backend
+// TODO АХ да, надо разделить явно на fronend / IR / backend
+
+// TODO ренейм в ir parse context или типа того
 struct spec_loader {
  private:
-  // путь до спеки относительно specs_dir -> её распаршенный объект с зарезолвленными ссылками без #
-  // и загруженные явно и упомянутые в загруженных
-  std::unordered_map<fs::path, openapi_object> specs;
-  // путь до спек относительно specs_dir, для которых вызвано load_spec явно. Помимо них в specs ещё могут
-  // быть просто упомянутые, но не те IR которых пользователь хотел получить
-  std::unordered_set<fs::path> loaded_specs;
   svarg_options opts;
   // путь относительно которого в IR написаны все пути до спецификаций
   fs::path specs_dir;
   jsons_cache jcache;
   // схемы создаваемые прямо сейчас (scope + name), чтобы избегать рекурсии
   std::unordered_set<strpair> schemas_in_progress;
+  // просто хранится здесь как в контексте
+  ir::ir_object ir;
 
  public:
   const svarg_options& get_options() const noexcept {
     return opts;
   }
-  void load_spec(fs::path s) {
-    if (!fs::exists(s) || !fs::is_regular_file(s))
-      throw parse_error("path `{}` do not refer to file", s.generic_string());
-    if (specs_dir.empty())
-      specs_dir = s.parent_path();
-    s = fs::relative(s, specs_dir);
-    if (!specs.contains(s))
-      specs[s] = do_parse_spec_file(s);
-    loaded_specs.insert(std::move(s));
-  }
 
-  // возвращает IR всех загруженных спецификаций
-  ir::ir_object generate();
+  // принимает путь до директории спек и пути до всех спецификаций кодогенерацию для которых нужно сделать
+  // пути могут быть или относительно spec dir или абсолютные
+  // Note: инклуд директории из опций распространяются на specs
+  [[nodiscard]] ir::ir_object generate_specs(fs::path specsdir, std::vector<fs::path> specs2generate,
+                                             svarg_options options = {}) {
+    // подготовка
+    if (!fs::exists(specsdir) || !fs::is_directory(specsdir))
+      throw parse_error("specs directory not exist, provided path: {}", specsdir.generic_string());
+    specs_dir = fs::absolute(specsdir);
+    std::unordered_set<fs::path> loaded_specs;
+    std::unordered_map<fs::path, openapi_object> specs;
 
-  fs::path get_specs_dir() const {
-    return specs_dir;
-  }
-  void set_specs_dir(fs::path p) {
-    specs_dir = fs::absolute(std::move(p));
-    // TODO ремапить все пути
-    assert(specs.empty() && loaded_specs.empty());
+    // парсинг спек
+
+    for (fs::path& s : specs2generate) {
+      s = find_existing_file(std::move(s));
+      if (!specs.contains(s))
+        specs[s] = do_parse_spec_file(s);
+      loaded_specs.insert(std::move(s));
+    }
+
+    // перевод в IR
+
+    for (auto& p : loaded_specs) {
+      assert(specs.contains(p));
+      try {
+        ir.merge(visit_and_generate_ir(specs.at(p), p));
+      } catch (std ::exception& e) {
+        throw parse_error("{}/{}", p.generic_string(), e.what());
+      }
+    }
+    return std::move(ir);
   }
 
   // reffile - файл где написана ссылка
@@ -100,6 +118,7 @@ struct spec_loader {
     filefromref = fs::relative(fs::absolute(filefromref), specs_dir);
     return find_existing_file(filefromref);
   }
+
   // возвращает первый из существующих файлов из списка specs_dir/filename, -I dirs/filename...
   // используется для разрешений ссылок
   // возвращаемый путь всегда относительно specs_dir
@@ -113,17 +132,12 @@ struct spec_loader {
     throw parse_error("no such file: `{}`", filepart.generic_string());
   }
 
-  // возвращает тип, но и вставляет его в types (если его там не было)
-  resolved_schema resolve_schema_ref(reference_object obj, fs::path file,
-                                     std::unordered_set<ir::schema>& types);
-
-  callback_object resolve_callback(reference_or<callback_object>, fs::path file);
-  path_item_object resolve_path_item_object(reference_or<path_item_object> item, fs::path file);
+  // возвращает тип, но и вставляет его в ir.schemas (если его там не было)
+  resolved_schema resolve_schema_ref(reference_object obj, fs::path file);
 
   // file - относительно specs dir, jsonptr должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
-  ir::object_schema make_object_type(schema_object const& schema, const fs::path& file,
-                                     std::string_view jsonptr, std::unordered_set<ir::schema>& types);
+  ir::object_schema make_object_type(schema_object const& schema, const fs::path& file, scopes_t jsonptr);
 
   template <typename... Args>
   void emit_warn(const fs::path& where, std::string_view jsonptr, std::format_string<Args...> fmt,
@@ -132,17 +146,24 @@ struct spec_loader {
                              std::format(fmt, std::forward<Args>(args)...));
   }
 
-  schema_or_ref schema_lowering(const schema_object& schema, const fs::path& file, std::string_view jsonptr,
-                                std::optional<std::string_view> name,
-                                std::unordered_set<ir::schema>& schemas);
+  schema_or_ref schema_lowering(const schema_object& schema, const fs::path& file, scopes_t jsonptr,
+                                std::optional<std::string_view> name);
 
   // name - operationId для операций, имя калбека/вебхука для калбека или вебхука
+  //    используется как базовое имя, если нет operationId. Н-р метод складывается с именем и получается имя
+  //    для сгенерированной операции
   // path - путь относительно сервера для операции, runtime expr для калбека
+  // resolve_ref_file - путь относительно которого резолвить ссылки.
+  //    Может не совпадать с path, так как операция загружена из другого файла, но декларирована то здесь
   // spec - где определена операция. Даже если операция была ссылкой, она могла перекрыть какие-то филды
-  // и поэтому стала новой операцией в том файле где написана ссылка
-  ir::operation path_item_object_lowering(std::string_view path, fs::path spec,
-                                          std::optional<std::string_view> name, path_item_object);
+  //    и поэтому стала новой операцией в том файле где написана ссылка
+  // jsonptr - путь до path item в объекте апи
+  // Возвращает мапу METHOD => operation
+  string_map<ir::operation> path_item_object_lowering(std::string_view path, fs::path spec,
+                                                      fs::path resolve_ref_file, scopes_t jsonptr,
+                                                      std::string_view name, path_item_object);
 
+  // TODO внести сюда все ловеринги
  private:
   template <typename T>
   friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, spec_loader& loader);
@@ -159,8 +180,6 @@ struct spec_loader {
     v = resolve_raw_references(std::move(v), opts);
     return parse_spec(std::as_const(v), opts);
   }
-  template <typename>
-  friend struct vtor;
 
   ir::ir_object visit_and_generate_ir(const openapi_object& obj, const fs::path& obj_file);
 };

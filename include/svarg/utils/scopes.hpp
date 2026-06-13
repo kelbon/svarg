@@ -17,6 +17,11 @@ struct scopes_t {
   std::vector<size_t> prevszs;
 
  public:
+  scopes_t() = default;
+  scopes_t(std::convertible_to<std::string_view> auto&& s) {
+    add_scope(std::string_view(s));
+  }
+
   void add_scope(std::string_view str) {
     assert(!str.empty());
     prevszs.push_back(scope.size());
@@ -101,6 +106,27 @@ struct scopes_t {
 
   [[nodiscard]] segments_t segments() const noexcept {
     return segments_t(*this);
+  }
+
+  scopes_t& operator/=(std::string_view seg) {
+    add_scope(seg);
+    return *this;
+  }
+  scopes_t& operator/=(int64_t num) {
+    add_scope(std::to_string(num));
+    return *this;
+  }
+  template <typename Me>
+  scopes_t operator/(this Me&& self, std::string_view seg) {
+    scopes_t s = std::forward<Me>(self);
+    s.add_scope(seg);
+    return s;
+  }
+  template <typename Me>
+  scopes_t operator/(this Me&& self, int64_t num) {
+    scopes_t s = std::forward<Me>(self);
+    s.add_scope(std::to_string(num));
+    return s;
   }
 };
 

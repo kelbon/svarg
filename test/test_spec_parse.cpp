@@ -16,15 +16,14 @@ TEST("json is an yaml") {
 TEST("spec loader") {
   svarg::spec_loader loader;
 
-  loader.set_specs_dir(std::filesystem::current_path());
-  loader.load_spec("./test_specs/TS29510_Nnrf_NFDiscovery.yaml");
-  loader.load_spec("./test_specs/TS29571_CommonData.yaml");
-  svarg::ir::ir_object o = loader.generate();
+  svarg::ir::ir_object o = loader.generate_specs(
+      std::filesystem::current_path(),
+      {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"});
   for (auto&& x : o.schemas) {
     if (x.spec() == "test_specs/TS29571_CommonData.yaml")
       std::cout << x.jsonptr() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
   }
-  REQUIRE(o.schemas.size() == 1889);
+  REQUIRE(o.schemas.size() == 1907);
 }
 
 TEST("parse_spec") {

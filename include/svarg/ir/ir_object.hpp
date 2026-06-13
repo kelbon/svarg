@@ -312,6 +312,9 @@ enum struct status_range_e {
 };
 
 struct response_desc {
+  // если респонс дефолтный, то у него выставлен статус 0
+  static constexpr int64_t default_status_marker = 0;
+
   // всегда должен быть одно - либо status либо statusRange
   // допустимые значения - [100; 600)
   optional<int64_t> status;
@@ -322,6 +325,34 @@ struct response_desc {
   optional<std::unordered_set<header>> headers;
   // на каждый contentType своё тело
   optional<std::unordered_set<body>> bodies;
+
+  [[nodiscard]] bool is_default() const noexcept {
+    return status && *status == default_status_marker;
+  }
+  void make_default() noexcept {
+    if (statusRange)
+      statusRange = std::nullopt;
+    status = default_status_marker;
+  }
+  void set_status(std::string_view s) {
+    std::optional range = ss::string_switch<std::optional<status_range_e>>(s)
+                              .case_("1XX", status_range_e::_1XX)
+                              .case_("2XX", status_range_e::_2XX)
+                              .case_("3XX", status_range_e::_3XX)
+                              .case_("4XX", status_range_e::_4XX)
+                              .case_("5XX", status_range_e::_5XX)
+                              .or_default(std::nullopt);
+    if (range)
+      statusRange = *range;
+    size_t num = 0;
+    auto [ptr, e] = std::from_chars(s.data(), s.data() + s.size(), num);
+    if (e != std::errc{} || ptr != s.data() + s.size())
+      throw parse_error("invalid status, not number and not valid range: `{}`", s);
+    if (num == 0)
+      throw validate_error("invalid status value 0");
+    // не проверяем статус, вдруг кто-то сделал 1023 валидным статусом
+    status = num;
+  }
 
   bool operator==(const response_desc& r) const noexcept {
     if (status && r.status)
@@ -341,8 +372,6 @@ struct hash<::svarg::ir::response_desc> {
   size_t operator()(const ::svarg::ir::response_desc& o) const {
     assert(!(o.status && o.statusRange));
     if (o.status) {
-      if (*o.status < 100)
-        throw ::svarg::parse_error("invalid status");
       return ::svarg::hash_combined(*o.status);
     } else if (o.statusRange) {
       // значения из енама меньше 100, поэтому не должны пересекаться с status никогда
@@ -372,13 +401,13 @@ struct operation {
   // TODO использовать правила валидации из openapie 3.2
   // https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.2.0.md#path-templating
   string path;
-  // GET/POST и тд, регистронезависимо.
+  // get/post и тд. Всегда маленькие буквы
   // строкой для поддержки кастомных методов (openapi 3.2)
   string method;
   optional<array<operation_parameter>> parameters;
   // на каждый contentType своё тело
   optional<std::unordered_set<body>> bodies;
-  std::unordered_set<response_desc> responses;
+  optional<std::unordered_set<response_desc>> responses;
   optional<response_desc> defaultResponse;
   optional<meta_t> meta;
 

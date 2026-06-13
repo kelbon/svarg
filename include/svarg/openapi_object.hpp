@@ -1,8 +1,10 @@
 #pragma once
 
+#include "svarg/utils/all.hpp"
 #include "svarg/utils/parse_json.hpp"
 
 #include <boost/json/serialize.hpp>
+#include <ranges>
 
 namespace svarg {
 
@@ -271,6 +273,8 @@ struct header_object {
   optional<string_map<media_type_object>> content;
 };
 
+// TODO string switch add or_nullopt
+
 struct encoding_object {
   optional<string> contentType;
   // должно быть проигнорировано, если у запроса тело не multipart
@@ -466,9 +470,25 @@ struct path_item_object {
   optional<array<server_object>> servers;
   // все параметры должны быть уникальны (ключ name + location)
   optional<array<reference_or<parameter_object>>> parameters;
+
+  auto all_operations() const noexcept {
+    return all(get, put, post, delete_, options, head, patch, trace);
+  }
+  auto all_operations_with_method() const noexcept {
+    return std::views::zip(
+               all(get, put, post, delete_, options, head, patch, trace),
+               // Note: важно что все типы
+               std::array{+"get", +"put", +"post", +"delete", +"options", +"head", +"patch", +"trace"}) |
+           std::views::filter([](auto&& x) { return !!std::get<0>(x); }) |
+           std::views::transform([](auto&& x) -> decltype(auto) {
+             auto& [op, str] = x;
+             return std::pair<const operation_object&, std::string_view>(*op, str);
+           });
+  }
 };
 
 // TODO здесь надо специальную мапу со сравнением без учёта шаблонизирования?
+
 // хранит пути относительно url сервера
 // все пути должны начинаться с '/'
 // при поиске подходящего пути приоритет у тех
