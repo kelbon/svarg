@@ -56,8 +56,7 @@ struct object_and_path {
 // например одна спека ссылается на другие, но paths и тд из других не нужны
 // TODO АХ да, надо разделить явно на fronend / IR / backend
 
-// TODO ренейм в ir parse context или типа того
-struct spec_loader {
+struct lowering_context {
  private:
   svarg_options opts;
   // путь относительно которого в IR написаны все пути до спецификаций
@@ -166,7 +165,7 @@ struct spec_loader {
   // TODO внести сюда все ловеринги
  private:
   template <typename T>
-  friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, spec_loader& loader);
+  friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lowering_context& loader);
   const boost::json::value& load_as_json(fs::path const& p) {
     // spec_dir != cwd
     // не включен ассёрт, так как файловую систему могут поменять

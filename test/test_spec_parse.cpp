@@ -14,7 +14,7 @@ TEST("json is an yaml") {
 }
 
 TEST("spec loader") {
-  svarg::spec_loader loader;
+  svarg::lowering_context loader;
 
   svarg::ir::ir_object o = loader.generate_specs(
       std::filesystem::current_path(),
