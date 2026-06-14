@@ -5,9 +5,12 @@
 
 namespace svarg {
 
+[[nodiscard]] constexpr bool is_keyfield(std::string_view name) {
+  return name.starts_with("_keyfield");
+}
 // принимает имя поля из C++ структуры и возвращает то, которое было в спеке и должно быть в json
 //
-consteval std::string_view unescape_field_name(std::string_view name) {
+constexpr std::string_view unescape_field_name(std::string_view name) {
   name = ss::string_switch<std::string_view>(name)
              .case_("default_", "default")
              .case_("namespace_", "namespace")
@@ -21,10 +24,8 @@ consteval std::string_view unescape_field_name(std::string_view name) {
              .or_default(name);
   // чтобы не забыть _responses в responses_object и подобные вещи.
   // По сути ключевые слова которые нужно специальным образом обработать
-  if (name.starts_with('_') && !name.starts_with("_keyfield"))
-    throw "special field not handled correctly";
-  if (name.ends_with('_'))
-    throw "may be i forget some field";
+  assert(!(name.starts_with('_') && !is_keyfield(name) && "special field not handled correctly"));
+  assert(!name.ends_with('_') && "may be i forget some field");
   return name;
 }
 

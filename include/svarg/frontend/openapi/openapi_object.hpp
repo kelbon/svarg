@@ -494,7 +494,7 @@ struct path_item_object {
   }
   auto all_operations_with_method() const noexcept {
     return std::views::zip(
-               all(get, put, post, delete_, options, head, patch, trace),
+               all_operations(),
                // Note: важно что все типы
                std::array{+"get", +"put", +"post", +"delete", +"options", +"head", +"patch", +"trace"}) |
            std::views::filter([](auto&& x) { return !!std::get<0>(x); }) |

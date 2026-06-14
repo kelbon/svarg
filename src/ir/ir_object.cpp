@@ -9,7 +9,7 @@ void ir_object::merge(ir_object other) {
 }
 
 bool schema_ref::refers_to(const schema& t) const noexcept {
-  return name == t.name && scope == t.scope;
+  return spec == t.spec && jsonptr == t.jsonptr;
 }
 
 }  // namespace svarg::ir

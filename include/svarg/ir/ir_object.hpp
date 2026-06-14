@@ -5,8 +5,8 @@
 #include <unordered_set>
 
 #include "svarg/utils/forward_like.hpp"
-#include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/path_tools.hpp"
+#include "svarg/utils/scopes.hpp"
 #include "svarg/utils/strcmp.hpp"
 #include "svarg/utils/combined_hash.hpp"
 #include "svarg/utils/from_chars.hpp"
@@ -41,21 +41,19 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
   out = loc;
 }
 
-// fundamental | name + scope
 struct schema_ref {
   std::optional<string> name;
-  // может быть ссылкой на фундаментал (_#string и тд)
-  string scope;
+  // может быть ссылкой на фундаментал (@string@ и тд)
+  // generic путь до спеки
+  string spec;
+  json_pointer jsonptr;
   // TODO тест с refers_to фундаментальные типы и тд
   [[nodiscard]] bool refers_to(const schema&) const noexcept;
 };
 
-[[nodiscard]] inline size_t hash_schema(std::string_view scope, const std::optional<std::string>& name) {
-  svarg::combined_hash hash;
-  hash.add(scope);
-  if (name)
-    hash.add(*name);
-  return hash;
+[[nodiscard]] inline size_t hash_schema(std::string_view spec, const json_pointer& jp) {
+  // не требуется escape
+  return hash_combined(spec, jp.view());
 }
 
 // пытается распарсить ссылку на фундаментал
@@ -64,11 +62,11 @@ struct schema_ref {
 inline std::optional<fundamental_e> try_parse_as_fundamental_ref(std::string_view ref) {
   // подчёркивание в начале чтобы избежать ошибки и принять это за локальную ссылку
   return ss::string_switch<std::optional<fundamental_e>>(ref)
-      .case_("_#null", fundamental_e::null)
-      .case_("_#boolean", fundamental_e::boolean)
-      .case_("_#integer", fundamental_e::integer)
-      .case_("_#number", fundamental_e::number)
-      .case_("_#string", fundamental_e::string)
+      .case_("@null@", fundamental_e::null)
+      .case_("@boolean@", fundamental_e::boolean)
+      .case_("@integer@", fundamental_e::integer)
+      .case_("@number@", fundamental_e::number)
+      .case_("@string@", fundamental_e::string)
       .or_default(std::nullopt);
 }
 
@@ -78,22 +76,22 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
   auto f2scope = [&]() -> std::string_view {
     switch (e) {
       case fundamental_e::null:
-        return "_#null";
+        return "@null@";
       case fundamental_e::boolean:
-        return "_#boolean";
+        return "@boolean@";
       case fundamental_e::integer:
-        return "_#integer";
+        return "@integer@";
       case fundamental_e::number:
-        return "_#number";
+        return "@number@";
       case fundamental_e::string:
-        return "_#string";
+        return "@string@";
       case fundamental_e::array:
       case fundamental_e::object:
         std::unreachable();
         break;
     };
   };
-  ref.scope = std::string(f2scope());
+  ref.spec = f2scope();
   return ref;
 }
 
@@ -158,9 +156,10 @@ struct any_schema {};
 
 // fundamental | enum | object_type | oneof | anyof | allof
 struct schema {
-  // spec#jsonptr ref на место где определён тип (не включает имя типа)
-  // TODO отдельно спека и json pointer
-  string scope;
+  // generic строка файла
+  string spec;
+  json_pointer jsonptr;
+  // если имени нет это инлайн схема
   std::optional<string> name;
   // представление типа (то что получит пользователь генератора)
   std::variant<any_schema, fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
@@ -171,11 +170,8 @@ struct schema {
   // что написано в enum
   std::optional<array<schema_ref>> required;
 
-  std::string_view spec() const noexcept {
-    return parse_ref(scope).file;
-  }
-  std::string_view jsonptr() const noexcept {
-    return parse_ref(scope).json_ptr;
+  std::string scope() const {
+    return std::format("{}#{}", spec, jsonptr.escaped());
   }
 
   void add_requirement(schema_ref s) {
@@ -189,12 +185,13 @@ struct schema {
     schema_ref r;
     if (self.name)
       r.name = noadl::forwardLike<Me>(*self.name);
-    r.scope = noadl::forwardLike<Me>(self.scope);
+    r.spec = noadl::forwardLike<Me>(self.spec);
+    r.jsonptr = noadl::forwardLike<Me>(self.jsonptr);
     return r;
   }
 
   bool operator==(const schema& x) const noexcept {
-    return scope == x.scope && name == x.name;
+    return spec == x.spec && jsonptr == x.jsonptr && name == x.name;
   }
 };
 
@@ -296,7 +293,7 @@ struct hash<::svarg::ir::body> {
 template <>
 struct hash<::svarg::ir::schema_ref> {
   size_t operator()(const ::svarg::ir::schema_ref& r) const noexcept {
-    return ::svarg::ir::hash_schema(r.scope, r.name);
+    return ::svarg::ir::hash_schema(r.spec, r.jsonptr);
   }
 };
 
@@ -425,7 +422,7 @@ namespace std {
 template <>
 struct hash<::svarg::ir::schema> {
   size_t operator()(const ::svarg::ir::schema& t) const {
-    return ::svarg::ir::hash_schema(t.scope, t.name);
+    return ::svarg::ir::hash_schema(t.spec, t.jsonptr);
   }
 };
 

@@ -7,17 +7,17 @@
 
 using segments = std::vector<std::string>;
 
-static segments collect(const svarg::scopes_t& s) {
+static segments collect(const svarg::json_pointer& s) {
   segments result;
   for (auto seg : s.segments())
     result.emplace_back(seg);
   return result;
 }
 
-// --- scopes_t: add/remove/view ---
+// --- json_pointer: add/remove/view ---
 
-TEST("scopes: complex") {
-  svarg::scopes_t s;
+TEST("json_pointer: basic") {
+  svarg::json_pointer s;
   REQUIRE(s.view() == "");
   REQUIRE(collect(s) == segments{});
   s.add_key("foo");
@@ -39,8 +39,8 @@ TEST("scopes: complex") {
 }
 // TODO тесты из json pointer RFC на escaped
 
-TEST("multiscope") {
-  svarg::scopes_t s = "/foo/bar/baz"_jp;
+TEST("json_pointer: multiscope") {
+  svarg::json_pointer s = "/foo/bar/baz"_jp;
   REQUIRE(s.view() == "/foo/bar/baz");
   REQUIRE(collect(s) == segments{"foo", "bar", "baz"});
   s.remove_scope();
@@ -54,55 +54,55 @@ TEST("multiscope") {
   REQUIRE(s.view() == "");
 }
 
-TEST("scopes: add after remove") {
-  svarg::scopes_t s;
-  s.add_scopes("foo");
-  s.add_scopes("bar");
+TEST("json_pointer: add after remove") {
+  svarg::json_pointer s;
+  s.add_json_ptr("foo");
+  s.add_json_ptr("bar");
   s.remove_scope();
-  s.add_scopes("qux");
+  s.add_json_ptr("qux");
   REQUIRE(s.view() == "/foo/qux");
 }
 
-TEST("scopes: add remove interleaved") {
-  svarg::scopes_t s;
-  s.add_scopes("a");
-  s.add_scopes("b");
+TEST("json_pointer: add remove interleaved") {
+  svarg::json_pointer s;
+  s.add_json_ptr("a");
+  s.add_json_ptr("b");
   s.remove_scope();
-  s.add_scopes("c");
-  s.add_scopes("d");
+  s.add_json_ptr("c");
+  s.add_json_ptr("d");
   s.remove_scope();
   REQUIRE(s.view() == "/a/c");
 }
 
 // --- iterator ---
 
-TEST("scopes: iterate single segment") {
-  svarg::scopes_t s;
-  s.add_scopes("foo");
+TEST("json_pointer: iterate single segment") {
+  svarg::json_pointer s;
+  s.add_json_ptr("foo");
   REQUIRE(collect(s) == segments{"foo"});
 }
 
-TEST("scopes: iterator begin equals end on empty") {
-  svarg::scopes_t s;
+TEST("json_pointer: iterator begin equals end on empty") {
+  svarg::json_pointer s;
   REQUIRE(s.segments().begin() == s.segments().end());
-  s.add_scopes("x");
+  s.add_json_ptr("x");
   REQUIRE(s.segments().begin() != s.segments().end());
 }
 
-TEST("scopes: iterator post-increment") {
-  svarg::scopes_t s;
-  s.add_scopes("a");
-  s.add_scopes("b");
+TEST("json_pointer: iterator post-increment") {
+  svarg::json_pointer s;
+  s.add_json_ptr("a");
+  s.add_json_ptr("b");
   auto it = s.segments().begin();
   REQUIRE(*it++ == "a");
   REQUIRE(*it++ == "b");
   REQUIRE(it == s.segments().end());
 }
 
-TEST("scopes: iterator dereference is idempotent") {
-  svarg::scopes_t s;
-  s.add_scopes("foo");
-  s.add_scopes("bar");
+TEST("json_pointer: iterator dereference is idempotent") {
+  svarg::json_pointer s;
+  s.add_json_ptr("foo");
+  s.add_json_ptr("bar");
   auto it = s.segments().begin();
   REQUIRE(*it == "foo");
   REQUIRE(*it == "foo");

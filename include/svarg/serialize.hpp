@@ -135,7 +135,7 @@ void serialize_field(T const& in, boost::json::object& out) {
   constexpr std::string_view name = unescape_field_name(raw_name);
 
   // пропускаем внутренние keyfield поля (они не часть JSON-схемы)
-  if constexpr (raw_name.starts_with("_keyfield"))
+  if constexpr (is_keyfield(raw_name))
     return;
 
   auto const& field = boost::pfr::get<I>(in);

@@ -18,10 +18,10 @@ TEST("generate ir from openapi") {
       std::filesystem::current_path(),
       {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"});
   for (auto&& x : o.schemas) {
-    if (x.spec() == "test_specs/TS29571_CommonData.yaml")
-      std::cout << x.jsonptr() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
+    if (x.spec == "test_specs/TS29571_CommonData.yaml")
+      std::cout << x.jsonptr.view() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
   }
-  REQUIRE(o.schemas.size() == 536);
+  REQUIRE(o.schemas.size() == 1890);
   REQUIRE(o.operations.size() == 6);
   REQUIRE(o.webhooks.size() == 1);
 }

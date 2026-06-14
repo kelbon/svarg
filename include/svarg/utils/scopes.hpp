@@ -13,37 +13,40 @@
 
 namespace svarg {
 
-struct unescaped_t {
-  explicit unescaped_t() = default;
+struct escaped_t {
+  explicit escaped_t() = default;
 };
 
 // заставляет вставить сегменты как есть
-constexpr inline unescaped_t unescaped = unescaped_t{};
+constexpr inline escaped_t escaped = escaped_t{};
+// TODO rename file / test
+
+// TODO нужно хранить экранировано, т.к. могут совпасть "/" + "name" и add_key("/name")
+// TODO escaped_json_pointer(str) - вьюшка
 
 // по сути json pointer с возможностью добавлять и убирать последний сегмент
 // НО может быть невалидным json pointer, так как в add_scope можно подать и строки содержащие /
 // в итоге получив нечто типа path//get/abc. Но такие сегменты тоже поддерживаются и корреткно удаляются
-// TODO rename в реально json_pointer
-struct scopes_t {
+struct json_pointer {
  private:
-  std::string scope;
+  // хранится экранировано, чтобы было невозможно пересечение путей
+  // и можно было обходить через visit_path_segments
+  std::string data;
   std::vector<size_t> prevszs;
 
  public:
-  scopes_t() = default;
+  json_pointer() = default;
   // precondition: строка начинается с '/' или пуста (json pointer)
-  explicit scopes_t(std::convertible_to<std::string_view> auto&& s) {
+  explicit json_pointer(std::convertible_to<std::string_view> auto&& s) {
     std::string_view str(s);
-    add_scopes(str);
+    add_json_ptr(str);
   }
 
   // precondition: str распарсится в сегменты нормально
-  explicit scopes_t(std::convertible_to<std::string_view> auto&& s, unescaped_t) {
+  explicit json_pointer(std::convertible_to<std::string_view> auto&& s, escaped_t) {
     std::string_view str(s);
-    add_scopes(str, unescaped);
+    add_json_ptr(str, ::svarg::escaped);
   }
-
-  // TODO отрефакторить лишние методы, переименовать и тд
 
   // json key
   void add_key(std::string_view key) {
@@ -58,26 +61,33 @@ struct scopes_t {
   }
 
   // str валидный json pointer
-  void add_scopes(std::string_view str) {
+  void add_json_ptr(std::string_view str) {
     if (!str.contains('/'))
       return add_one_scope(str);
     visit_path_segments(str, [&](std::string_view seg) { add_one_scope(seg); });
   }
-  void add_scopes(std::string_view str, unescaped_t) {
+  void add_json_ptr(std::string_view str, escaped_t) {
     if (!str.contains('/'))
       return add_one_scope(str);
-    visit_path_segments(str, [&](std::string_view seg) { add_one_scope(seg, unescaped); });
+    visit_path_segments(str, [&](std::string_view seg) { add_one_scope(seg, ::svarg::escaped); });
   }
-
+  // TODO название получше
   void remove_scope() {
     assert(!prevszs.empty());
-    scope.resize(prevszs.back());
+    data.resize(prevszs.back());
     prevszs.pop_back();
   }
 
-  // возвращает UNESCAPED указатель (возможно там сегменты не так поделены и тд)
+  // возвращает экранированный сегмент
+  std::string last_segment() const noexcept {
+    if (empty())
+      return {};
+    return jp_unescape_segment(std::string_view(data).substr(prevszs.back() + 1 /*skip /*/));
+  }
+
+  // возвращает ESCAPED указатель
   [[nodiscard]] std::string_view view() const noexcept {
-    return scope;
+    return data;
   }
 
   [[nodiscard]] size_t segments_count() const noexcept {
@@ -102,7 +112,7 @@ struct scopes_t {
    public:
     iterator() noexcept = default;
 
-    explicit iterator(const scopes_t& s) noexcept : str(s.scope), prevszs_(s.prevszs) {
+    explicit iterator(const json_pointer& s) noexcept : str(s.data), prevszs_(s.prevszs) {
     }
 
     reference operator*() const noexcept {
@@ -135,7 +145,7 @@ struct scopes_t {
 
   // begin/end вынесено сюда, чтобы нельзя было ошибиться по типу std::format("{}", scopes (без .view()))
   struct segments_t {
-    const scopes_t& scopes;
+    const json_pointer& scopes;
 
     iterator begin() const noexcept {
       return iterator(scopes);
@@ -151,39 +161,43 @@ struct scopes_t {
 
   // NOTE: сюда не должны попадать два и более сегментов за раз
   // если `key` это строковое представление индекса, то тоже сработает
-  scopes_t& operator/=(std::string_view key) {
+  json_pointer& operator/=(std::string_view key) {
     add_key(key);
     return *this;
   }
-  scopes_t& operator/=(size_t num) {
+  json_pointer& operator/=(size_t num) {
     add_index(num);
     return *this;
   }
-  scopes_t& operator/=(const scopes_t& other) {
+  json_pointer& operator/=(const json_pointer& other) {
     for (std::string_view seg : other.segments())
-      add_one_scope(seg, unescaped);
+      add_one_scope(seg, ::svarg::escaped);
     return *this;
   }
   template <typename Me>
-  scopes_t operator/(this Me&& self, std::string_view key) {
-    scopes_t s = std::forward<Me>(self);
+  json_pointer operator/(this Me&& self, std::string_view key) {
+    json_pointer s = std::forward<Me>(self);
     s /= key;
     return s;
   }
   template <typename Me>
-  scopes_t operator/(this Me&& self, size_t i) {
-    scopes_t s = std::forward<Me>(self);
+  json_pointer operator/(this Me&& self, size_t i) {
+    json_pointer s = std::forward<Me>(self);
     s /= i;
     return s;
   }
 
-  std::string escaped() const {
+  std::string_view escaped() const {
+    return data;
+  }
+  // может вернуть невалидный json pointer, но красивый
+  std::string unescaped() const {
+    if (empty())
+      return {};
     std::string result;
-    if (scope.empty())
-      return result;
-    visit_path_segments(scope, [&](std::string_view seg) {
-      if (jp_escape_required(seg))
-        result += jp_escape_segment(seg);
+    visit_path_segments(escaped(), [&](std::string_view seg) {
+      result.push_back('/');
+      result += jp_unescape_segment(seg);
     });
     return result;
   }
@@ -192,9 +206,13 @@ struct scopes_t {
 
   // получает доступ без escape/unescape
   boost::json::value* access(boost::json::value& json) const {
+    auto r = json.try_at_pointer(data);
+    return r ? &*r : nullptr;
+    /*
     boost::json::value* current = &json;
 
-    for (std::string_view seg : segments()) {
+    for (std::string_view escaped_seg : segments()) {
+      std::string seg = jp_unescape_segment(escaped_seg);
       if (current->is_array()) {
         size_t idx;
         if (!try_from_chars(seg, idx))
@@ -214,33 +232,39 @@ struct scopes_t {
       }
     }
     return current;
+    */
   }
 
   const boost::json::value* access(const boost::json::value& json) const {
     return access(const_cast<boost::json::value&>(json));
   }
 
+  bool operator==(const json_pointer& other) const noexcept {
+    return view() == other.view();
+  }
+
  private:
   // precondition: str это только один сегмент (например "id", а не "id/name")
   void add_one_scope(std::string_view str) {
     assert(!str.empty());
-    prevszs.push_back(scope.size());
-    scope.push_back('/');
-    if (!jp_unescape_required(str))
-      scope += str;
+    prevszs.push_back(data.size());
+    data.push_back('/');
+    // TODO лучше с экранированным ренжом, а не созданием строки
+    if (!jp_escape_required(str))
+      data += str;
     else
-      scope += jp_unescape_segment(str);
+      data += jp_escape_segment(str);
   }
-  void add_one_scope(std::string_view str, unescaped_t) {
+  void add_one_scope(std::string_view str, escaped_t) {
     assert(!str.empty());
-    prevszs.push_back(scope.size());
-    scope.push_back('/');
-    scope += str;
+    prevszs.push_back(data.size());
+    data.push_back('/');
+    data += str;
   }
 };
 
 }  // namespace svarg
 
-inline svarg::scopes_t operator""_jp(const char* str, size_t sz) {
-  return svarg::scopes_t(std::string_view(str, sz));
+inline svarg::json_pointer operator""_jp(const char* str, size_t sz) {
+  return svarg::json_pointer(std::string_view(str, sz));
 }

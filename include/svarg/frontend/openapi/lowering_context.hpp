@@ -34,7 +34,7 @@ template <typename T>
 struct object_and_path {
   T object;
   fs::path path;  // путь где лежал в итоге объект
-  scopes_t jsonptr;
+  json_pointer jsonptr;
 };
 
 struct lowering_context {
@@ -119,18 +119,18 @@ struct lowering_context {
   // возвращает тип, но и вставляет его в ir.schemas (если его там не было)
   resolved_schema resolve_schema_ref(reference_object obj, fs::path file);
 
-  // file - относительно specs dir, jsonptr должен указывать на место где лежит schema
+  // file - относительно specs dir, jp должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
-  ir::object_schema make_object_type(schema_object const& schema, const fs::path& file, scopes_t jsonptr);
+  ir::object_schema make_object_type(schema_object const& schema, const fs::path& file, json_pointer jp);
 
   template <typename... Args>
-  void emit_warn(const fs::path& where, std::string_view jsonptr, std::format_string<Args...> fmt,
+  void emit_warn(const fs::path& where, std::string_view jp, std::format_string<Args...> fmt,
                  Args&&... args) {
-    std::print("in {}#{}. warning: {}\n", where.generic_string(), jsonptr,
+    std::print("in {}#{}. warning: {}\n", where.generic_string(), jp,
                std::format(fmt, std::forward<Args>(args)...));
   }
 
-  schema_or_ref schema_lowering(const schema_object& schema, const fs::path& file, scopes_t jsonptr,
+  schema_or_ref schema_lowering(const schema_object& schema, const fs::path& file, json_pointer,
                                 std::optional<std::string_view> name);
 
   // name - operationId для операций, имя калбека/вебхука для калбека или вебхука
@@ -141,21 +141,21 @@ struct lowering_context {
   //    Может не совпадать с path, так как операция загружена из другого файла, но декларирована то здесь
   // spec - где определена операция. Даже если операция была ссылкой, она могла перекрыть какие-то филды
   //    и поэтому стала новой операцией в том файле где написана ссылка
-  // jsonptr - путь до path item в объекте апи
+  // jp - путь до path item в объекте апи
   // Возвращает мапу METHOD => operation
   string_map<ir::operation> path_item_object_lowering(std::string_view path, fs::path spec,
-                                                      fs::path resolve_ref_file, scopes_t jsonptr,
+                                                      fs::path resolve_ref_file, json_pointer jp,
                                                       std::string_view name, path_item_object);
   // TODO как-то объединить везде file + jsonptr, везде прокидывается же абсолютно
 
-  ir::operation_parameter parameter_lowering(const parameter_object& param, fs::path file, scopes_t jsonptr,
+  ir::operation_parameter parameter_lowering(const parameter_object& param, fs::path file, json_pointer,
                                              std::string_view path);
-  std::unordered_set<ir::body> request_body_lowering(request_body_object, fs::path file, scopes_t jsonptr);
+  std::unordered_set<ir::body> request_body_lowering(request_body_object, fs::path file, json_pointer jp);
   ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
-                                      fs::path file, scopes_t jsonptr);
+                                      fs::path file, json_pointer);
   ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
                                                 const array<ir::schema_ref>& schemas);
-  ir::body media_type_object_lowering(const media_type_object&, fs::path file, scopes_t jsonptr,
+  ir::body media_type_object_lowering(const media_type_object&, fs::path file, json_pointer,
                                       std::string_view content_type);
 
  private:
