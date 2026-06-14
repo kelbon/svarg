@@ -63,26 +63,17 @@ struct parse<reference_or<T>> {
       }
       throw parse_error(" object expected, got `{}`", e2str(v.kind()));
     }
-    if (obj->contains("$ref")) {
-      reference_object ref{};
-      parse<reference_object>{}(v, ref);
-      out = std::move(ref);
-    } else {
-      T val{};
-      parse<T>{}(v, val);
-      out = std::move(val);
-    }
+    if (obj->contains("$ref"))
+      out = from_json<reference_object>(v);
+    else
+      out = from_json<T>(v);
   }
 };
 
 template <typename T>
 struct serialize<reference_or<T>> {
   boost::json::value operator()(reference_or<T> const& v) {
-    return std::visit(
-        [](auto const& x) -> boost::json::value {
-          return to_json(x);  //
-        },
-        v);
+    return std::visit([](auto const& x) -> boost::json::value { return to_json(x); }, v);
   }
 };
 

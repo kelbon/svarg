@@ -34,8 +34,10 @@ struct validate<media_type_object> {
   void operator()(media_type_object const& obj) {
     if (obj.example && obj.examples)
       throw validate_error("media_type_object: `example` and `examples` are mutually exclusive");
-    // TODO провалидировать что все .encoding имена есть в .obj (это можно сделать только после резолва
-    // ссылок)
+    // https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#media-type-object
+    if (obj.encoding && !obj.encoding->empty() && !obj.schema)
+      throw validate_error(
+          "media_type_object: all keys from `encoding` must be in `schema`, but `schema` not setted");
   }
 };
 
@@ -317,8 +319,8 @@ struct postparse<schema_object> {
     }
     if (schema.is_write_only() && schema.is_read_only()) {
       // бессмысленно (может так просто вышло после складывания ссылок)
-      schema.writeOnly = nullptr;
-      schema.readOnly = nullptr;
+      schema.writeOnly = std::nullopt;
+      schema.readOnly = std::nullopt;
     }
   }
 };

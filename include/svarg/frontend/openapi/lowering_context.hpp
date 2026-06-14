@@ -24,9 +24,9 @@ struct schema_or_ref {
   template <typename Me>
   ir::schema_ref ref(this Me&& self) {
     if (auto* r = std::get_if<ir::schema_ref>(&self.data))
-      return forwardLike<Me>(*r);
+      return noadl::forwardLike<Me>(*r);
     else
-      return std::get<ir::schema>(forwardLike<Me>(self.data)).ref();
+      return std::get<ir::schema>(noadl::forwardLike<Me>(self.data)).ref();
   }
 };
 
@@ -63,7 +63,7 @@ struct lowering_context {
     // парсинг спек
 
     for (fs::path& s : specs2generate) {
-      s = find_existing_file(std::move(s));
+      s = find_existing_file(std::move(s), specs_dir);
       if (!specs.contains(s)) {
         specs[s] = do_parse_spec_file(s);
         loaded_specs.insert(std::move(s));
@@ -88,24 +88,30 @@ struct lowering_context {
     // даже для абсолютных делаем relative чтобы правильно запрашивать файлы в кеше (единообразно)
     // поддерживаем абсолютные пути не смотря на то что их вроде как нельзя в $ref
     // т.к. имплементация сама создаёт такие ссылки внутри resolve_ref
-    if (!filefromref.is_absolute())
-      filefromref = !filefromref.empty() ? reffile.parent_path() / filefromref : reffile;
-    filefromref = fs::relative(fs::canonical(filefromref), specs_dir);
-    return find_existing_file(filefromref);
+    if (filefromref.empty())  // этот файл точно существует
+      return fs::relative(fs::canonical(reffile), specs_dir);
+    if (filefromref.is_absolute())
+      return fs::relative(fs::canonical(filefromref), specs_dir);
+    return find_existing_file(filefromref, reffile);
   }
 
   // возвращает первый из существующих файлов из списка specs_dir/filename, -I dirs/filename...
   // используется для разрешений ссылок
   // возвращаемый путь всегда относительно specs_dir
-  [[nodiscard]] fs::path find_existing_file(fs::path filepart) const {
+  // `where` - в каком контексте ищется файл (относительно cwd).
+  // Т.е. первый проверенный путь будет - локально рядом с ним
+  [[nodiscard]] fs::path find_existing_file(fs::path filepart, const fs::path& where) const {
     filepart = filepart.lexically_normal();
-    fs::path file = specs_dir / filepart;
+    fs::path file = where.lexically_normal().parent_path() / filepart;
+    if (fs::exists(file) && fs::is_regular_file(file))
+      return fs::relative(file, specs_dir);
+    file = specs_dir / filepart;
     if (fs::exists(file) && fs::is_regular_file(file))
       return filepart;
     for (auto&& dir : opts.include_dirs) {
       file = dir / filepart;
       if (fs::exists(file) && fs::is_regular_file(file))
-        return fs::relative(filepart, specs_dir);
+        return fs::relative(file, specs_dir);
     }
     throw parse_error("no such file: `{}`", filepart.generic_string());
   }
@@ -140,13 +146,17 @@ struct lowering_context {
   string_map<ir::operation> path_item_object_lowering(std::string_view path, fs::path spec,
                                                       fs::path resolve_ref_file, scopes_t jsonptr,
                                                       std::string_view name, path_item_object);
+  // TODO как-то объединить везде file + jsonptr, везде прокидывается же абсолютно
 
-  ir::operation_parameter parameter_lowering(const parameter_object& param, std::string_view path);
-  std::unordered_set<ir::body> body_lowering(request_body_object);
+  ir::operation_parameter parameter_lowering(const parameter_object& param, fs::path file, scopes_t jsonptr,
+                                             std::string_view path);
+  std::unordered_set<ir::body> request_body_lowering(request_body_object, fs::path file, scopes_t jsonptr);
   ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
                                       fs::path file, scopes_t jsonptr);
   ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
                                                 const array<ir::schema_ref>& schemas);
+  ir::body media_type_object_lowering(const media_type_object&, fs::path file, scopes_t jsonptr,
+                                      std::string_view content_type);
 
  private:
   template <typename T>

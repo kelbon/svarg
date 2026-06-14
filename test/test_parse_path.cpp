@@ -8,7 +8,7 @@ TEST("is_equal_paths_template_insensitve") {
   REQUIRE(is_equal_paths_template_insensitve("/users", "/users"));
   REQUIRE(is_equal_paths_template_insensitve("/users/{id}", "/users/{name}"));
   REQUIRE(is_equal_paths_template_insensitve("/users/{id}/orders/{oid}", "/users/{name}/orders/{x}"));
-  REQUIRE(is_equal_paths_template_insensitve("users/{id}", "users/{name}"));
+  REQUIRE(is_equal_paths_template_insensitve("/users/{id}", "/users/{name}"));
   REQUIRE(is_equal_paths_template_insensitve("", ""));
   REQUIRE(is_equal_paths_template_insensitve("/", "/"));
   REQUIRE(!is_equal_paths_template_insensitve("/users/{id}", "/items/{id}"));
@@ -19,8 +19,8 @@ TEST("is_equal_paths_template_insensitve") {
   REQUIRE(!is_equal_paths_template_insensitve("/users/{id}", "/users/{id}/orders"));
   REQUIRE(!is_equal_paths_template_insensitve("", "/users"));
   REQUIRE(!is_equal_paths_template_insensitve("/users", ""));
-  // равны не смотря на слеш в конце
-  REQUIRE(is_equal_paths_template_insensitve("/users/{id}/", "/users/{id}"));
+  // в конце пустой сегмент
+  REQUIRE(!is_equal_paths_template_insensitve("/users/{id}/", "/users/{id}"));
   // невалидные пути
   REQUIRE(!is_equal_paths_template_insensitve("//users/{id}", "/users/{id}"));
   REQUIRE(is_equal_paths_template_insensitve("//users/{id}", "//users/{name}"));
@@ -38,13 +38,13 @@ TEST("is_equal_paths_template_insensitve") {
 
 TEST("visit_path_segments") {
   REQUIRE(test_visit_path_segments("", {}));
-  REQUIRE(test_visit_path_segments("/", {}));
-  REQUIRE(test_visit_path_segments("//", {""}));
-  REQUIRE(test_visit_path_segments("users/id", {"users", "id"}));
-  REQUIRE(test_visit_path_segments("users/{id}", {"users", "{id}"}));
-  REQUIRE(test_visit_path_segments("{users}/{id}", {"{users}", "{id}"}));
-  REQUIRE(test_visit_path_segments("users/{id}/", {"users", "{id}"}));
-  REQUIRE(test_visit_path_segments("users/{id}//", {"users", "{id}", {}}));
+  REQUIRE(test_visit_path_segments("/", {""}));
+  REQUIRE(test_visit_path_segments("//", {"", ""}));
+  REQUIRE(test_visit_path_segments("/users/id", {"users", "id"}));
+  REQUIRE(test_visit_path_segments("/users/{id}", {"users", "{id}"}));
+  REQUIRE(test_visit_path_segments("/{users}/{id}", {"{users}", "{id}"}));
+  REQUIRE(test_visit_path_segments("/users/{id}/", {"users", "{id}", ""}));
+  REQUIRE(test_visit_path_segments("/users/{id}//", {"users", "{id}", "", ""}));
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

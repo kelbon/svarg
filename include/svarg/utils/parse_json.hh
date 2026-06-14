@@ -78,24 +78,32 @@ template <typename T>
 struct parse<one_or_array<T>> {
   void operator()(boost::json::value const& v, one_or_array<T>& out) {
     if (v.is_array())
-      return parse<decltype(out.values)>{}(v, out.values);
+      return from_json(v, out.values);
     T x;
-    parse<T>{}(v, x);
+    from_json(v, x);
     out.values.push_back(std::move(x));
   }
 };
 
 template <typename T>
-struct parse<box<T>> {
-  void operator()(boost::json::value const& v, box<T>& out) {
+struct parse<optional<T>> {
+  void operator()(boost::json::value const& v, optional<T>& out) {
     if (v.is_null()) {
       out.reset();
       return;
     }
-    // если не получилось распарсить не трогаем out
-    T tmp{};
-    parse<T>{}(v, tmp);
-    out = std::move(tmp);
+    out = from_json<T>(v);
+  }
+};
+
+template <typename T>
+struct parse<std::optional<T>> {
+  void operator()(boost::json::value const& v, std::optional<T>& out) {
+    if (v.is_null()) {
+      out.reset();
+      return;
+    }
+    out = from_json<T>(v);
   }
 };
 
@@ -111,7 +119,7 @@ struct parse<array<T>> {
       // не вставляем последний лишний элемент, если его не получится распарсить
       T elem{};
       try {
-        parse<T>{}((*arr)[i], elem);
+        from_json((*arr)[i], elem);
       } catch (parse_error const& e) {
         throw parse_error("[{}]{}", i, e.what());
       }
@@ -130,10 +138,9 @@ struct parse<string_map<T>> {
       throw parse_error(" object expected, got `{}`", e2str(v.kind()));
     out.clear();
     for (auto const& [key, val] : *obj) {
-      // не вставляем полураспаршенный элемент
       T elem{};
       try {
-        parse<T>{}(val, elem);
+        from_json(val, elem);
       } catch (parse_error const& e) {
         throw parse_error("/`{}`{}", std::string_view(key), e.what());
       }
@@ -170,6 +177,8 @@ template <typename T>
 struct is_optional_field : std::false_type {};
 template <typename T>
 struct is_optional_field<optional<T>> : std::true_type {};
+template <typename T>
+struct is_optional_field<std::optional<T>> : std::true_type {};
 
 template <typename T>
 constexpr bool has_field(std::string_view name) noexcept {
@@ -190,7 +199,7 @@ void parse_field(boost::json::object const& obj, T& out) {
       throw parse_error(" field `{}` in type `{}` is REQUIRED but not present", name, type_name<T>());
   }
   try {
-    parse<Field>{}(it->value(), boost::pfr::get<I>(out));
+    from_json(it->value(), boost::pfr::get<I>(out));
   } catch (parse_error& e) {
     throw parse_error("/`{}`{}", name, e.what());
   }

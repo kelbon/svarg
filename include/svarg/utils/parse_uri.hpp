@@ -1,9 +1,10 @@
 #pragma once
 
-#include <charconv>
 #include <string_view>
 #include <stdexcept>
 #include <cstdint>
+
+#include "svarg/utils/from_chars.hpp"
 
 namespace svarg {
 
@@ -23,8 +24,7 @@ struct parsed_uri {
         return 0;
     }
     uint16_t p;
-    auto [ptr, ec] = std::from_chars(port.data(), port.data() + port.size(), p);
-    if (ec != std::errc{} || ptr != port.data() + port.size())
+    if (!try_from_chars(port, p))
       throw std::invalid_argument("bad port");
     return p;
   }

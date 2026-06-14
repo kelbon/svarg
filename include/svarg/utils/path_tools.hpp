@@ -10,13 +10,17 @@
 namespace svarg {
 
 constexpr std::string_view cut_path_segment(std::string_view& path) noexcept {
-  auto pos = path.find('/');
+  if (path.empty()) [[unlikely]]
+    return path;
+  assert(path.starts_with('/'));
   std::string_view segment;
-  if (pos != std::string_view::npos) {
-    segment = path.substr(0, pos);
-    path.remove_prefix(pos + 1);
+  // находим два '/' и отдаём то что оказалось между ними
+  auto pos = path.find('/', 1);
+  if (pos != path.npos) {
+    segment = path.substr(1, pos - 1);
+    path.remove_prefix(pos);
   } else {
-    segment = path;
+    segment = path.substr(1);
     path = {};
   }
   return segment;
@@ -30,12 +34,16 @@ constexpr std::string_view cut_path_segment(std::string_view& path) noexcept {
   return path.substr(pos + 1);
 }
 
+// нарезает сегменты также как для json pointer
+// https://datatracker.ietf.org/doc/html/rfc6901#section-5
+// т.е. "" - ни разу не вызовет калбек
+// "/" - callback("")
+// "//" - callback("") дважды
 template <typename F>
 void visit_path_segments(std::string_view path, F&& callback) {
-  if (path.starts_with('/'))
-    path.remove_prefix(1);
   if (path.empty())
     return;
+  assert(path.starts_with('/'));
   while (!path.empty())
     callback(cut_path_segment(path));
 }
@@ -43,10 +51,6 @@ void visit_path_segments(std::string_view path, F&& callback) {
 // сравниваем так что users/{id} == users/{name}
 [[nodiscard]] constexpr inline bool is_equal_paths_template_insensitve(std::string_view a,
                                                                        std::string_view b) noexcept {
-  if (a.starts_with('/'))
-    a.remove_prefix(1);
-  if (b.starts_with('/'))
-    b.remove_prefix(1);
   while (!a.empty() && !b.empty()) {
     auto sega = cut_path_segment(a);
     auto segb = cut_path_segment(b);
@@ -156,6 +160,55 @@ inline std::string path_to_name(std::string_view path, string_map<std::string>& 
       return name;
     }
   }
+}
+
+// json pointer
+
+[[nodiscard]] inline bool jp_escape_required(std::string_view seg) {
+  return seg.find_first_of("~/") != std::string_view::npos;
+}
+
+[[nodiscard]] inline std::string jp_escape_segment(std::string_view seg) {
+  if (!jp_escape_required(seg))
+    return std::string(seg);
+  std::string out;
+  out.reserve(seg.size());
+  for (char c : seg) {
+    if (c == '~')
+      out += "~0";
+    else if (c == '/')
+      out += "~1";
+    else
+      out += c;
+  }
+  return out;
+}
+
+[[nodiscard]] inline bool jp_unescape_required(std::string_view seg) {
+  return seg.find('~') != std::string_view::npos;
+}
+
+[[nodiscard]] inline std::string jp_unescape_segment(std::string_view seg) {
+  if (!jp_unescape_required(seg))
+    return std::string(seg);
+  std::string out;
+  out.reserve(seg.size());
+  for (size_t i = 0; i < seg.size(); ++i) {
+    if (seg[i] == '~' && i + 1 < seg.size()) {
+      if (seg[i + 1] == '0') {
+        out += '~';
+        ++i;
+        continue;
+      }
+      if (seg[i + 1] == '1') {
+        out += '/';
+        ++i;
+        continue;
+      }
+    }
+    out += seg[i];
+  }
+  return out;
 }
 
 }  // namespace svarg

@@ -8,7 +8,7 @@ namespace detail {
 
 // https://spec.openapis.org/oas/v3.1.0#fixed-fields-14
 // "If a response header is defined with the name "Content-Type", it SHALL be ignored."
-static void remove_content_type_header(optional<string_map<reference_or<header_object>>>& headers) {
+static void remove_content_type_header(std::optional<string_map<reference_or<header_object>>>& headers) {
   if (!headers)
     return;
   std::erase_if(*headers, [](auto const& kv) { return is_equal_ci(kv.first, "Content-Type"); });

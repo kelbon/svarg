@@ -4,10 +4,12 @@
 #include <boost/container_hash/hash.hpp>
 #include <unordered_set>
 
+#include "svarg/utils/forward_like.hpp"
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/path_tools.hpp"
 #include "svarg/utils/strcmp.hpp"
 #include "svarg/utils/combined_hash.hpp"
+#include "svarg/utils/from_chars.hpp"
 
 namespace svarg::ir {
 
@@ -41,13 +43,20 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
 
 // fundamental | name + scope
 struct schema_ref {
-  optional<string> name;
-  // REQUIRED если name есть
+  std::optional<string> name;
   // может быть ссылкой на фундаментал (_#string и тд)
-  optional<string> scope;
+  string scope;
   // TODO тест с refers_to фундаментальные типы и тд
   [[nodiscard]] bool refers_to(const schema&) const noexcept;
 };
+
+[[nodiscard]] inline size_t hash_schema(std::string_view scope, const std::optional<std::string>& name) {
+  svarg::combined_hash hash;
+  hash.add(scope);
+  if (name)
+    hash.add(*name);
+  return hash;
+}
 
 // пытается распарсить ссылку на фундаментал
 // (у меня используются "ссылки" на фундаментальные типы для удобства реализации)
@@ -89,7 +98,7 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
 }
 
 struct enum_schema {
-  optional<schema_ref> type;
+  std::optional<schema_ref> type;
   array<Any> values;
 };
 
@@ -101,12 +110,12 @@ struct discriminator_desc {
 };
 
 struct oneof_schema {
-  optional<discriminator_desc> discriminator;
+  std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct anyof_schema {
-  optional<discriminator_desc> discriminator;
+  std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
@@ -128,7 +137,7 @@ struct object_field_info {
 
 struct object_schema {
   array<object_field_info> fields;
-  optional<schema_ref> additional_fields;
+  std::optional<schema_ref> additional_fields;
 };
 
 struct array_schema {
@@ -150,8 +159,9 @@ struct any_schema {};
 // fundamental | enum | object_type | oneof | anyof | allof
 struct schema {
   // spec#jsonptr ref на место где определён тип (не включает имя типа)
+  // TODO отдельно спека и json pointer
   string scope;
-  optional<string> name;
+  std::optional<string> name;
   // представление типа (то что получит пользователь генератора)
   std::variant<any_schema, fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
                object_schema, array_schema, not_schema, never_schema>
@@ -159,7 +169,7 @@ struct schema {
   // схемы которые не влияют на представление, только на валидацию
   // н-р type: string enum: ... это означает что пользователь увидит строку, но она провалидируется по тому
   // что написано в enum
-  optional<array<schema_ref>> required;
+  std::optional<array<schema_ref>> required;
 
   std::string_view spec() const noexcept {
     return parse_ref(scope).file;
@@ -174,27 +184,12 @@ struct schema {
     required->push_back(std::move(s));
   }
 
-  schema_ref ref() const& {
+  template <typename Me>
+  schema_ref ref(this Me&& self) {
     schema_ref r;
-    if (name)
-      r.name = *name;
-    r.scope = scope;
-    assert(r.refers_to(*this));
-    return r;
-  }
-
-  ir::schema_ref ref() const&& {
-    return ref();
-  }
-
-  schema_ref ref() & {
-    return std::as_const(*this).ref();
-  }
-  schema_ref ref() && {
-    schema_ref r;
-    if (name)
-      r.name = std::move(*name);
-    r.scope = std::move(scope);
+    if (self.name)
+      r.name = noadl::forwardLike<Me>(*self.name);
+    r.scope = noadl::forwardLike<Me>(self.scope);
     return r;
   }
 
@@ -204,7 +199,7 @@ struct schema {
 };
 
 [[nodiscard]] inline bool is_meta_key(std::string_view key) noexcept {
-  return key.starts_with("_meta_");
+  return key.starts_with("x-");
 }
 
 // все ключи должны быть is_meta_key(key)
@@ -217,12 +212,12 @@ struct operation_parameter {
   string name;
   schema_ref schema;
   // по умолчанию false
-  optional<bool> required;
+  std::optional<bool> required;
   // аналогично упрощённому encoding из openapi
   // говорит как отправлять этот параметр, н-р application/json
   // по умолчанию такой же как у тела запроса
-  optional<string> encoding;
-  optional<meta_t> meta;
+  std::optional<string> encoding;
+  std::optional<meta_t> meta;
 
   bool operator==(const operation_parameter& r) const noexcept {
     return location == r.location && name == r.name;
@@ -233,9 +228,9 @@ struct header {
   // не зависит от регистра
   string name;
   // по умолчанию false
-  optional<bool> required;
+  std::optional<bool> required;
   // по умолчанию эквивалентно type: string
-  optional<schema_ref> schema;
+  std::optional<schema_ref> schema;
 
   bool operator==(const header& r) const noexcept {
     return is_equal_ci(name, r.name);
@@ -275,11 +270,12 @@ struct body {
   string contentType;
   schema_ref schema;
   // мапа имя property из schema => как его кодировать конкретно в этом теле
-  optional<string_map<string>> membersEncoding;
+  // application/json и тд контент типы
+  std::optional<string_map<string>> membersEncoding;
   // означает, что schema применяется не ко всему телу, а к единице стрима
   // (например openapi 3.2 itemsSchema)
   // по умолчанию false
-  optional<bool> streaming;
+  std::optional<bool> streaming;
 
   bool operator==(const body& b) const noexcept {
     return contentType == b.contentType;
@@ -294,6 +290,13 @@ template <>
 struct hash<::svarg::ir::body> {
   size_t operator()(const ::svarg::ir::body& b) const noexcept {
     return ::svarg::hash_combined(b.contentType);
+  }
+};
+
+template <>
+struct hash<::svarg::ir::schema_ref> {
+  size_t operator()(const ::svarg::ir::schema_ref& r) const noexcept {
+    return ::svarg::ir::hash_schema(r.scope, r.name);
   }
 };
 
@@ -315,14 +318,14 @@ struct response_desc {
 
   // всегда должен быть одно - либо status либо statusRange
   // допустимые значения - [100; 600)
-  optional<int64_t> status;
+  std::optional<int64_t> status;
   // допустимые значения 100, 200, 300, 400, 500
-  optional<status_range_e> statusRange;
+  std::optional<status_range_e> statusRange;
   // content-type игнорируется (даже не попадает в этот список)
   // регистронезависимо
-  optional<std::unordered_set<header>> headers;
+  std::optional<std::unordered_set<header>> headers;
   // на каждый contentType своё тело
-  optional<std::unordered_set<body>> bodies;
+  std::optional<std::unordered_set<body>> bodies;
 
   [[nodiscard]] bool is_default() const noexcept {
     return status && *status == default_status_marker;
@@ -343,8 +346,7 @@ struct response_desc {
     if (range)
       statusRange = *range;
     size_t num = 0;
-    auto [ptr, e] = std::from_chars(s.data(), s.data() + s.size(), num);
-    if (e != std::errc{} || ptr != s.data() + s.size())
+    if (!try_from_chars(s, num))
       throw parse_error("invalid status, not number and not valid range: `{}`", s);
     if (num == 0)
       throw validate_error("invalid status value 0");
@@ -388,7 +390,7 @@ namespace svarg::ir {
 struct operation {
   // operationId, если нет, используется method + путь (каким-то образом)
   // лучше бы было
-  optional<string> id;
+  std::optional<string> id;
   // спека где объявлена операция
   string spec;
   // путь относительно url сервера. Должен начинаться с / (если не пустой)
@@ -402,12 +404,12 @@ struct operation {
   // get/post и тд. Всегда маленькие буквы
   // строкой для поддержки кастомных методов (openapi 3.2)
   string method;
-  optional<array<operation_parameter>> parameters;
+  std::optional<array<operation_parameter>> parameters;
   // на каждый contentType своё тело
-  optional<std::unordered_set<body>> bodies;
-  optional<std::unordered_set<response_desc>> responses;
-  optional<response_desc> defaultResponse;
-  optional<meta_t> meta;
+  std::optional<std::unordered_set<body>> bodies;
+  std::optional<std::unordered_set<response_desc>> responses;
+  std::optional<response_desc> defaultResponse;
+  std::optional<meta_t> meta;
 
   bool operator==(const operation& r) const noexcept {
     // имя не участвует в сравнении, так как при отправлении на тот же путь с тем же методом
@@ -423,11 +425,7 @@ namespace std {
 template <>
 struct hash<::svarg::ir::schema> {
   size_t operator()(const ::svarg::ir::schema& t) const {
-    svarg::combined_hash hash;
-    hash.add(t.scope);
-    if (t.name)
-      hash.add(*t.name);
-    return hash;
+    return ::svarg::ir::hash_schema(t.scope, t.name);
   }
 };
 

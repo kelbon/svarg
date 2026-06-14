@@ -109,6 +109,16 @@ struct serialize<optional<T>> {
 };
 
 template <typename T>
+struct serialize<std::optional<T>> {
+  // возвращает null если пусто, иначе сериализует значение
+  boost::json::value operator()(std::optional<T> const& opt) {
+    if (!opt)
+      return nullptr;
+    return to_json(*opt);
+  }
+};
+
+template <typename T>
 struct serialize<one_or_array<T>> {
   boost::json::value operator()(one_or_array<T> const& v) {
     if (v.values.size() == 1)

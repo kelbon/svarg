@@ -10,9 +10,11 @@ template <typename T, typename U,
                                             const std::remove_reference_t<U>, std::remove_reference_t<U>>>
 using forward_like_t = std::conditional_t<std::is_rvalue_reference_v<T&&>, Tmp&&, Tmp&>;
 
-template <typename T, typename U>
-constexpr forward_like_t<T, U> forwardLike(U&& x) noexcept {
-  return static_cast<forward_like_t<T, U>>(x);
-}
+struct noadl {
+  template <typename T, typename U>
+  static constexpr forward_like_t<T, U> forwardLike(U&& x) noexcept {
+    return static_cast<forward_like_t<T, U>>(x);
+  }
+};
 
 }  // namespace svarg

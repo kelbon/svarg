@@ -3,6 +3,7 @@
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/merge_with_override.hpp"
 #include "svarg/utils/scopes.hpp"
+#include "svarg/utils/guard_array.hpp"
 
 #include <boost/pfr.hpp>
 
@@ -50,7 +51,7 @@ static void remap_references(string_map<Any>& fields, const fs::path& curfile, c
 // TODO тест на ремап ссылок в resolve_ref_to учитывая инклуд директории и так далее
 
 // рекурсивно резолвит ссылку и в конце передаёт в invocable объект T, путь в котором он лежал (относительно
-// specs_dir) и json pointer на него в этом файле
+// specs_dir) и scopes_t(json pointer) на него в этом файле
 // возвращает то что вернёт вызов invocable(tvalue, file, jsonptr)
 // в поданном в конце объекте все ссылки относительно его файла ЛИБО абсолютные
 // (те которые прицепились к нему по дороге)
@@ -78,9 +79,9 @@ auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lower
       throw semantic_error("refered by $ref must be json/yaml object, but got {}", e2str(jref.kind()));
     for (auto& [k, j] : override_fields)
       jref.as_object()[k] = j.value;
-    auto ref_or_t = parse_from_json<reference_or<T>>(jref);
+    auto ref_or_t = from_json<reference_or<T>>(jref);
     if (auto* val = std::get_if<T>(&ref_or_t))
-      return invocable(std::move(*val), std::move(refered_file), r.json_ptr);
+      return invocable(std::move(*val), std::move(refered_file), scopes_t(r.json_ptr));
     ref = std::get<reference_object>(std::move(ref_or_t));
     file = std::move(refered_file);
     remap_references(ref._keyfield_override_fields, file, ctx);
@@ -94,8 +95,8 @@ template <typename T>
 object_and_path<T> resolve_ref_and_ret(reference_or<T> x, fs::path file, scopes_t jsonptr,
                                        lowering_context& ctx) {
   if (auto* r = std::get_if<reference_object>(&x)) {
-    auto getcb = [](T obj, fs::path file, std::string_view rjsonptr) {
-      return object_and_path(std::move(obj), std::move(file), rjsonptr);
+    auto getcb = [](T obj, fs::path file, scopes_t rjsonptr) {
+      return object_and_path(std::move(obj), std::move(file), std::move(rjsonptr));
     };
     return resolve_ref_to<T>(std::move(*r), std::move(file), getcb, ctx);
   } else {
@@ -176,7 +177,7 @@ ir::discriminator_desc lowering_context::discriminator_lowering(const discrimina
 }
 
 template <typename... Args>
-[[nodiscard]] static size_t count_true(optional<Args> const&... args) noexcept {
+[[nodiscard]] static size_t count_true(const auto&... args) noexcept {
   return (size_t(bool(args)) + ...);
 }
 
@@ -196,8 +197,10 @@ template <typename... Args>
 schema_or_ref lowering_context::schema_lowering(const schema_object& schema, const fs::path& file,
                                                 scopes_t jsonptr, std::optional<std::string_view> name) {
   ir::schema res;
-  res.scope = std::format("{}#{}", file.generic_string(), jsonptr.view());
+  res.scope = std::format("{}#{}", file.generic_string(), jsonptr.escaped());
   auto ret_res = [&] {
+    // TODO такие проверки добавить и для операций и тд + нужно ещё проверять что оно парсится как схема
+    assert(jsonptr.access(load_as_json(res.spec())) && "invalidly generated scheme");
     ir.schemas.insert(res);
     return schema_or_ref(std::move(res));
   };
@@ -292,16 +295,16 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       res.data = ir::any_schema{};
   }
 
-  auto collect_result = [&](std::string_view jsonptr, auto schema) {
+  auto collect_result = [&](std::string_view fieldname, auto schema) {
     if (!as_requirements) {
       res.data = std::move(schema);
     } else {
       ir::schema s;
       // создаём что-то типа file#abc/anyOf
       if (!s.scope.ends_with('/'))
-        s.scope = res.scope + "/" + std::string(jsonptr);
+        s.scope = res.scope + "/" + std::string(fieldname);
       else
-        s.scope = res.scope + std::string(jsonptr);
+        s.scope = res.scope + std::string(fieldname);
       s.name = std::nullopt;
       s.data = std::move(schema);
       ir::schema_ref r = s.ref();
@@ -349,14 +352,14 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
 
 // ожидает что file относительно spec dir
 resolved_schema lowering_context::resolve_schema_ref(reference_object ref, fs::path file) {
-  auto doschema = [&](schema_object schema, fs::path refered_file, std::string_view jsonptr) {
+  auto doschema = [&](schema_object schema, fs::path refered_file, scopes_t jsonptr) {
     // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
     // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
-    std::string_view name = last_segment(jsonptr);
+    std::string_view name = last_segment(jsonptr.view());
     if (name.empty())
-      throw semantic_error("name of schema cannot be empty. json pointer: {}", jsonptr);
+      throw semantic_error("name of schema cannot be empty. json pointer: {}", jsonptr.view());
     resolved_schema res;
-    res.ir_schema = schema_lowering(schema, refered_file, jsonptr, name).ref();
+    res.ir_schema = schema_lowering(schema, refered_file, std::move(jsonptr), name).ref();
     res.front_schema = std::move(schema);
     return res;
   };
@@ -399,7 +402,7 @@ struct schemas_collector {
   template <typename T>
   void operator()(std::string_view name, const array<T>& f) try {
     dbgprint(name);
-    scopes.add_scope(name);
+    scopes.add_key(name);
     on_scope_exit {
       scopes.remove_scope();
     };
@@ -413,7 +416,7 @@ struct schemas_collector {
   template <typename T>
   void operator()(std::string_view name, const string_map<T>& f) try {
     dbgprint(name);
-    scopes.add_scope(name);
+    scopes.add_key(name);
     on_scope_exit {
       scopes.remove_scope();
     };
@@ -444,7 +447,7 @@ struct schemas_collector {
     dbgprint(name);
   }
   void operator()(std::string_view name, const aggregate auto& x) try {
-    scopes.add_scope(name);
+    scopes.add_key(name);
     dbgprint(name);
     on_scope_exit {
       scopes.remove_scope();
@@ -462,7 +465,7 @@ struct schemas_collector {
     std::optional<std::string_view> schema_name;
     if (scopes.view().ends_with("/components/schemas"))
       schema_name = name;
-    ctx->schema_lowering(x, obj_file, std::format("{}/{}", scopes.view(), name), schema_name);
+    ctx->schema_lowering(x, obj_file, scopes / name, schema_name);
   }
   SVARG_ADD_EXCEPTION_INFO(parse_error, name);
 
@@ -473,7 +476,7 @@ struct schemas_collector {
     if (auto* r = std::get_if<reference_object>(&x)) {
       if constexpr (!std::is_same_v<T, schema_object>) {
         // проходимся на зарезолвленном объекте, чтобы собрать всё что упомянуто там
-        auto [resolved, path, jsonptr] = resolve_ref_and_ret(x, obj_file, scopes, *ctx);
+        auto [resolved, path, jsonptr] = resolve_ref_and_ret(x, obj_file, scopes / name, *ctx);
         schemas_collector inner(path, schemas, *ctx);
         inner.scopes = std::move(jsonptr);
         inner(name, resolved);
@@ -489,6 +492,11 @@ struct schemas_collector {
 
   template <typename T>
   void operator()(std::string_view name, const optional<T>& x) {
+    if (x)
+      (*this)(name, *x);
+  }
+  template <typename T>
+  void operator()(std::string_view name, const std::optional<T>& x) {
     if (x)
       (*this)(name, *x);
   }
@@ -511,13 +519,13 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
   // components/callbacks
   if (api.components && api.components->callbacks) {
     for (auto& [name, cb] : *api.components->callbacks)
-      visitor(name, cb, file, "/components/callbacks");
+      visitor(name, cb, file, "/components/callbacks"_jp);
   }
 
   // components/pathItems
   if (api.components->pathItems) {
     for (auto& [name, item] : *api.components->pathItems) {
-      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, "/components/pathItems", ctx);
+      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, "/components/pathItems"_jp, ctx);
       visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjsonptr));
     }
   }
@@ -525,7 +533,7 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
   // paths -> operations -> callbacks
   if (api.paths) {
     for (auto& [path, item] : *api.paths) {
-      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, scopes_t("/paths") / path, ctx);
+      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, "/paths"_jp / path, ctx);
       visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjsonptr));
     }
   }
@@ -533,7 +541,7 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
   // webhooks -> operations -> callbacks
   if (api.webhooks) {
     for (auto& [name, item] : *api.webhooks) {
-      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, scopes_t("/webhooks") / name, ctx);
+      auto [ritem, reffile, refjsonptr] = resolve_ref_and_ret(item, file, "/webhooks"_jp / name, ctx);
       visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjsonptr));
     }
   }
@@ -542,6 +550,30 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
 // TODO в интерфейс принимать сразу все файлы которые нужно сгенерировать и объединить процесс
 // загрузки всех файлов, предобработки (и там ремап ссылок абсолютно всех даже в файлах НА которые ссылки)
 // и затем generate, в итоге один метод есть просто
+
+ir::body lowering_context::media_type_object_lowering(const media_type_object& obj, fs::path file,
+                                                      scopes_t jsonptr, std::string_view content_type) {
+  ir::body result;
+  // возможно media type range
+  result.contentType = content_type;
+  if (obj.schema) {
+    auto [ref, rschema] = resolve_schema(*obj.schema, file, jsonptr, *this);
+    result.schema = ref;
+    if (obj.encoding) {
+      auto _ = guard_array(result.membersEncoding);
+      // есть только если есть schema (валидируется до этого)
+      // наличие property в схеме не проверяется, так как там очень сложно - может быть в anyOf и тд
+      // где-то
+      for (auto& [property, enc] : *obj.encoding) {
+        if (!enc.contentType)
+          continue;  // остальное пока игнорируется (всякие style и тд)
+        result.membersEncoding->try_emplace(property, *enc.contentType);
+      }
+    }
+  }
+  // result.streaming пока игнорируется
+  return result;
+}
 
 // statusstr пустой для дефолтного респонса
 ir::response_desc lowering_context::response_lowering(std::optional<std::string_view> statusstr,
@@ -552,31 +584,69 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
     result.set_status(*statusstr);
   else
     result.make_default();
-  result.bodies;   // rsp.content
-  result.headers;  // rsp.headers
-
   if (rsp.headers) {
-    // TODO in header
+    auto _ = guard_array(result.headers);
     for (auto& [name, hdr] : *rsp.headers) {
       ir::header result_hdr;
       result_hdr.name = name;
       auto [hdrobj, reffile, refjsonptr] = resolve_ref_and_ret(hdr, file, jsonptr / "headers" / name, *this);
-      if (hdrobj.schema) {
-        resolved_schema rs = resolve_schema(*hdrobj.schema, reffile, refjsonptr, *this);
-      }
+      if (hdrobj.required)
+        result_hdr.required = *hdrobj.required;
+      if (hdrobj.schema)
+        result_hdr.schema = resolve_schema(*hdrobj.schema, reffile, refjsonptr / "schema", *this).ir_schema;
+      result.headers->insert(std::move(result_hdr));
     }
   }
+  if (rsp.content) {
+    auto _ = guard_array(result.bodies);
+    for (auto& [contenttype, bodydesc] : *rsp.content)
+      result.bodies->insert(
+          media_type_object_lowering(bodydesc, file, jsonptr / "content" / contenttype, contenttype));
+  }
 
-  return result;  // TODO
+  return result;
 }
 
 // TODO сделать required по дефолту если присутствует в path и валидировать что оно есть в строке path
-ir::operation_parameter lowering_context::parameter_lowering(const parameter_object& param,
-                                                             std::string_view path) {
-  return {};  // TODO
+ir::operation_parameter lowering_context::parameter_lowering(const parameter_object& param, fs::path file,
+                                                             scopes_t jsonptr, std::string_view path) {
+  ir::operation_parameter result;
+  // TODO здесь где то со скоупом накосячено
+  // а может и не здесь... А там где первый раз резолвятся эти штуки
+  result.location = param.in;
+  result.name = param.name;
+  if (param.schema)
+    result.schema = resolve_schema(*param.schema, file, jsonptr / "schema", *this).ir_schema;
+  else {
+    // валидация была
+    assert(param.content && param.content->size() == 1);
+    // content type
+    auto& [content_type, mediaobj] = *param.content->begin();
+    result.encoding = content_type;
+    if (!mediaobj.schema)
+      throw validate_error("parameter schema not setted. Both `schema` and `content/schema` not setted");
+    result.schema =
+        resolve_schema(*mediaobj.schema, file, jsonptr / "content" / content_type / "schema", *this)
+            .ir_schema;
+  }
+  if (param.in == parameter_location::path) {
+    // валидация уже была
+    assert(!(param.required && !*param.required));
+    if (!path.contains(std::string("{") + param.name + std::string("}")))
+      throw validate_error("path `{}` does not contain path parameter with name", path, param.name);
+    result.required = true;
+  }
+  if (param.required)
+    result.required = param.required;
+  // TODO result.meta
+  return result;
 }
-std::unordered_set<ir::body> lowering_context::body_lowering(request_body_object) {
-  return {};  // TODO
+std::unordered_set<ir::body> lowering_context::request_body_lowering(request_body_object obj, fs::path file,
+                                                                     scopes_t jsonptr) {
+  std::unordered_set<ir::body> result;
+  for (auto& [content_type, mediaobj] : obj.content)
+    result.insert(media_type_object_lowering(mediaobj, file, jsonptr / content_type, content_type));
+  return result;
 }
 
 string_map<ir::operation> lowering_context::path_item_object_lowering(std::string_view path, fs::path spec,
@@ -585,7 +655,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
                                                                       path_item_object item) {
   string_map<ir::operation> result;
 
-  for (auto [o, methodstr] : item.all_operations_with_method()) {
+  for (auto [methodstr, o] : item.all_operations_with_method()) {
     ir::operation op;
     op.spec = spec.generic_string();
     if (o.operationId)
@@ -598,37 +668,35 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
     op.path = path;
     if (o.responses) {
       if (o.responses->default_) {
-        auto [obj, reffile, refjsonptr] = resolve_ref_and_ret(*o.responses->default_, resolve_ref_file,
-                                                              jsonptr / "responses" / "default", *this);
+        auto [obj, reffile, refjsonptr] = resolve_ref_and_ret(
+            *o.responses->default_, resolve_ref_file, jsonptr / methodstr / "responses" / "default", *this);
         op.defaultResponse = response_lowering(std::nullopt, obj, std::move(reffile), std::move(refjsonptr));
       }
-      op.responses.emplace();
+      auto _ = guard_array(op.responses);
       for (auto&& [status, r] : o.responses->_responses) {
         auto [obj, reffile, refjsonptr] =
-            resolve_ref_and_ret(r, resolve_ref_file, jsonptr / "responses" / status, *this);
+            resolve_ref_and_ret(r, resolve_ref_file, jsonptr / methodstr / "responses" / status, *this);
         ir::response_desc rsp = response_lowering(status, obj, std::move(reffile), std::move(refjsonptr));
         op.responses->insert(std::move(rsp));
       }
-      if (op.responses->empty())
-        op.responses.reset();
     }
     if (o.parameters) {
-      op.parameters.emplace();
+      auto _ = guard_array(op.parameters);
       size_t i = 0;
       for (auto& param : *o.parameters) {
-        ir::operation_parameter p = parameter_lowering(
-            resolve_ref_and_ret(param, resolve_ref_file, jsonptr / "parameters" / i, *this).object, path);
+        auto [rparam, reffile, refjsonptr] =
+            resolve_ref_and_ret(param, resolve_ref_file, jsonptr / "parameters" / i, *this);
+        ir::operation_parameter p =
+            parameter_lowering(rparam, std::move(reffile), std::move(refjsonptr), path);
         op.parameters->push_back(std::move(p));
         ++i;
       }
-      if (op.parameters->empty())
-        op.parameters.reset();
     }
     if (o.requestBody) {
-      op.bodies = body_lowering(
-          resolve_ref_and_ret(*o.requestBody, resolve_ref_file, jsonptr / "requestBody", *this).object);
-      if (op.bodies->empty())
-        op.bodies.reset();
+      auto _ = guard_array(op.bodies);
+      auto [rbody, reffile, refjsonptr] =
+          resolve_ref_and_ret(*o.requestBody, resolve_ref_file, jsonptr / "requestBody", *this);
+      op.bodies = request_body_lowering(rbody, std::move(reffile), std::move(refjsonptr));
     }
 
     // не зависит от порядка если чё
@@ -657,7 +725,7 @@ ir::ir_object lowering_context::visit_and_generate_ir(const openapi_object& api,
                         for (auto&& [expr, pathItem] : rcb) {
                           // используем cbpath, т.к. ссылки могут указывать туда если он загружен оттуда
                           auto [rpi, rpipath, rpijsonptr] =
-                              resolve_ref_and_ret(pathItem, cbpath, cbjsonptr, *this);
+                              resolve_ref_and_ret(pathItem, cbpath, cbjsonptr / expr, *this);
                           // используется путь откуда операция взялась, но она всё ещё декларирована в
                           // obj_file и является операцией этого апи
                           auto ops = path_item_object_lowering(
@@ -671,7 +739,7 @@ ir::ir_object lowering_context::visit_and_generate_ir(const openapi_object& api,
     // если были pathItems и на них ссылались и в paths и в webhooks, то они продублируются на уровне IR
     // но это нормально
     for (auto& [path, item] : *api.paths) {
-      auto [ritem, file, itemjsonptr] = resolve_ref_and_ret(item, obj_file, scopes_t("/paths") / path, *this);
+      auto [ritem, file, itemjsonptr] = resolve_ref_and_ret(item, obj_file, "/paths"_jp / path, *this);
       string_map<std::string> name2path;
       string_map<std::string> path2name;
       std::string generatedname = path_to_name(path, name2path, path2name);

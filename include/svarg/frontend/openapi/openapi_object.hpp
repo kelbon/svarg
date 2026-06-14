@@ -11,22 +11,22 @@ namespace svarg {
 struct license_object {
   string name;
   // может быть только одно поле identifier или url
-  optional<string> identifier;  // SPDX апи, типа Apache-2.0
-  optional<string> url;         // MUST be URL
+  std::optional<string> identifier;  // SPDX апи, типа Apache-2.0
+  std::optional<string> url;         // MUST be URL
 };
 
 struct contact_object {
-  optional<string> name;
-  optional<string> url;    // MUST be URL
-  optional<string> email;  // MUST be valid email
+  std::optional<string> name;
+  std::optional<string> url;    // MUST be URL
+  std::optional<string> email;  // MUST be valid email
 };
 
 struct info_object {
   string title;
   string version;
-  optional<string> summary;
-  optional<string> description;
-  optional<string> termsOfService;
+  std::optional<string> summary;
+  std::optional<string> description;
+  std::optional<string> termsOfService;
   optional<contact_object> contact;
   optional<license_object> license;
 };
@@ -34,28 +34,28 @@ struct info_object {
 struct server_object {
   struct variable {
     // MUST NOT be empty
-    optional<array<string>> enum_;
+    std::optional<array<string>> enum_;
     // если поле enum есть, то значение должно быть оттуда
     string default_;
-    optional<string> description;
+    std::optional<string> description;
   };
   // URL или шаблон URL (в шаблон подставляются значения из variables)
   string url;
-  optional<string> description;
-  optional<string_map<variable>> variables;
+  std::optional<string> description;
+  std::optional<string_map<variable>> variables;
 };
 
 struct external_documentation_object {
   string url;  // MUST be URL
-  optional<string> description;
+  std::optional<string> description;
 };
 
 struct example_object {
-  optional<string> summary;
-  optional<string> description;
+  std::optional<string> summary;
+  std::optional<string> description;
   // разрешено только одно value или externalValue
-  optional<Any> value;
-  optional<string> externalValue;
+  std::optional<Any> value;
+  std::optional<string> externalValue;
 };
 
 /*
@@ -74,18 +74,18 @@ MyResponseType:
 */
 struct discriminator_object {
   string propertyName;
-  optional<string_map<string>> mapping;
+  std::optional<string_map<string>> mapping;
 };
 
 struct xml_object {
-  optional<string> name;
-  optional<string> namespace_;  // MUST be URI
-  optional<string> prefix;
+  std::optional<string> name;
+  std::optional<string> namespace_;  // MUST be URI
+  std::optional<string> prefix;
   // дефолт: false
-  optional<bool> attribute;
+  std::optional<bool> attribute;
   // имеет смысл только для array
   // дефолт: false
-  optional<bool> wrapped;
+  std::optional<bool> wrapped;
 };
 
 struct schema_object {
@@ -107,17 +107,17 @@ struct schema_object {
   }
 
   // "int32", "password" и тд, в том числе расширенные форматы известные пользователю
-  optional<string> format;
+  std::optional<string> format;
   // МЕТА https://datatracker.ietf.org/doc/draft-ietf-jsonschema-json-schema/
-  optional<string> title;
-  optional<string> description;
-  optional<Any> default_;
-  optional<bool> deprecated;
+  std::optional<string> title;
+  std::optional<string> description;
+  std::optional<Any> default_;
+  std::optional<bool> deprecated;
   // может присутствовать только в ответе
-  optional<bool> readOnly;
+  std::optional<bool> readOnly;
   // может присутствовать только в запросе
-  optional<bool> writeOnly;
-  optional<array<Any>> examples;
+  std::optional<bool> writeOnly;
+  std::optional<array<Any>> examples;
   // в 3.1 убрано, остановлено чтобы парсилось и эквивалентно "type": ["x", "null"]
   // а оно в свою очередь эквивалентно anyof
   // Note: svarg считает, что nullable это эквивалент NOT required, а пришедший json null
@@ -126,74 +126,74 @@ struct schema_object {
   // Поле nullable типа обозначенное required вызовет предупреждение
   // Бекенд может считать, что такое поле может не прийти и более того, если придёт null на любое другое
   // поле, это может считаться эквивалентным его отсутствию
-  optional<bool> nullable;
+  std::optional<bool> nullable;
 
-  optional<discriminator_object> discriminator;
+  std::optional<discriminator_object> discriminator;
   optional<xml_object> xml;
   optional<external_documentation_object> externalDocs;
   // убрано в 3.1, остановлено чтобы парсилось - всем похуй на это
-  optional<Any> example;
+  std::optional<Any> example;
   // в openapi написана дичь в стиле иди читай rfc Json Schema и сам ищи что там может быть
   // взято из
   // https://ftp.ripe.net/internet-drafts/draft-bhutton-json-schema-validation-01.html
 
   // валидация
 
-  optional<one_or_array<string>> type;
+  std::optional<one_or_array<string>> type;
   // если есть, то должно быть хотя бы одно значение и все значения должны быть уникальны
-  optional<array<Any>> enum_;
+  std::optional<array<Any>> enum_;
   // == enum с одним значением, все значения должны быть такими
-  optional<Any> const_;
+  std::optional<Any> const_;
 
   // валидация для интов
 
   // ДОЛЖНО быть > 0
-  optional<number> multipleOf;
-  optional<number> maximum;
-  optional<number> exclusiveMaximum;
-  optional<number> minimum;
-  optional<number> exclusiveMinimum;
+  std::optional<number> multipleOf;
+  std::optional<number> maximum;
+  std::optional<number> exclusiveMaximum;
+  std::optional<number> minimum;
+  std::optional<number> exclusiveMinimum;
 
   // валидация для строк
 
-  optional<uint64_t> maxLength;
-  optional<uint64_t> minLength;
+  std::optional<uint64_t> maxLength;
+  std::optional<uint64_t> minLength;
   // SHOULD be регекс ECMA-262
-  optional<string> pattern;
+  std::optional<string> pattern;
 
   // валидация для массивов
 
-  optional<uint64_t> maxItems;
-  optional<uint64_t> minItems;
+  std::optional<uint64_t> maxItems;
+  std::optional<uint64_t> minItems;
   // дефолт: false
-  optional<bool> uniqueItems;
-  optional<uint64_t> maxContains;
+  std::optional<bool> uniqueItems;
+  std::optional<uint64_t> maxContains;
   // если отсутствует эквивалентно 1
-  optional<uint64_t> minContains;
+  std::optional<uint64_t> minContains;
 
   // валидация для объектов
 
-  optional<uint64_t> maxProperties;
+  std::optional<uint64_t> maxProperties;
   // если отсутствует эквивалентно 0
-  optional<uint64_t> minProperties;
+  std::optional<uint64_t> minProperties;
   // все элементы должны быть уникальны
-  optional<array<string>> required;
+  std::optional<array<string>> required;
   // в каждом массиве строки ДОЛЖНЫ быть уникальны
   // списки требуемых полей если какое-то поле существует
-  optional<string_map<array<string>>> dependentRequired;
+  std::optional<string_map<array<string>>> dependentRequired;
 
   // логические операции над схемами
 
   // allOf, anyOf, oneOf должны быть не пустым массивом
   // если есть одновременно type: и allOf/anyOf/oneOf/ not, то они обозначают требование, а не представление
   // типа. н-р type: object + anyOf: required [A], required [B]
-  optional<array<reference_or<schema_object>>> allOf;
+  std::optional<array<reference_or<schema_object>>> allOf;
   // вопреки интуиции anyOf семантически парсит ВСЕ схемы, а не до первой попавшейся и выдаёт все поля,
   // которые получилось собрать в результате
   // для этого, вероятно, бекенду стоит объединять все типы в anyOf в некий один тип, либо просто делать это
   // набором опциональных полей, т.е. anyOf [A, B, C] => struct { optional A, optional B, optional C }
-  optional<array<reference_or<schema_object>>> anyOf;
-  optional<array<reference_or<schema_object>>> oneOf;
+  std::optional<array<reference_or<schema_object>>> anyOf;
+  std::optional<array<reference_or<schema_object>>> oneOf;
   optional<reference_or<schema_object>> not_;
 
   // условия на схемах... (бесполезная хуйня, это никто не будет реализовывать)
@@ -234,7 +234,7 @@ struct schema_object {
   // если есть и true - другие поля неважны, всех пускаем
   // если есть и false - другие поля неважны, всех НЕ пускаем
   // "_keyfield" специальный префикс для таких костылей
-  optional<bool> _keyfield_boolean_schema;
+  std::optional<bool> _keyfield_boolean_schema;
 
   [[nodiscard]] bool is_write_only() const noexcept {
     return writeOnly && *writeOnly;
@@ -291,6 +291,9 @@ struct media_type_object {
   // разрешено только одно поле example / examples
   optional<Any> example;
   optional<string_map<reference_or<example_object>>> examples;
+  // property name -> encoding info
+  // каждый ключ должен присутствовать в schema как property (а значит если есть encoding должна быть и
+  // schema)
   optional<string_map<encoding_object>> encoding;
 };
 
@@ -301,10 +304,10 @@ struct media_type_object {
 struct parameter_object {
   string name;
   parameter_location in;
-  optional<string> description;
+  std::optional<string> description;
   // если `in` == path, то это поле обязательно и оно должно быть `true`
   // дефолт false
-  optional<bool> required;
+  std::optional<bool> required;
   // дефолт false
   optional<bool> deprecated;
   // разрешено только для in == query
@@ -322,17 +325,18 @@ struct parameter_object {
   // имеет смысл только если in == query
   // дефолт: false
   optional<bool> allowReserved;
+  // Может быть указано ЛИБО schema ЛИБО content
   optional<reference_or<schema_object>> schema;
+  // MUST содержать ровно одно значение
+  optional<string_map<media_type_object>> content;
   // разрешено только одно поле - example или examples
   optional<Any> example;
   optional<string_map<reference_or<example_object>>> examples;
-  // MUST содержать ровно одно значение
-  // Может быть указано ЛИБО schema ЛИБО content
-  optional<string_map<media_type_object>> content;
 };
 
 struct request_body_object {
   // REQUIRED
+  // ключ content type (или media type range)
   string_map<media_type_object> content;
   optional<string> description;
   // дефолт: false
@@ -352,13 +356,14 @@ struct link_object {
 struct response_object {
   string description;
   // Content-Type игнорируется. Независимо от регистра
-  optional<string_map<reference_or<header_object>>> headers;
+  std::optional<string_map<reference_or<header_object>>> headers;
+  // ключ contentType или media type range
   optional<string_map<media_type_object>> content;
   optional<string_map<reference_or<link_object>>> links;
 };
 
 struct responses_object {
-  optional<reference_or<response_object>> default_;
+  std::optional<reference_or<response_object>> default_;
   // все ключи должны быть 1XX / 2XX / 3XX / 4XX / 5XX
   // ключи должны быть строками, даже в ямле (для совместимости с json)
   // https://spec.openapis.org/oas/v3.1.0#patterned-fields-0
@@ -372,7 +377,7 @@ struct parse<responses_object> {
   void operator()(boost::json::value const& v, responses_object& out) {
     // responses это по сути стринг мапа с ключами 200/201 и тд + возможный default
     responses_object res;
-    parse_from_json(v, res._responses);
+    from_json(v, res._responses);
     if (auto it = res._responses.find("default"); it != res._responses.end()) {
       res.default_.emplace(std::move(it->second));
       res._responses.erase(it);
@@ -495,7 +500,7 @@ struct path_item_object {
            std::views::filter([](auto&& x) { return !!std::get<0>(x); }) |
            std::views::transform([](auto&& x) -> decltype(auto) {
              auto& [op, str] = x;
-             return std::pair<const operation_object&, std::string_view>(*op, str);
+             return std::pair<std::string_view, const operation_object&>(str, *op);
            });
   }
 };
