@@ -88,8 +88,7 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
       case fundamental_e::array:
       case fundamental_e::object:
         std::unreachable();
-        break;
-    };
+    }
   };
   ref.spec = f2scope();
   return ref;
