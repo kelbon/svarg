@@ -143,18 +143,18 @@ struct json_pointer {
     }
   };
 
-  // begin/end вынесено сюда, чтобы нельзя было ошибиться по типу std::format("{}", scopes (без .view()))
+  // begin/end вынесено сюда, чтобы нельзя было ошибиться по типу std::format("{}", jsonpre (без .view()))
   struct segments_t {
-    const json_pointer& scopes;
+    const json_pointer& jsonptr;
 
     iterator begin() const noexcept {
-      return iterator(scopes);
+      return iterator(jsonptr);
     }
     static std::default_sentinel_t end() noexcept {
       return std::default_sentinel;
     }
   };
-
+  // возвращает экранированные сегменты
   [[nodiscard]] segments_t segments() const noexcept {
     return segments_t(*this);
   }

@@ -380,7 +380,6 @@ struct refvtor {
   Vtor vtor;
 
   decltype(auto) operator()(std::string_view name, auto&& arg) {
-    auto dbgscope = vtor.scopes;  // TODO rm
     return vtor(name, std::forward<decltype(arg)>(arg));
   };
 };
@@ -391,7 +390,7 @@ struct schemas_collector {
   const fs::path& obj_file;
   lowering_context* ctx;
   std::unordered_set<ir::schema>& schemas;
-  json_pointer scopes;
+  json_pointer currentjp;
 
 #define recursion (*this)
 
@@ -407,16 +406,16 @@ struct schemas_collector {
   }
   void dbgprint(std::string_view name) {
     // auto& ss = std::cout;
-    // for (std::string_view s : scopes.segments())
+    // for (std::string_view s : currentjp.segments())
     //   ss << s << '.';
     // ss << name << '\n';
   }
   template <typename T>
   void operator()(std::string_view name, const array<T>& f) try {
     dbgprint(name);
-    scopes.add_key(name);
+    currentjp.add_key(name);
     on_scope_exit {
-      scopes.remove_scope();
+      currentjp.remove_scope();
     };
     for (size_t i = 0; i < f.size(); ++i)
       // не смотря на то что скоп может быть захвачен по string_view,
@@ -428,9 +427,9 @@ struct schemas_collector {
   template <typename T>
   void operator()(std::string_view name, const string_map<T>& f) try {
     dbgprint(name);
-    scopes.add_key(name);
+    currentjp.add_key(name);
     on_scope_exit {
-      scopes.remove_scope();
+      currentjp.remove_scope();
     };
     for (auto& [key, v] : f)
       recursion(std::string_view(key), v);
@@ -462,9 +461,9 @@ struct schemas_collector {
   void operator()(std::string_view name, const responses_object& rsps) {
     dbgprint(name);
     assert(!is_keyfield(name));
-    scopes.add_key(name);
+    currentjp.add_key(name);
     on_scope_exit {
-      scopes.remove_scope();
+      currentjp.remove_scope();
     };
     recursion("default", rsps.default_);
     for (auto& [key, v] : rsps._responses)
@@ -473,10 +472,10 @@ struct schemas_collector {
   void operator()(std::string_view name, const aggregate auto& x) try {
     assert(!is_keyfield(name));  // должен был обработать специально
     name = unescape_field_name(name);
-    scopes.add_key(name);
+    currentjp.add_key(name);
     dbgprint(name);
     on_scope_exit {
-      scopes.remove_scope();
+      currentjp.remove_scope();
     };
     for_each_field_with_name(x, refvtor(*this));
   }
@@ -489,9 +488,9 @@ struct schemas_collector {
     // * components_object (components/schemas) - там они не инлайн
     // * в самих schema_object - их вообще этот визитор не посещает, это обрабатывается в schema_lowering
     std::optional<std::string_view> schema_name;
-    if (scopes.view().ends_with("/components/schemas"))
+    if (currentjp.view().ends_with("/components/schemas"))
       schema_name = name;
-    ctx->schema_lowering(x, obj_file, scopes / name, schema_name);
+    ctx->schema_lowering(x, obj_file, currentjp / name, schema_name);
   }
   SVARG_ADD_EXCEPTION_INFO(parse_error, name);
 
@@ -502,13 +501,12 @@ struct schemas_collector {
     if (auto* r = std::get_if<reference_object>(&x)) {
       if constexpr (!std::is_same_v<T, schema_object>) {
         // проходимся на зарезолвленном объекте, чтобы собрать всё что упомянуто там
-        auto dbg = scopes;  // TODO rm
-        auto [resolved, path, jp] = resolve_ref_and_ret(x, obj_file, scopes, *ctx);
+        auto [resolved, path, jp] = resolve_ref_and_ret(x, obj_file, currentjp, *ctx);
         schemas_collector inner(path, schemas, *ctx);
-        inner.scopes = jp;  // TODO mv
-        std::string lastseg = inner.scopes.last_segment();
-        if (!inner.scopes.empty())
-          inner.scopes.remove_scope();
+        inner.currentjp = std::move(jp);
+        std::string lastseg = inner.currentjp.last_segment();
+        if (!inner.currentjp.empty())
+          inner.currentjp.remove_scope();
         // при "переезде" в другой файл name теряет значение
         refvtor{inner}(lastseg, resolved);
         return;
