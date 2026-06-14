@@ -1,4 +1,4 @@
-#include "svarg/utils/scopes.hpp"
+#include "svarg/utils/json_pointer.hpp"
 
 #include <moko3/moko3.hpp>
 

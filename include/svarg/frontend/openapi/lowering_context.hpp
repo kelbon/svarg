@@ -7,7 +7,7 @@
 #include "svarg/frontend/openapi/openapi.hpp"
 
 #include "svarg/ir/ir_object.hpp"
-#include "svarg/utils/scopes.hpp"
+#include "svarg/utils/json_pointer.hpp"
 #include "svarg/utils/strpair.hpp"
 #include "svarg/utils/forward_like.hpp"
 

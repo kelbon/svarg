@@ -2,7 +2,7 @@
 #include "svarg/ir/ir_object.hpp"
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/merge_with_override.hpp"
-#include "svarg/utils/scopes.hpp"
+#include "svarg/utils/json_pointer.hpp"
 #include "svarg/utils/guard_array.hpp"
 #include "svarg/utils/for_each_field.hpp"
 

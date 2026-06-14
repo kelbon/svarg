@@ -6,7 +6,7 @@
 
 #include "svarg/utils/forward_like.hpp"
 #include "svarg/utils/path_tools.hpp"
-#include "svarg/utils/scopes.hpp"
+#include "svarg/utils/json_pointer.hpp"
 #include "svarg/utils/strcmp.hpp"
 #include "svarg/utils/combined_hash.hpp"
 #include "svarg/utils/from_chars.hpp"

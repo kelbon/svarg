@@ -3,7 +3,7 @@
 #include <string_view>
 
 #include "svarg/errors.hpp"
-#include "svarg/utils/scopes.hpp"
+#include "svarg/utils/json_pointer.hpp"
 
 namespace svarg {
 
