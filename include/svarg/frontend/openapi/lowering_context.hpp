@@ -89,7 +89,12 @@ struct lowering_context {
     // поддерживаем абсолютные пути не смотря на то что их вроде как нельзя в $ref
     // т.к. имплементация сама создаёт такие ссылки внутри resolve_ref
     if (filefromref.empty())  // этот файл точно существует
-      return fs::relative(fs::canonical(reffile), specs_dir);
+    {
+      if (reffile.is_absolute())
+        return fs::relative(reffile, specs_dir);
+      assert(fs::exists(specs_dir / reffile));
+      return reffile;
+    }
     if (filefromref.is_absolute())
       return fs::relative(fs::canonical(filefromref), specs_dir);
     return find_existing_file(filefromref, reffile);

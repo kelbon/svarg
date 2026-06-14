@@ -1,0 +1,186 @@
+openapi: 3.1.0
+info:
+  title: API A
+  version: 1.0.0
+  license:
+    name: MIT
+    identifier: MIT
+
+paths:
+  /users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getUser
+      parameters:
+        - name: expand
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [profile, settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPatch'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Rate-Limit:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders:
+    post:
+      operationId: createOrder
+      requestBody:
+        $ref: '#/components/requestBodies/OrderCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: 'api-b.yaml#/components/schemas/Order'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-b.yaml#/components/schemas/Error'
+      callbacks:
+        orderStatus:
+          '{$request.body#/callbackUrl}':
+            post:
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      type: string
+              responses:
+                '200':
+                  description: Callback received
+
+webhooks:
+  newOrderWebhook:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: string
+                event:
+                  type: string
+                  const: order.created
+      responses:
+        '200':
+          description: OK
+
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        favoriteItem:
+          type: null
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+
+    UserPatch:
+      type: object
+      properties:
+        name:
+          type: string
+      additionalProperties: false
+
+    OrderStatusEvent:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, shipped, delivered]
+
+  responses:
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            type: number
+
+  requestBodies:
+    OrderCreate:
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [itemId, quantity]
+            properties:
+              itemId:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+              callbackUrl:
+                type: string
+                format: uri
+
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+
+  headers:
+    X-Request-Id:
+      schema:
+        type: string
+        format: uuid
+
+  examples:
+    UserExample:
+      summary: Sample user
+      value:
+        id: "123e4567-e89b-12d3-a456-426614174000"
+        name: "Alice"
+
+  pathItems:
+    PingPath:
+      get:
+        operationId: ping
+        responses:
+          '200':
+            description: pong

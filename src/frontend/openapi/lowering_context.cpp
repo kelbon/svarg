@@ -590,7 +590,7 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
   // возможно media type range
   result.contentType = content_type;
   if (obj.schema) {
-    auto [ref, rschema] = resolve_schema(*obj.schema, file, jp, *this);
+    auto [ref, rschema] = resolve_schema(*obj.schema, file, jp / "schema", *this);
     result.schema = ref;
     if (obj.encoding) {
       auto _ = guard_array(result.membersEncoding);
@@ -677,7 +677,7 @@ std::unordered_set<ir::body> lowering_context::request_body_lowering(request_bod
                                                                      json_pointer jp) {
   std::unordered_set<ir::body> result;
   for (auto& [content_type, mediaobj] : obj.content)
-    result.insert(media_type_object_lowering(mediaobj, file, jp / content_type, content_type));
+    result.insert(media_type_object_lowering(mediaobj, file, jp / "content" / content_type, content_type));
   return result;
 }
 

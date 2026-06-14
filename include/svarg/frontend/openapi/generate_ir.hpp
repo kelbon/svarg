@@ -5,7 +5,7 @@
 
 namespace svarg {
 
-ir::ir_object openapi2ir(fs::path specsdir, std::vector<fs::path> specs2generate,
-                         openapi_options options = {});
+[[nodiscard]] ir::ir_object openapi2ir(fs::path specsdir, std::vector<fs::path> specs2generate,
+                                       openapi_options options = {});
 
 }

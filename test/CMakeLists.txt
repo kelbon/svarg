@@ -24,16 +24,24 @@ endforeach()
 
 # отслеживаем любое изменение внутри файлов
 file(GLOB TEST_SPEC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/test_specs/*")
+file(GLOB TEST_SPEC_FILES2 "${CMAKE_CURRENT_SOURCE_DIR}/test_raw_links_specs/*")
+file(GLOB TEST_SPEC_FILES3 "${CMAKE_CURRENT_SOURCE_DIR}/test_api/*")
 set_property(
     DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${TEST_SPEC_FILES}
+    ${TEST_SPEC_FILES2}
+    ${TEST_SPEC_FILES3}
 )
 # изменение количества файлов, директории
 set_property(
     DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/test_specs"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_raw_links_specs"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_api"
 )
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_specs" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_raw_links_specs" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_api" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+
