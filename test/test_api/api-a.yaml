@@ -110,12 +110,7 @@ components:
           type: null
 
     Address:
-      type: object
-      properties:
-        street:
-          type: string
-        city:
-          type: string
+      $ref: 'api-b.yaml#/components/schemas/Order'
 
     UserPatch:
       type: object

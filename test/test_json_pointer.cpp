@@ -27,13 +27,13 @@ TEST("json_pointer: basic") {
   s.add_key("baz");
   REQUIRE(s.view() == "/foo/bar/baz");
   REQUIRE(collect(s) == segments{"foo", "bar", "baz"});
-  s.remove_scope();
+  s.rm_last_segment();
   REQUIRE(collect(s) == segments{"foo", "bar"});
   REQUIRE(s.view() == "/foo/bar");
-  s.remove_scope();
+  s.rm_last_segment();
   REQUIRE(collect(s) == segments{"foo"});
   REQUIRE(s.view() == "/foo");
-  s.remove_scope();
+  s.rm_last_segment();
   REQUIRE(collect(s) == segments{});
   REQUIRE(s.view() == "");
 }
@@ -43,13 +43,13 @@ TEST("json_pointer: multiscope") {
   svarg::json_pointer s = "/foo/bar/baz"_jp;
   REQUIRE(s.view() == "/foo/bar/baz");
   REQUIRE(collect(s) == segments{"foo", "bar", "baz"});
-  s.remove_scope();
+  s.rm_last_segment();
   REQUIRE(collect(s) == segments{"foo", "bar"});
   REQUIRE(s.view() == "/foo/bar");
-  s.remove_scope();
+  s.rm_last_segment();
   REQUIRE(collect(s) == segments{"foo"});
   REQUIRE(s.view() == "/foo");
-  s.remove_scope();
+  s.rm_last_segment();
   REQUIRE(collect(s) == segments{});
   REQUIRE(s.view() == "");
 }
@@ -58,7 +58,7 @@ TEST("json_pointer: add after remove") {
   svarg::json_pointer s;
   s.add_json_ptr("foo");
   s.add_json_ptr("bar");
-  s.remove_scope();
+  s.rm_last_segment();
   s.add_json_ptr("qux");
   REQUIRE(s.view() == "/foo/qux");
 }
@@ -67,10 +67,10 @@ TEST("json_pointer: add remove interleaved") {
   svarg::json_pointer s;
   s.add_json_ptr("a");
   s.add_json_ptr("b");
-  s.remove_scope();
+  s.rm_last_segment();
   s.add_json_ptr("c");
   s.add_json_ptr("d");
-  s.remove_scope();
+  s.rm_last_segment();
   REQUIRE(s.view() == "/a/c");
 }
 

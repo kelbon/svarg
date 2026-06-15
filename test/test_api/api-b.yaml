@@ -78,6 +78,7 @@ components:
           type: string
         item:
           $ref: '#/components/schemas/Item'
+          readOnly: true
         buyer:
           $ref: 'api-a.yaml#/components/schemas/User'
 

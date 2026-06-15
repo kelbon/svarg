@@ -71,8 +71,8 @@ struct json_pointer {
       return add_one_scope(str);
     visit_path_segments(str, [&](std::string_view seg) { add_one_scope(seg, ::svarg::escaped); });
   }
-  // TODO название получше
-  void remove_scope() {
+
+  void rm_last_segment() {
     assert(!prevszs.empty());
     data.resize(prevszs.back());
     prevszs.pop_back();

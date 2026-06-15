@@ -6,11 +6,9 @@
 #include "svarg/frontend/openapi/generate_ir.hpp"
 
 #include "svarg/ir/ir_object.hpp"
-// TODO дополнить тест ссылками с override которые должны по цепочке создать себе типы
-// (+ сверять их значения, что всё распарсилось как надо)
+
 std::unordered_set<std::string> a_jsonptrs{
     "/components/schemas/User",
-    "/components/schemas/Address",
     "/components/schemas/UserPatch",
     "/components/schemas/OrderStatusEvent",
     "/paths/~1users~1{userId}/get/parameters/0/schema",
@@ -22,8 +20,6 @@ std::unordered_set<std::string> a_jsonptrs{
     "/components/schemas/User/properties/favoriteItem",
     "/components/schemas/UserPatch/properties/name",
     "/components/schemas/UserPatch/additionalProperties",
-    "/components/schemas/Address/properties/street",
-    "/components/schemas/Address/properties/city",
     "/components/schemas/User/properties/id",
     "/components/schemas/User/properties/name",
     "/components/schemas/OrderStatusEvent/properties/status",
@@ -59,6 +55,13 @@ std::unordered_set<std::string> b_jsonptrs{
     "/components/schemas/Error/properties/message",
     "/paths/~1items~1{itemId}/get/parameters/1/schema",
     "/paths/~1orders~1{orderId}/get/parameters/0/schema",
+    // сгенерированные через $ref с перекрытым полем
+    // т.е. инлайн схемы продублированы, указывает поинтер в объект которого в ямле нет
+    "/components/schemas/Order/properties/item/properties/id",
+    "/components/schemas/Order/properties/item/properties/tags",
+    "/components/schemas/Order/properties/item/properties/title",
+    "/components/schemas/Order/properties/item/properties/tags/items",
+    "/components/schemas/Order/properties/item",
 };
 
 TEST("json pointers are correct") {

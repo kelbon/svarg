@@ -10,6 +10,14 @@
 
 namespace svarg {
 
+static std::optional<std::string> try_get_name(const json_pointer& jp) {
+  // ссылаться разрешено только на то что находится в schemas,
+  // т.е. что-то типа /components/schemas/User => User
+  if (!jp.view().starts_with("/components/schemas/") || jp.segments_count() != 3)
+    return std::nullopt;
+  return jp.last_segment();
+}
+
 // посещает все значения с ключом $ref в json
 static void visit_refs(boost::json::value& val, auto&& visitor) {
   switch (val.kind()) {
@@ -103,8 +111,6 @@ struct references_chain {
 };
 
 // TODO тест на ремап ссылок в resolve_ref_to учитывая инклуд директории и так далее
-// TODO cache + возвращать вместо инвокабл
-// TODO тест на путь до инлайн схемы через ссылку с оверрайд полем (должно продолжаться "вглубь")
 // TODO в IR складывать и спеку и джсон птр где лежало значение
 
 // ref - ссылка по которой нужно пройти
@@ -405,9 +411,7 @@ resolved_schema lowering_context::resolve_schema_ref(reference_object ref, fs::p
       resolve_ref_to<schema_object>(std::move(ref), std::move(file), std::move(refjp), *this);
   // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
   // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
-  std::string name = jp.last_segment();
-  if (name.empty())
-    throw semantic_error("name of schema cannot be empty. json pointer: {}", jp.view());
+  std::optional<std::string> name = try_get_name(jp);
   resolved_schema res;
   res.ir_schema = schema_lowering(schema, refered_file, std::move(jp), name).ref();
   res.front_schema = std::move(schema);
@@ -458,7 +462,7 @@ struct schemas_collector {
     dbgprint(name);
     currentjp.add_key(name);
     on_scope_exit {
-      currentjp.remove_scope();
+      currentjp.rm_last_segment();
     };
     for (size_t i = 0; i < f.size(); ++i)
       // не смотря на то что скоп может быть захвачен по string_view,
@@ -472,7 +476,7 @@ struct schemas_collector {
     dbgprint(name);
     currentjp.add_key(name);
     on_scope_exit {
-      currentjp.remove_scope();
+      currentjp.rm_last_segment();
     };
     for (auto& [key, v] : f)
       recursion(std::string_view(key), v);
@@ -506,7 +510,7 @@ struct schemas_collector {
     assert(!is_keyfield(name));
     currentjp.add_key(name);
     on_scope_exit {
-      currentjp.remove_scope();
+      currentjp.rm_last_segment();
     };
     recursion("default", rsps.default_);
     for (auto& [key, v] : rsps._responses)
@@ -518,7 +522,7 @@ struct schemas_collector {
     currentjp.add_key(name);
     dbgprint(name);
     on_scope_exit {
-      currentjp.remove_scope();
+      currentjp.rm_last_segment();
     };
     for_each_field_with_name(x, refvtor(*this));
   }
@@ -530,9 +534,7 @@ struct schemas_collector {
     // * parameter_object/header_object/media_type_object - там они инлайн
     // * components_object (components/schemas) - там они не инлайн
     // * в самих schema_object - их вообще этот визитор не посещает, это обрабатывается в schema_lowering
-    std::optional<std::string_view> schema_name;
-    if (currentjp.view().ends_with("/components/schemas"))
-      schema_name = name;
+    std::optional<std::string> schema_name = try_get_name(currentjp / name);
     ctx->schema_lowering(x, obj_file, currentjp / name, schema_name);
   }
   SVARG_ADD_EXCEPTION_INFO(parse_error, name);
@@ -549,7 +551,7 @@ struct schemas_collector {
         inner.currentjp = std::move(jp);
         std::string lastseg = inner.currentjp.last_segment();
         if (!inner.currentjp.empty())
-          inner.currentjp.remove_scope();
+          inner.currentjp.rm_last_segment();
         // при "переезде" в другой файл name теряет значение
         refvtor{inner}(lastseg, resolved);
         return;
