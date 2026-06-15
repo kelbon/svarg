@@ -41,6 +41,25 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
   out = loc;
 }
 
+inline std::string_view e2str(fundamental_e e) noexcept {
+  switch (e) {
+    case fundamental_e::null:
+      return "null";
+    case fundamental_e::boolean:
+      return "boolean";
+    case fundamental_e::integer:
+      return "integer";
+    case fundamental_e::number:
+      return "number";
+    case fundamental_e::string:
+      return "string";
+    case fundamental_e::array:
+      return "array";
+    case fundamental_e::object:
+      return "object";
+  }
+}
+
 // fundamental | name + scope
 struct schema_ref {
   optional<string> name;
@@ -91,6 +110,8 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
 }
 
 struct enum_schema {
+  static constexpr std::string_view discriminator_value = "enum";
+
   optional<schema_ref> type;
   array<Any> values;
 };
@@ -103,16 +124,22 @@ struct discriminator_desc {
 };
 
 struct oneof_schema {
+  static constexpr std::string_view discriminator_value = "oneof";
+
   optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct anyof_schema {
+  static constexpr std::string_view discriminator_value = "anyof";
+
   optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct allof_schema {
+  static constexpr std::string_view discriminator_value = "allof";
+
   array<schema_ref> schemas;
 };
 
@@ -129,39 +156,53 @@ struct object_field_info {
 };
 
 struct object_schema {
+  static constexpr std::string_view discriminator_value = "object";
+
   array<object_field_info> fields;
   optional<schema_ref> additional_fields;
 };
 
 struct array_schema {
+  static constexpr std::string_view discriminator_value = "array";
+
   schema_ref element;
 };
 
 struct not_schema {
+  static constexpr std::string_view discriminator_value = "not";
+
   schema_ref type;
 };
 
 // соответствует схеме false
 // т.е. любой тип должен проваливать проверку
-struct never_schema {};
+struct never_schema {
+  static constexpr std::string_view discriminator_value = "never";
+};
 
 // соответствует схеме true
 // т.е. любой тип подходит
-struct any_schema {};
+struct any_schema {
+  static constexpr std::string_view discriminator_value = "any";
+};
 
 // fundamental | enum | object_type | oneof | anyof | allof
 struct schema {
-  // spec#jsonptr ref на место где определён тип (не включает имя типа)
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  //  spec#jsonptr ref на место где определён тип (не включает имя типа)
   string scope;
   optional<string> name;
   // представление типа (то что получит пользователь генератора)
   std::variant<any_schema, fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
                object_schema, array_schema, not_schema, never_schema>
       data;
+
   // схемы которые не влияют на представление, только на валидацию
   // н-р type: string enum: ... это означает что пользователь увидит строку, но она провалидируется по тому
   // что написано в enum
   optional<array<schema_ref>> required;
+
+  // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   std::string_view spec() const noexcept {
     return parse_ref(scope).file;
@@ -310,6 +351,21 @@ enum struct status_range_e {
   _4XX,
   _5XX,
 };
+
+inline constexpr std::string_view e2str(status_range_e e) {
+  switch (e) {
+    case status_range_e::_1XX:
+      return "1XX";
+    case status_range_e::_2XX:
+      return "2XX";
+    case status_range_e::_3XX:
+      return "3XX";
+    case status_range_e::_4XX:
+      return "4XX";
+    case status_range_e::_5XX:
+      return "5XX";
+  }
+}
 
 struct response_desc {
   // всегда должен быть одно - либо status либо statusRange

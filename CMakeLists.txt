@@ -46,4 +46,4 @@ set_target_properties(svarg svarglib PROPERTIES
 )
 
 # generates launch.json, places compile_commands.json correctly for clangd
-ccozy_on_configuration_end_vscode()
+# ccozy_on_configuration_end_vscode()
