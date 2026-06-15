@@ -5,6 +5,7 @@
 
 #include "svarg/common_types.hpp"
 #include "svarg/serialize.hpp"
+#include "svarg/utils/parse_ref.hpp"
 
 namespace svarg {
 
@@ -22,6 +23,18 @@ struct reference_object {
   optional<string> description;
   // какие-то дополнительные поля переопределяющие то что лежит по ссылке
   string_map<Any> _keyfield_override_fields;
+
+  bool operator==(const reference_object& r) const {
+    if (ref_ == r.ref_) {
+      return summary == r.summary && description == r.description &&
+             _keyfield_override_fields == r._keyfield_override_fields;
+    }
+    if (summary != r.summary || description != r.description ||
+        _keyfield_override_fields != r._keyfield_override_fields)
+      return false;
+    // ref_ и r.ref_ могли не совпасть так как в одном случае json pointer экранирован, а в другом нет
+    return parse_ref(ref_).json_ptr == parse_ref(r.ref_).json_ptr;
+  }
 };
 
 template <typename T>

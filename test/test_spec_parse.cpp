@@ -21,7 +21,7 @@ TEST("generate ir from openapi") {
     if (x.spec == "test_specs/TS29571_CommonData.yaml")
       std::cout << x.jsonptr.view() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
   }
-  REQUIRE(o.schemas.size() == 1890);
+  REQUIRE(o.schemas.size() == 1902);
   REQUIRE(o.operations.size() == 6);
   REQUIRE(o.webhooks.size() == 1);
 }

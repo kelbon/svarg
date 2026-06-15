@@ -203,6 +203,9 @@ struct json_pointer {
   }
 
   // TODO тесты из json pointer rfc
+  // TODO взятие сегмента по индексу (и замена)
+  // TODO понять не будет ли description/прочая хрень из ссылки ломать парсинг каких-то типов
+  // желательно наверное игнорировать их при override
 
   // получает доступ без escape/unescape
   boost::json::value* access(boost::json::value& json) const {

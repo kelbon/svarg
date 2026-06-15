@@ -39,12 +39,17 @@ struct object_and_path {
 
 struct lowering_context {
   openapi_options opts;
+
+ private:
   // путь относительно которого в IR написаны все пути до спецификаций
   fs::path specs_dir;
+
   // не используется напрямую, только через load_as_json
   jsons_cache jcache;
   // схемы создаваемые прямо сейчас (scope + name), чтобы избегать рекурсии
   std::unordered_set<strpair> schemas_in_progress;
+
+ public:
   // просто хранится здесь как в контексте
   ir::ir_object ir;
 
@@ -122,7 +127,7 @@ struct lowering_context {
   }
 
   // возвращает тип, но и вставляет его в ir.schemas (если его там не было)
-  resolved_schema resolve_schema_ref(reference_object obj, fs::path file);
+  resolved_schema resolve_schema_ref(reference_object obj, fs::path file, json_pointer jp);
 
   // file - относительно specs dir, jp должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
@@ -163,15 +168,26 @@ struct lowering_context {
   ir::body media_type_object_lowering(const media_type_object&, fs::path file, json_pointer,
                                       std::string_view content_type);
 
- private:
-  template <typename T>
-  friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lowering_context&);
+  void replace_in_cache(fs::path const& p, const json_pointer& jp, boost::json::value newvalue) {
+    boost::json::value& v = jcache.load_mutable(specs_dir / p);
+    boost::json::value* refered = jp.access(v);
+    if (!refered) {
+      // так-то это assert, но файловую систему могли изменить и всё такое
+      throw semantic_error("cannot replace value, json pointer `{}` does not refer to object in file `{}`",
+                           jp.escaped(), p.generic_string());
+    }
+    *refered = std::move(newvalue);
+  }
   const boost::json::value& load_as_json(fs::path const& p) {
     // spec_dir != cwd
     // не включен ассёрт, так как файловую систему могут поменять
     // assert(fs::is_directory(specs_dir));
     return jcache.load(specs_dir / p);
   }
+
+ private:
+  template <typename T>
+  friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lowering_context&);
   openapi_object do_parse_spec_file(fs::path spec) {
     // подменяем кеш, чтобы в нём не было незарезолвленных сырых ссылок
     boost::json::value& v = jcache.load_mutable(specs_dir / spec);

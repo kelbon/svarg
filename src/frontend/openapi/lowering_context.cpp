@@ -36,62 +36,109 @@ static void visit_refs(boost::json::value& val, auto&& visitor) {
 // ctx - используется чтобы найти существующие файлы, т.е. учесть инклуд директории
 // Note: ссылки ремапятся в абсолютные пути, хотя это и запрещено в $ref. Но у меня поддержано чтобы не
 // возиться
-static void remap_references(string_map<Any>& fields, const fs::path& curfile, const lowering_context& ctx) {
-  for (auto& [key, a] : fields) {
-    auto remap_ref = [&](boost::json::value& ref) {
-      if (!ref.is_string())
-        throw parse_error("invalid reference, expected string, but got {}", e2str(ref.kind()));
-      parsed_ref r = parse_ref(ref.as_string());
-      fs::path p = ctx.find_file_from_ref(r.file, curfile);
-      ref.as_string() = std::format("{}#{}", p.generic_string(), r.json_ptr.escaped());
-    };
-    visit_refs(a.value, remap_ref);
-  }
+// Нужно так как в цепи ссылок $ref написаны в одном файле, а резолвится будут возможно в контексте
+// другого поэтому их нужно перемапить на "универсальную" основу не зависящую от конкретного файла
+static void remap_references(boost::json::value& obj, const fs::path& curfile, const lowering_context& ctx) {
+  auto remap_ref = [&](boost::json::value& ref) {
+    if (!ref.is_string())
+      throw parse_error("invalid reference, expected string, but got `{}`", e2str(ref.kind()));
+    parsed_ref r = parse_ref(ref.as_string());
+    fs::path p = ctx.find_file_from_ref(r.file, curfile);
+    ref.as_string() = std::format("{}#{}", p.generic_string(), r.json_ptr.escaped());
+  };
+  visit_refs(obj, remap_ref);
 }
 
-// TODO тест на ремап ссылок в resolve_ref_to учитывая инклуд директории и так далее
+static void remap_references(string_map<Any>& fields, const fs::path& curfile, const lowering_context& ctx) {
+  for (auto& [key, a] : fields)
+    remap_references(a.value, curfile, ctx);
+}
 
-// рекурсивно резолвит ссылку и в конце передаёт в invocable объект T, путь в котором он лежал (относительно
-// specs_dir) и json_pointer на него в этом файле
-// возвращает то что вернёт вызов invocable(tvalue, file, json_pointer)
-// в поданном в конце объекте все ссылки относительно его файла ЛИБО абсолютные
-// (те которые прицепились к нему по дороге)
-template <typename T>
-auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lowering_context& ctx) {
-  parsed_ref r;
-  // здесь нельзя кешировать, так как с разных мест разные ссылки дают разный результат из-за override fields
+struct references_chain {
+  fs::path file;
+  json_pointer jp;
+  lowering_context& ctx;
+  // сумма перекрытых всей цепочкой ссылок полей
+  // (всегда с ремапленными ссылками)
+  //  $ref + override FIELD1 ссылается на $ref + override FIELD2 и тд
+  string_map<Any> override_fields;
+  // любая ссылка с override филдами в итоге должна сгенерировать свой уникальный тип
+  // например:
+  //  $0     $1                $2
+  //  ref -> ref + override -> schema
+  //  $0 это ссылка на $1, $1 это уникальный тип на который можно ссылаться
+  // иначе несколько ссылок могут ссылаться на один объект не смотря на разную итоговую схему
+  std::optional<std::pair<fs::path, json_pointer>> first_with_overrides;
 
-  // поля со всех ссылок складываются сюда. $ref + override FIELD1
-  // ссылается на $ref + override FIELD2 и так далее
-  string_map<Any> override_fields = std::move(ref._keyfield_override_fields);
-  // override fields написаны в одном файле, а резолвится будут возможно в контексте
-  // другого поэтому их нужно перемапить на "универсальную" основу не зависящую от конкретного файла
-  remap_references(override_fields, file, ctx);
-  for (size_t recursion_depth = 0; recursion_depth <= ctx.opts.ref_max_depth; ++recursion_depth) {
-    if (!ref.ref_.contains("#/components/")) [[unlikely]] {
-      ctx.emit_warn(file, r.json_ptr.empty() ? parse_ref(ref.ref_).json_ptr.escaped() : r.json_ptr.escaped(),
-                    "$ref should be into /components/, but $ref = {}", ref.ref_);
-    }
-    r = parse_ref(ref.ref_);
-    fs::path refered_file = ctx.find_file_from_ref(r.file, file);
-    const boost::json::value& v = ctx.load_as_json(refered_file);
-    const boost::json::value* jref_ptr = r.json_ptr.access(v);
-    if (!jref_ptr)
-      throw semantic_error("invalid json pointer `{}`, does not refer to value in `{}`",
-                           r.json_ptr.unescaped(), refered_file.generic_string());
-    boost::json::value jref = *jref_ptr;
-    if (!jref.is_object())
-      throw semantic_error("refered by $ref must be json/yaml object, but got {}", e2str(jref.kind()));
-    for (auto& [k, j] : override_fields)
-      jref.as_object()[k] = j.value;
-    auto ref_or_t = from_json<reference_or<T>>(jref);
-    if (auto* val = std::get_if<T>(&ref_or_t))
-      return invocable(std::move(*val), std::move(refered_file), json_pointer(r.json_ptr));
-    ref = std::get<reference_object>(std::move(ref_or_t));
-    file = std::move(refered_file);
+  references_chain(fs::path file, json_pointer jp, lowering_context& ctx)
+      : file(std::move(file)), jp(std::move(jp)), ctx(ctx) {
+  }
+
+  boost::json::value follow(reference_object ref) {
+    if (!first_with_overrides && !ref._keyfield_override_fields.empty())
+      first_with_overrides.emplace(file, jp);
     remap_references(ref._keyfield_override_fields, file, ctx);
     override_fields =
         merge_with_override(std::move(override_fields), std::move(ref._keyfield_override_fields));
+    {
+      parsed_ref r = parse_ref(ref.ref_);
+      file = ctx.find_file_from_ref(r.file, file);
+      jp = std::move(r.json_ptr);
+    }
+    const boost::json::value* pointed = jp.access(ctx.load_as_json(file));
+    if (!pointed)
+      throw semantic_error("invalid json pointer `{}`, does not refer to value in `{}`", jp.unescaped(),
+                           file.generic_string());
+    boost::json::value refered = *pointed;
+    if (!refered.is_object())
+      throw semantic_error("refered by $ref must be json/yaml object, but got {}", e2str(refered.kind()));
+    // объект всегда должен возвращаться с универсальными ссылками, чтобы избежать смешения ссылок из разных
+    // контекстов например конфликт контекста "первый $ref + overrided" и "конечный объект без $ref"
+    remap_references(refered, file, ctx);
+    // в override_fields ссылки уже универсальные
+    for (auto& [k, j] : override_fields)
+      refered.as_object()[k] = j.value;
+    return refered;
+  }
+};
+
+// TODO тест на ремап ссылок в resolve_ref_to учитывая инклуд директории и так далее
+// TODO cache + возвращать вместо инвокабл
+// TODO тест на путь до инлайн схемы через ссылку с оверрайд полем (должно продолжаться "вглубь")
+// TODO в IR складывать и спеку и джсон птр где лежало значение
+
+// ref - ссылка по которой нужно пройти
+// file - файл где эта ссылка лежит
+// jp - указатель в file где эта ссылка лежит
+// возвращает итоговый объект, файл в котором он лежал и джсон поинтер на него
+// Note: объект может не существовать в входном апи, а быть сгенерированным через $ref с перекрытыми полями
+// Note: в вернувшемся объекте все ссылки универсальные (относительно specs dir)
+template <typename T>
+object_and_path<T> resolve_ref_to(reference_object ref, fs::path file, json_pointer jp,
+                                  lowering_context& ctx) {
+  // если обращение к nullptr - всё равно это ассёрт
+  assert(from_json<reference_object>(*jp.access(ctx.load_as_json(file))) == ref);
+
+  references_chain chain(std::move(file), std::move(jp), ctx);
+
+  for (size_t recursion_depth = 0; recursion_depth <= ctx.opts.ref_max_depth; ++recursion_depth) {
+    if (!ref.ref_.contains("#/components/")) [[unlikely]] {
+      ctx.emit_warn(file, chain.jp.empty() ? parse_ref(ref.ref_).json_ptr.escaped() : chain.jp.escaped(),
+                    "$ref should be into /components/*, but $ref = {}", ref.ref_);
+    }
+    boost::json::value json = chain.follow(std::move(ref));
+    auto refered = from_json<reference_or<T>>(json);
+    if (auto* value = std::get_if<T>(&refered)) {
+      if (chain.first_with_overrides) {
+        auto [reffile, refjp] = *std::move(chain.first_with_overrides);
+        // нужно изменить само загруженное апи, чтобы json pointer на поле внутри $reef
+        // с перекрытым полем стал валиден (т.к. он указывает внутрь $ref)
+        ctx.replace_in_cache(reffile, refjp, std::move(json));
+        return {std::move(*value), std::move(reffile), std::move(refjp)};
+      } else
+        return {std::move(*value), std::move(chain.file), std::move(chain.jp)};
+    }
+    ref = std::get<reference_object>(std::move(refered));
   }
   throw semantic_error("recursion depth max reached");
 }
@@ -99,14 +146,10 @@ auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lower
 template <typename T>
 object_and_path<T> resolve_ref_and_ret(reference_or<T> x, fs::path file, json_pointer jp,
                                        lowering_context& ctx) {
-  if (auto* r = std::get_if<reference_object>(&x)) {
-    auto getcb = [](T obj, fs::path file, json_pointer rjp) {
-      return object_and_path(std::move(obj), std::move(file), std::move(rjp));
-    };
-    return resolve_ref_to<T>(std::move(*r), std::move(file), getcb, ctx);
-  } else {
+  if (auto* r = std::get_if<reference_object>(&x))
+    return resolve_ref_to<T>(std::move(*r), std::move(file), std::move(jp), ctx);
+  else
     return object_and_path(std::move(std::get<T>(x)), std::move(file), std::move(jp));
-  }
 }
 
 // jp используется только если это инлайн схема для создания уникального scope
@@ -114,7 +157,7 @@ object_and_path<T> resolve_ref_and_ret(reference_or<T> x, fs::path file, json_po
                                                     const fs::path& file, json_pointer jp,
                                                     lowering_context& ctx) {
   if (auto* ref = std::get_if<reference_object>(&sor)) {
-    return ctx.resolve_schema_ref(*ref, file);
+    return ctx.resolve_schema_ref(*ref, file, std::move(jp));
   } else {
     auto s = ctx.schema_lowering(std::get<schema_object>(sor), file, std::move(jp), std::nullopt);
     return {std::move(s).ref(), std::get<schema_object>(sor)};
@@ -356,19 +399,19 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
 }
 
 // ожидает что file относительно spec dir
-resolved_schema lowering_context::resolve_schema_ref(reference_object ref, fs::path file) {
-  auto doschema = [&](schema_object schema, fs::path refered_file, json_pointer jp) {
-    // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
-    // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
-    std::string name = jp.last_segment();
-    if (name.empty())
-      throw semantic_error("name of schema cannot be empty. json pointer: {}", jp.view());
-    resolved_schema res;
-    res.ir_schema = schema_lowering(schema, refered_file, std::move(jp), name).ref();
-    res.front_schema = std::move(schema);
-    return res;
-  };
-  return resolve_ref_to<schema_object>(std::move(ref), std::move(file), doschema, *this);
+resolved_schema lowering_context::resolve_schema_ref(reference_object ref, fs::path file,
+                                                     json_pointer refjp) {
+  auto [schema, refered_file, jp] =
+      resolve_ref_to<schema_object>(std::move(ref), std::move(file), std::move(refjp), *this);
+  // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
+  // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
+  std::string name = jp.last_segment();
+  if (name.empty())
+    throw semantic_error("name of schema cannot be empty. json pointer: {}", jp.view());
+  resolved_schema res;
+  res.ir_schema = schema_lowering(schema, refered_file, std::move(jp), name).ref();
+  res.front_schema = std::move(schema);
+  return res;
 }
 
 // оборачивает визитор в ссылке с тем же интерфейсом,
@@ -501,7 +544,7 @@ struct schemas_collector {
     if (auto* r = std::get_if<reference_object>(&x)) {
       if constexpr (!std::is_same_v<T, schema_object>) {
         // проходимся на зарезолвленном объекте, чтобы собрать всё что упомянуто там
-        auto [resolved, path, jp] = resolve_ref_and_ret(x, obj_file, currentjp, *ctx);
+        auto [resolved, path, jp] = resolve_ref_and_ret(x, obj_file, currentjp / name, *ctx);
         schemas_collector inner(path, schemas, *ctx);
         inner.currentjp = std::move(jp);
         std::string lastseg = inner.currentjp.last_segment();
@@ -512,7 +555,7 @@ struct schemas_collector {
         return;
       } else {
         // вызывается чтобы обойти всё и собрать упоминающиеся ссылки
-        ctx->resolve_schema_ref(*r, obj_file);
+        ctx->resolve_schema_ref(*r, obj_file, currentjp / name);
       }
     } else {
       recursion(name, *std::get_if<T>(&x));
