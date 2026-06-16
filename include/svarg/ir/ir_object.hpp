@@ -115,8 +115,6 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
 }
 
 struct enum_schema {
-  static constexpr std::string_view discriminator_value = "enum";
-
   std::optional<schema_ref> type;
   array<Any> values;
 };
@@ -129,22 +127,16 @@ struct discriminator_desc {
 };
 
 struct oneof_schema {
-  static constexpr std::string_view discriminator_value = "oneOf";
-
   std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct anyof_schema {
-  static constexpr std::string_view discriminator_value = "anyOf";
-
   std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct allof_schema {
-  static constexpr std::string_view discriminator_value = "allOf";
-
   array<schema_ref> schemas;
 };
 
@@ -161,34 +153,65 @@ struct object_field_info {
 };
 
 struct object_schema {
-  static constexpr std::string_view discriminator_value = "object";
-
   array<object_field_info> fields;
   std::optional<schema_ref> additional_fields;
 };
 
 struct array_schema {
-  static constexpr std::string_view discriminator_value = "array";
-
   schema_ref element;
 };
 
 struct not_schema {
-  static constexpr std::string_view discriminator_value = "not";
-
   schema_ref type;
 };
 
 // соответствует схеме false
 // т.е. любой тип должен проваливать проверку
-struct never_schema {
-  static constexpr std::string_view discriminator_value = "never";
-};
+struct never_schema {};
 
 // соответствует схеме true
 // т.е. любой тип подходит
-struct any_schema {
-  static constexpr std::string_view discriminator_value = "any";
+struct any_schema {};
+
+struct schema_type {
+  std::variant<any_schema, fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
+               object_schema, array_schema, not_schema, never_schema>
+      data;
+
+  std::string_view discriminator() const noexcept {
+    return std::visit(
+        matcher_r<std::string_view>(
+            [](const any_schema&) { return "any"; }, [](const never_schema&) { return "never"; },
+            [](const not_schema&) { return "not"; }, [](const array_schema&) { return "array"; },
+            [](const object_schema&) { return "object"; }, [](const allof_schema&) { return "allOf"; },
+            [](const anyof_schema&) { return "anyOf"; }, [](const oneof_schema&) { return "oneOf"; },
+            [](const enum_schema&) { return "enum"; }, [](const fundamental_e&) { return "fundamental"; }),
+        data);
+  }
+  void set_type_from_discriminator(std::string_view s) {
+    if (s == "any")
+      data.emplace<any_schema>();
+    else if (s == "never")
+      data.emplace<never_schema>();
+    else if (s == "not")
+      data.emplace<not_schema>();
+    else if (s == "array")
+      data.emplace<array_schema>();
+    else if (s == "object")
+      data.emplace<object_schema>();
+    else if (s == "allOf")
+      data.emplace<allof_schema>();
+    else if (s == "anyOf")
+      data.emplace<anyof_schema>();
+    else if (s == "oneOf")
+      data.emplace<oneof_schema>();
+    else if (s == "enum")
+      data.emplace<enum_schema>();
+    else if (s == "fundamental")
+      data.emplace<fundamental_e>();
+    else
+      throw parse_error("invalid discriminator `{}`", s);
+  }
 };
 
 // fundamental | enum | object_type | oneof | anyof | allof
@@ -199,9 +222,7 @@ struct schema {
   // если имени нет это инлайн схема
   std::optional<string> name;
   // представление типа (то что получит пользователь генератора)
-  std::variant<any_schema, fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
-               object_schema, array_schema, not_schema, never_schema>
-      data;
+  schema_type type;
   // схемы которые не влияют на представление, только на валидацию
   // н-р type: string enum: ... это означает что пользователь увидит строку, но она провалидируется по тому
   // что написано в enum
@@ -383,31 +404,50 @@ inline constexpr void efromstr(std::string_view str, status_range_e& out) {
     throw parse_error("invalid status range type `{}`", str);
   out = loc;
 }
-// TODO нормально чтоб выводило
-struct status_t {
-  static constexpr std::string_view discriminator_value = "status";
-
-  int64_t status = 0;
-
-  auto operator<=>(const status_t&) const = default;
-};
-
-struct status_range_t {
-  static constexpr std::string_view discriminator_value = "statusRange";
-
-  status_range_e statusRange = status_range_e::_1XX;
-
-  auto operator<=>(const status_range_t&) const = default;
-};
 
 struct default_response_t {
-  static constexpr std::string_view discriminator_value = "default";
-
   auto operator<=>(const default_response_t&) const = default;
 };
 
+// тег тип для сериализации
+struct response_status {
+  std::variant<default_response_t, int64_t, status_range_e> status;
+
+  std::string to_string() const noexcept {
+    return std::visit(matcher_r<std::string>([](default_response_t) { return "default"; },
+                                             [](int64_t s) { return std::to_string(s); },
+                                             [](status_range_e e) { return e2str(e); }),
+                      status);
+  }
+
+  [[nodiscard]] static response_status from_string(std::string_view str) {
+    response_status result;
+    if (str == "default") {
+      result.status.emplace<default_response_t>();
+      return result;
+    }
+    using enum status_range_e;
+    auto loc = ss::string_switch<status_range_e>(str)
+                   .case_("1XX", _1XX)
+                   .case_("2XX", _2XX)
+                   .case_("3XX", _3XX)
+                   .case_("4XX", _4XX)
+                   .case_("5XX", _5XX)
+                   .or_default(status_range_e(-1));
+    if (loc != status_range_e(-1)) {
+      result.status.emplace<status_range_e>(loc);
+      return result;
+    }
+    if (!try_from_chars(str, result.status.emplace<int64_t>()))
+      throw parse_error("invalid status string `{}`", str);
+    return result;
+  }
+
+  auto operator<=>(const response_status&) const = default;
+};
+
 struct response_desc {
-  std::variant<default_response_t, status_t, status_range_t> status;
+  response_status status;
   // content-type игнорируется (даже не попадает в этот список)
   // регистронезависимо
   std::optional<std::unordered_set<header>> headers;
@@ -415,30 +455,13 @@ struct response_desc {
   std::optional<std::unordered_set<body>> bodies;
 
   [[nodiscard]] bool is_default() const noexcept {
-    return std::holds_alternative<default_response_t>(status);
+    return std::holds_alternative<default_response_t>(status.status);
   }
   void make_default() noexcept {
-    status.emplace<default_response_t>();
+    status.status.emplace<default_response_t>();
   }
   void set_status(std::string_view s) {
-    std::optional range = ss::string_switch<std::optional<status_range_e>>(s)
-                              .case_("1XX", status_range_e::_1XX)
-                              .case_("2XX", status_range_e::_2XX)
-                              .case_("3XX", status_range_e::_3XX)
-                              .case_("4XX", status_range_e::_4XX)
-                              .case_("5XX", status_range_e::_5XX)
-                              .or_default(std::nullopt);
-    if (range) {
-      status.emplace<status_range_t>(*range);
-      return;
-    }
-    size_t num = 0;
-    if (!try_from_chars(s, num))
-      throw parse_error("invalid status, not number and not valid range: `{}`", s);
-    if (num < 100)
-      throw validate_error("invalid status value {}", num);
-    // не проверяем статус, вдруг кто-то сделал 1023 валидным статусом
-    status.emplace<status_t>(num);
+    status = status.from_string(s);
   }
 
   bool operator==(const response_desc& r) const noexcept {
@@ -456,14 +479,7 @@ namespace std {
 template <>
 struct hash<::svarg::ir::response_desc> {
   size_t operator()(const ::svarg::ir::response_desc& o) const {
-    return std::visit(::svarg::matcher{
-                          [](::svarg::ir::default_response_t) { return ::svarg::combined_hash(int64_t(0)); },
-                          [](::svarg::ir::status_range_t r) {
-                            return ::svarg::combined_hash(std::to_underlying(r.statusRange));
-                          },
-                          [](::svarg::ir::status_t s) { return ::svarg::combined_hash(s.status); },
-                      },
-                      o.status);
+    return svarg::hash_combined(o.status.to_string());
   }
 };
 
@@ -554,16 +570,45 @@ struct ir_object {
   bool operator==(const ir_object&) const = default;
 };
 
-// TODO serialize/parse ir
-// TODO операции
-
 }  // namespace svarg::ir
 
 namespace svarg {
 
 template <>
-struct discriminator_t<ir::fundamental_e> {
-  static constexpr std::string_view value = "fundamental";
+struct parse<ir::response_status> {
+  void operator()(boost::json::value const& v, ir::response_status& out) {
+    out = ir::response_status::from_string(v.as_string());
+  }
+};
+
+template <>
+struct parse<ir::schema_type> {
+  void operator()(boost::json::value const& v, ir::schema_type& out) {
+    if (!v.is_object())
+      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+    const boost::json::object& obj = v.as_object();
+    if (obj.size() != 1)
+      throw parse_error(" expected exactly one key, but `{}` keys present", obj.size());
+    std::string_view discriminator = obj.begin()->key();
+    out.set_type_from_discriminator(discriminator);
+    std::visit([&](auto& x) { from_json(obj.begin()->value(), x); }, out.data);
+  }
+};
+
+template <>
+struct serialize<ir::response_status> {
+  boost::json::value operator()(const ir::response_status& r) {
+    return boost::json::string(r.to_string());
+  }
+};
+
+template <>
+struct serialize<ir::schema_type> {
+  boost::json::value operator()(const ir::schema_type& s) {
+    boost::json::object obj;
+    obj[s.discriminator()] = std::visit([](auto& x) { return to_json(x); }, s.data);
+    return obj;
+  }
 };
 
 }  // namespace svarg

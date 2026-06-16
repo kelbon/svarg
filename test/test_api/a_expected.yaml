@@ -1,15 +1,15 @@
 "schemas":
   - "spec": "api-a.yaml"
     "jsonptr": "/components/headers/X-Request-Id/schema"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/parameters/LimitParam/schema"
-    "data":
+    "type":
       "fundamental": "integer"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -29,24 +29,24 @@
             "required": false
   - "spec": "api-a.yaml"
     "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/callbackUrl"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
-    "data":
+    "type":
       "fundamental": "integer"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/responses/NotFound/content/application~1json/schema"
-    "data":
+    "type":
       "fundamental": "number"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/OrderStatusEvent"
     "name": "OrderStatusEvent"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -56,7 +56,7 @@
             "required": false
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
-    "data":
+    "type":
       "enum":
         "type":
           "spec": "api-a.yaml"
@@ -68,7 +68,7 @@
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User"
     "name": "User"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -94,20 +94,20 @@
             "required": false
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/favoriteItem"
-    "data":
+    "type":
       "any": {}
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/id"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/name"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/UserPatch"
     "name": "UserPatch"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -120,26 +120,26 @@
           "jsonptr": "/components/schemas/UserPatch/additionalProperties"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/UserPatch/additionalProperties"
-    "data":
+    "type":
       "any": {}
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/UserPatch/properties/name"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema"
-    "data":
+    "type":
       "array":
         "element":
           "spec": "api-a.yaml"
           "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
-    "data":
+    "type":
       "enum":
         "type":
           "spec": "api-a.yaml"
@@ -149,15 +149,15 @@
           - "settings"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema"
-    "data":
+    "type":
       "fundamental": "integer"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1users~1{userId}/parameters/0/schema"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -172,7 +172,7 @@
             "required": false
   - "spec": "api-a.yaml"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
-    "data":
+    "type":
       "enum":
         "type":
           "spec": "api-a.yaml"
@@ -181,12 +181,12 @@
           - "order.created"
   - "spec": "api-a.yaml"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Error"
     "name": "Error"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -201,16 +201,16 @@
             "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Error/properties/code"
-    "data":
+    "type":
       "fundamental": "integer"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Error/properties/message"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Money"
     "name": "Money"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -225,11 +225,11 @@
             "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Money/properties/amount"
-    "data":
+    "type":
       "fundamental": "number"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Money/properties/currency"
-    "data":
+    "type":
       "enum":
         "type":
           "spec": "api-b.yaml"
@@ -241,7 +241,7 @@
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -267,11 +267,11 @@
             "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/id"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item"
-    "data":
+    "type":
       "object":
         "fields":
           - "type":
@@ -297,26 +297,26 @@
             "required": true
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/id"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
-    "data":
+    "type":
       "array":
         "element":
           "spec": "api-b.yaml"
           "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/title"
-    "data":
+    "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/status"
-    "data":
+    "type":
       "fundamental": "string"
 "operations":
   - "id": "getUser"
@@ -336,9 +336,7 @@
           "spec": "api-a.yaml"
           "jsonptr": "/components/schemas/UserPatch"
     "responses":
-      - "status":
-          "status":
-            "status": 200
+      - "status": "200"
         "headers":
           - "name": "X-Rate-Limit"
             "schema":
@@ -350,9 +348,7 @@
               "name": "User"
               "spec": "api-a.yaml"
               "jsonptr": "/components/schemas/User"
-      - "status":
-          "status":
-            "status": 404
+      - "status": "404"
         "bodies":
           - "contentType": "application/json"
             "schema":
@@ -368,18 +364,14 @@
           "spec": "api-a.yaml"
           "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
     "responses":
-      - "status":
-          "status":
-            "status": 201
+      - "status": "201"
         "bodies":
           - "contentType": "application/json"
             "schema":
               "name": "Order"
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Order"
-      - "status":
-          "status":
-            "status": 400
+      - "status": "400"
         "bodies":
           - "contentType": "application/json"
             "schema":
@@ -397,6 +389,4 @@
           "spec": "api-a.yaml"
           "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
     "responses":
-      - "status":
-          "status":
-            "status": 200
+      - "status": "200"

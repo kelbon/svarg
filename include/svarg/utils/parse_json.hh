@@ -238,27 +238,6 @@ struct parse<T> {
   }
 };
 
-template <typename... Types>
-struct parse<std::variant<Types...>> {
-  void operator()(const boost::json::value& v, std::variant<Types...>& out) {
-    if (!v.is_object())
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
-    const boost::json::object& obj = v.as_object();
-    if (obj.size() != 1)
-      throw parse_error(" expected exactly one key, but `{}` keys present", obj.size());
-    std::string_view discriminator = obj.begin()->key();
-    auto tryone = [&]<typename T>(std::type_identity<T>) {
-      static_assert(std::ranges::count(std::array{discriminator_v<Types>...}, discriminator_v<T>) == 1);
-      if (discriminator == discriminator_v<T>) {
-        out.template emplace<T>(from_json<T>(obj.begin()->value()));
-        return true;
-      }
-      return false;
-    };
-    (tryone(std::type_identity<Types>{}) || ...);
-  }
-};
-
 template <typename E>
   requires(std::is_enum_v<E>)
 struct parse<E> {

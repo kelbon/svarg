@@ -25,11 +25,11 @@ struct serialize<E> {
 };
 
 template <typename T>
-boost::json::value to_json(const T& x) {
+[[nodiscard]] boost::json::value to_json(const T& x) {
   return serialize<T>{}(x);
 }
 
-inline std::string to_json_string(const boost::json::value& v, bool pretty = true) {
+[[nodiscard]] inline std::string to_json_string(const boost::json::value& v, bool pretty = true) {
   if (pretty) {
     std::stringstream ss;
     pretty_print(ss, v);
@@ -37,11 +37,11 @@ inline std::string to_json_string(const boost::json::value& v, bool pretty = tru
   }
   return boost::json::serialize(v);
 }
-inline std::string to_yaml_string(const boost::json::value& v) {
+[[nodiscard]] inline std::string to_yaml_string(const boost::json::value& v) {
   return json2yaml(to_json_string(v, /*pretty=*/false));
 }
 
-std::string to_json_string(const auto& x, bool pretty = true) {
+[[nodiscard]] std::string to_json_string(const auto& x, bool pretty = true) {
   if (pretty) {
     std::stringstream ss;
     pretty_print(ss, to_json(x));
@@ -50,7 +50,7 @@ std::string to_json_string(const auto& x, bool pretty = true) {
   return boost::json::serialize(to_json(x));
 }
 
-std::string to_yaml_string(const auto& x) {
+[[nodiscard]] std::string to_yaml_string(const auto& x) {
   return json2yaml(to_json_string(x, /*pretty=*/false));
 }
 
@@ -143,19 +143,6 @@ struct serialize<one_or_array<T>> {
     if (v.values.size() == 1)
       return to_json(v.values[0]);
     return to_json(v.values);
-  }
-};
-
-template <typename... Types>
-struct serialize<std::variant<Types...>> {
-  boost::json::value operator()(std::variant<Types...> const& v) {
-    return std::visit(
-        []<typename V>(V&& v) {
-          boost::json::object r;
-          r[discriminator_v<V>] = to_json(v);
-          return r;
-        },
-        v);
   }
 };
 

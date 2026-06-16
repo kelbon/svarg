@@ -288,14 +288,14 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   };
   // ── boolean schema ──────────────────────────────────────────────────────────
   if (schema.allow_always()) {
-    res.data = ir::any_schema{};
+    res.type.data = ir::any_schema{};
     return ret_res();
   }
   if (schema.allow_never()) {
-    res.data = ir::never_schema{};
+    res.type.data = ir::never_schema{};
     return ret_res();
   }
-  res.data = ir::any_schema{};  // позже заменится (или нет)
+  res.type.data = ir::any_schema{};  // позже заменится (или нет)
 
   // если нужно anyOf/... парсить как требования, а не как представление типа
   bool as_requirements = schema.enum_ || schema.type;
@@ -313,7 +313,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       // из этой схемы
       es.type = res.ref();
     }
-    res.data = std::move(es);
+    res.type.data = std::move(es);
   } else if (schema.type) {
     array<string> rtypes = schema.type->values;
 
@@ -325,18 +325,18 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       const auto& t = rtypes[0];
 
       if (t == "object") {
-        res.data = make_object_type(schema, file, jp);
+        res.type.data = make_object_type(schema, file, jp);
       } else if (t == "array") {
         ir::array_schema at;
         if (!schema.items)
           throw parse_error("schema with type 'array' must contain 'items'");
         at.element = resolve_schema(*schema.items, file, jp / "items", *this).ir_schema;
-        res.data = std::move(at);
+        res.type.data = std::move(at);
       } else {
         // Всё остальное — фундаментальный тип
         ir::fundamental_e fe;
         efromstr(t, fe);
-        res.data = fe;
+        res.type.data = fe;
       }
     } else {
       // Несколько схем → anyOf из фундаментальных schema_ref-ов
@@ -351,7 +351,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
         }
         anyof.schemas.push_back(make_fundamental_ref(fe));
       }
-      res.data = std::move(anyof);
+      res.type.data = std::move(anyof);
     }
   }
 
@@ -361,18 +361,18 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     // если указано более одного, непонятно что отвечает за представление, а что за требование
     // поэтому тип any, но написанные схемы используются для валидации
     if (as_requirements)
-      res.data = ir::any_schema{};
+      res.type.data = ir::any_schema{};
   }
 
   auto collect_result = [&](std::string_view fieldname, auto schema) {
     if (!as_requirements) {
-      res.data = std::move(schema);
+      res.type.data = std::move(schema);
     } else {
       ir::schema s;
       // создаём что-то типа file#abc/anyOf
       s.jsonptr = res.jsonptr / fieldname;
       s.name = std::nullopt;
-      s.data = std::move(schema);
+      s.type.data = std::move(schema);
       ir::schema_ref r = s.ref();
       ir.schemas->insert(std::move(s));
       res.add_requirement(std::move(r));
