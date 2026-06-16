@@ -12,7 +12,7 @@ unset(BOOST_INCLUDE_LIBRARIES)
 CPMAddPackage(
   NAME STRSWITCH
   GITHUB_REPOSITORY kelbon/strswitch
-  GIT_TAG v1.1.0
+  GIT_TAG v1.1.1
 )
 
 CPMAddPackage(

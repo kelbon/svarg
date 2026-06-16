@@ -20,15 +20,15 @@ std::string_view e2str(parameter_location l) noexcept {
 
 void efromstr(std::string_view s, parameter_location& out) {
   using enum parameter_location;
-  auto loc = ss::string_switch<parameter_location>(s)
-                 .case_("query", query)
-                 .case_("header", header)
-                 .case_("path", path)
-                 .case_("cookie", cookie)
-                 .or_default(parameter_location(-1));
-  if (loc == parameter_location(-1))
+  std::optional loc = ss::string_switch<parameter_location>(s)
+                          .case_("query", query)
+                          .case_("header", header)
+                          .case_("path", path)
+                          .case_("cookie", cookie)
+                          .or_nullopt();
+  if (!loc)
     throw parse_error("unknown parameter location `{}`", s);
-  out = loc;
+  out = *loc;
 }
 
 }  // namespace svarg

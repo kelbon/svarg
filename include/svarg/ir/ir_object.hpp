@@ -28,18 +28,18 @@ enum struct fundamental_e {
 
 inline void efromstr(std::string_view s, fundamental_e& out) {
   using enum fundamental_e;
-  auto loc = ss::string_switch<fundamental_e>(s)
-                 .case_("null", null)
-                 .case_("boolean", boolean)
-                 .case_("integer", integer)
-                 .case_("number", number)
-                 .case_("string", string)
-                 .case_("any", any)
-                 .case_("never", never)
-                 .or_default(fundamental_e(-1));
-  if (loc == fundamental_e(-1))
+  std::optional loc = ss::string_switch<fundamental_e>(s)
+                          .case_("null", null)
+                          .case_("boolean", boolean)
+                          .case_("integer", integer)
+                          .case_("number", number)
+                          .case_("string", string)
+                          .case_("any", any)
+                          .case_("never", never)
+                          .or_nullopt();
+  if (!loc)
     throw parse_error("unknown fundamental type `{}`", s);
-  out = loc;
+  out = *loc;
 }
 
 inline std::string_view e2str(fundamental_e e) noexcept {
@@ -380,16 +380,16 @@ inline constexpr std::string_view e2str(status_range_e e) {
 
 inline constexpr void efromstr(std::string_view str, status_range_e& out) {
   using enum status_range_e;
-  auto loc = ss::string_switch<status_range_e>(str)
-                 .case_("1XX", _1XX)
-                 .case_("2XX", _2XX)
-                 .case_("3XX", _3XX)
-                 .case_("4XX", _4XX)
-                 .case_("5XX", _5XX)
-                 .or_default(status_range_e(-1));
-  if (loc == status_range_e(-1))
+  std::optional e = ss::string_switch<status_range_e>(str)
+                        .case_("1XX", _1XX)
+                        .case_("2XX", _2XX)
+                        .case_("3XX", _3XX)
+                        .case_("4XX", _4XX)
+                        .case_("5XX", _5XX)
+                        .or_nullopt();
+  if (!e)
     throw parse_error("invalid status range type `{}`", str);
-  out = loc;
+  out = *e;
 }
 
 struct default_response_t {
@@ -414,15 +414,15 @@ struct response_status {
       return result;
     }
     using enum status_range_e;
-    auto loc = ss::string_switch<status_range_e>(str)
-                   .case_("1XX", _1XX)
-                   .case_("2XX", _2XX)
-                   .case_("3XX", _3XX)
-                   .case_("4XX", _4XX)
-                   .case_("5XX", _5XX)
-                   .or_default(status_range_e(-1));
-    if (loc != status_range_e(-1)) {
-      result.status.emplace<status_range_e>(loc);
+    std::optional sr = ss::string_switch<status_range_e>(str)
+                           .case_("1XX", _1XX)
+                           .case_("2XX", _2XX)
+                           .case_("3XX", _3XX)
+                           .case_("4XX", _4XX)
+                           .case_("5XX", _5XX)
+                           .or_nullopt();
+    if (sr) {
+      result.status.emplace<status_range_e>(*sr);
       return result;
     }
     if (!try_from_chars(str, result.status.emplace<int64_t>()))
