@@ -117,8 +117,7 @@
     "type":
       "enum":
         "type":
-          "spec": "api-b.yaml"
-          "jsonptr": "/components/schemas/Money/properties/currency"
+          "spec": "@string@"
         "values":
           - "USD"
           - "EUR"

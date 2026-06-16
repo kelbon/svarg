@@ -261,6 +261,16 @@ template <typename... Args>
   return (size_t(bool(args)) + ...);
 }
 
+static ir::fundamental_e detect_enum_type(const array<Any>& values) noexcept {
+  if (values.empty())
+    return ir::fundamental_e::never;  // енам без значений
+  if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_string(); }))
+    return ir::fundamental_e::string;
+  else if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_number(); }))
+    return ir::fundamental_e::number;
+  else
+    return ir::fundamental_e::any;
+}
 /*
 - добавляет встреченные схемы в `schemas`. Как минимум один из schema + инлайн схемы
 - file - путь до текущего файла (относительно директории со спеками)
@@ -324,9 +334,18 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       throw semantic_error("enum at `{}` must have at least one value", jp.view());
     ir::enum_schema es{.values = *schema.enum_};
     if (schema.type) {
-      // как будто ссылка на самого себя, на самом деле ссылаемся на тип репрезентации
-      // из этой схемы
-      es.type = res.ref();
+      auto& types = schema.type->values;
+      if (types.size() > 1 || (types.front() == "object" || types.front() == "array")) {
+        // ссылаемся на тип определяемой прямо сейчас схемы
+        es.type = res.ref();
+      } else {
+        ir::fundamental_e e;
+        // types никогда не пустое
+        efromstr(types.front(), e);
+        es.type = ir::make_fundamental_ref(e);
+      }
+    } else {
+      es.type = ir::make_fundamental_ref(detect_enum_type(es.values));
     }
     res.type.data = std::move(es);
   } else if (schema.type) {

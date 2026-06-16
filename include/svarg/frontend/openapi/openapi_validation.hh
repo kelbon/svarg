@@ -314,6 +314,9 @@ struct postparse<schema_object> {
         schema.nullable = true;
         schema.type->values.erase(it);
       }
+      // чтобы не получался пустой массив типов
+      if (schema.type->empty())
+        schema.type.reset();
     } else if (schema.properties || schema.required || schema.additionalProperties) {
       // TODO dependentRequired / minProperties / maxProperties это тоже неявный объект
       schema.type.emplace().values.push_back("object");

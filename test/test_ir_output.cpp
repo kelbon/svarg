@@ -104,6 +104,9 @@ TEST("json pointers are correct") {
 }
 
 TEST("json repr") {
+  // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-a.yaml"}));
+  // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-b.yaml"}));
+  // return;
   ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"});
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);

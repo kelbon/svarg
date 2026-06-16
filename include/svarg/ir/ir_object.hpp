@@ -68,8 +68,9 @@ struct schema_ref {
   // generic путь до спеки
   string spec;
   // путь в спеке (не обязательно он существует, в случае $ref + перекрытое поле может сгенерироваться)
-  json_pointer jsonptr;
-  // TODO тест с refers_to фундаментальные типы и тд
+  // не указано, если ссылка на фундаментальный тип
+  std::optional<json_pointer> jsonptr;
+
   [[nodiscard]] bool refers_to(const schema&) const noexcept;
 
   bool operator==(const schema_ref& r) const noexcept {
@@ -80,8 +81,12 @@ struct schema_ref {
   }
 };
 
-[[nodiscard]] inline size_t hash_schema(std::string_view spec, const json_pointer& jp) {
-  return hash_combined(spec, jp.escaped());
+[[nodiscard]] inline size_t hash_schema(std::string_view spec, const json_pointer* jp) {
+  combined_hash h;
+  h.add(spec);
+  if (jp)
+    h.add(jp->escaped());
+  return h;
 }
 
 // precondition: e != array && s != object
@@ -346,7 +351,7 @@ struct hash<::svarg::ir::body> {
 template <>
 struct hash<::svarg::ir::schema_ref> {
   size_t operator()(const ::svarg::ir::schema_ref& r) const noexcept {
-    return ::svarg::ir::hash_schema(r.spec, r.jsonptr);
+    return ::svarg::ir::hash_schema(r.spec, r.jsonptr ? &*r.jsonptr : nullptr);
   }
 };
 
@@ -518,7 +523,7 @@ namespace std {
 template <>
 struct hash<::svarg::ir::schema> {
   size_t operator()(const ::svarg::ir::schema& t) const {
-    return ::svarg::ir::hash_schema(t.spec, t.jsonptr);
+    return ::svarg::ir::hash_schema(t.spec, &t.jsonptr);
   }
 };
 

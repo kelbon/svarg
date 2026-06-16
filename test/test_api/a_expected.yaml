@@ -4,8 +4,7 @@
     "type":
       "enum":
         "type":
-          "spec": "api-a.yaml"
-          "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
+          "spec": "@string@"
         "values":
           - "profile"
           - "settings"
@@ -52,8 +51,7 @@
     "type":
       "enum":
         "type":
-          "spec": "api-a.yaml"
-          "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
+          "spec": "@string@"
         "values":
           - "order.created"
   - "spec": "api-a.yaml"
@@ -115,8 +113,7 @@
     "type":
       "enum":
         "type":
-          "spec": "api-b.yaml"
-          "jsonptr": "/components/schemas/Money/properties/currency"
+          "spec": "@string@"
         "values":
           - "USD"
           - "EUR"
@@ -297,8 +294,7 @@
     "type":
       "enum":
         "type":
-          "spec": "api-a.yaml"
-          "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
+          "spec": "@string@"
         "values":
           - "pending"
           - "shipped"
