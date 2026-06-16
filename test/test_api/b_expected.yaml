@@ -20,22 +20,18 @@
     "type":
       "fundamental": "integer"
   - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1items~1{itemId}/get/responses/200/content/application~1json/schema"
-    "type":
-      "fundamental": "any"
-  - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Item/properties/tags"
     "type":
       "array":
         "element":
           "spec": "api-b.yaml"
           "jsonptr": "/components/schemas/Item/properties/tags/items"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
-    "type":
-      "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/name"
+    "type":
+      "fundamental": "string"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
     "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
@@ -176,7 +172,7 @@
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/favoriteItem"
     "type":
-      "fundamental": "any"
+      "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/status"
     "type":
@@ -282,8 +278,7 @@
         "bodies":
           - "contentType": "application/json"
             "schema":
-              "spec": "api-b.yaml"
-              "jsonptr": "/paths/~1items~1{itemId}/get/responses/200/content/application~1json/schema"
+              "spec": "@any@"
     "defaultResponse":
       "status": "default"
       "bodies":

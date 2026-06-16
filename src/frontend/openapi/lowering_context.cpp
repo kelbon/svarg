@@ -266,11 +266,48 @@ static ir::fundamental_e detect_enum_type(const array<Any>& values) noexcept {
     return ir::fundamental_e::never;  // енам без значений
   if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_string(); }))
     return ir::fundamental_e::string;
+  else if (std::ranges::all_of(values,
+                               [](const Any& v) { return v.value.is_int64() || v.value.is_uint64(); }))
+    return ir::fundamental_e::integer;
   else if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_number(); }))
     return ir::fundamental_e::number;
   else
     return ir::fundamental_e::any;
 }
+
+[[nodiscard]] static std::optional<ir::schema_ref> try_simple(const schema_object& schema) {
+  assert(!schema.allow_always() && !schema.allow_never());
+  if (schema.enum_ || schema.const_ || schema.oneOf || schema.anyOf || schema.allOf || schema.not_)
+    return std::nullopt;
+  if (schema.if_ || schema.then || schema.else_ || schema.dependentSchemas || schema.dependentRequired)
+    return std::nullopt;
+  if (schema.type) {
+    if (schema.type->values.size() != 1)
+      return std::nullopt;
+    std::string_view type = schema.type->values.front();
+    if (type == "object" || type == "array")
+      return std::nullopt;
+
+    if (type == "string") {
+      if (schema.minLength || schema.maxLength || schema.pattern || schema.format)
+        return std::nullopt;
+    } else if (type == "integer" || type == "number") {
+      if (schema.multipleOf || schema.maximum || schema.exclusiveMaximum || schema.minimum ||
+          schema.exclusiveMinimum || schema.format)
+        return std::nullopt;
+    }
+    if (schema.nullable && *schema.nullable)
+      return std::nullopt;
+    ir::fundamental_e e;
+    efromstr(type, e);
+    return ir::make_fundamental_ref(e);
+  }
+  if (schema.nullable && *schema.nullable)
+    return std::nullopt;
+  // пустая схема типа type: {}
+  return ir::make_fundamental_ref(ir::fundamental_e::any);
+}
+
 /*
 - добавляет встреченные схемы в `schemas`. Как минимум один из schema + инлайн схемы
 - file - путь до текущего файла (относительно директории со спеками)
@@ -289,11 +326,12 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   ir::schema res;
   res.spec = file.lexically_normal().generic_string();
   res.jsonptr = jp;
-  auto ret_res = [&] {
+  auto ret_schema = [&] {
     assert(parsable_as<schema_object>(jp.access(load_as_json(res.spec))) && "invalidly generated scheme");
     ir.schemas->insert(res);
     return schema_or_ref(std::move(res));
   };
+
   if (name)
     res.name = *name;
   else
@@ -313,12 +351,15 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   // ── boolean schema ──────────────────────────────────────────────────────────
   if (schema.allow_always()) {
     res.type.data = ir::fundamental_e::any;
-    return ret_res();
+    return ret_schema();
   }
   if (schema.allow_never()) {
     res.type.data = ir::fundamental_e::never;
-    return ret_res();
+    return ret_schema();
   }
+  // упрощение всяких type: string до фундаментальной ссылки
+  if (std::optional ref = try_simple(schema))
+    return schema_or_ref(std::move(*ref));
   res.type.data = ir::fundamental_e::any;  // позже заменится (или нет)
 
   // если нужно anyOf/... парсить как требования, а не как представление типа
@@ -442,7 +483,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     t.type = resolve_schema(*schema.not_, file, jp / "not", *this).ir_schema;
     collect_result("not", std::move(t));
   }
-  return ret_res();
+  return ret_schema();
 }
 
 // ожидает что file относительно spec dir

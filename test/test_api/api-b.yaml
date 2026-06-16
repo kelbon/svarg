@@ -14,6 +14,7 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
       responses:
         '200':
           description: OK
@@ -35,6 +36,7 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
       responses:
         '200':
           description: OK
@@ -42,6 +44,7 @@ paths:
             application/json:
               schema:
                 type: string
+                minLength: 1
 
 components:
   schemas:
@@ -51,20 +54,24 @@ components:
       properties:
         id:
           type: string
+          minLength: 1
         title:
           type: string
+          minLength: 1
         price:
           $ref: '#/components/schemas/Money'
         tags:
           type: array
           items:
             type: string
+            minLength: 1
 
     Money:
       type: object
       properties:
         amount:
           type: number
+          minimum: 0
         currency:
           type: string
           enum: [USD, EUR, RUB]
@@ -74,8 +81,10 @@ components:
       properties:
         id:
           type: string
+          minLength: 1
         status:
           type: string
+          minLength: 1
         item:
           $ref: '#/components/schemas/Item'
           readOnly: true
@@ -87,8 +96,10 @@ components:
       properties:
         code:
           type: integer
+          minimum: 0
         message:
           type: string
+          minLength: 1
       patternProperties:
         "^x-":
           type: string

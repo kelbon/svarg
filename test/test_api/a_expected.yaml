@@ -31,19 +31,7 @@
     "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/title"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/UserPatch/additionalProperties"
-    "type":
-      "fundamental": "any"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/id"
+    "jsonptr": "/components/schemas/User/properties/name"
     "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
@@ -54,6 +42,10 @@
           "spec": "@string@"
         "values":
           - "order.created"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/schemas/User/properties/id"
+    "type":
+      "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/UserPatch"
     "name": "UserPatch"
@@ -66,14 +58,9 @@
             "name": "name"
             "required": false
         "additional_fields":
-          "spec": "api-a.yaml"
-          "jsonptr": "/components/schemas/UserPatch/additionalProperties"
+          "spec": "@any@"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/favoriteItem"
-    "type":
-      "fundamental": "any"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/name"
     "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
@@ -83,7 +70,10 @@
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
     "type":
-      "fundamental": "string"
+      "anyOf":
+        "schemas":
+          - "spec": "@integer@"
+          - "spec": "@string@"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/status"
     "type":
@@ -102,6 +92,14 @@
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1users~1{userId}/parameters/0/schema"
+    "type":
+      "fundamental": "string"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/title"
+    "type":
+      "fundamental": "string"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId"
     "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"

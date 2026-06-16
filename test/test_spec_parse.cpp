@@ -18,7 +18,7 @@ TEST("generate ir from openapi") {
       std::filesystem::current_path(),
       {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"});
 
-  REQUIRE(o.schemas && o.schemas->size() == 1915);
+  REQUIRE(o.schemas && o.schemas->size() == 1446);
   REQUIRE(o.operations && o.operations->size() == 6);
   REQUIRE(o.webhooks && o.webhooks->size() == 1);
 }

@@ -15,6 +15,7 @@ paths:
         schema:
           type: string
           format: uuid
+          minLength: 1
     get:
       operationId: getUser
       parameters:
@@ -24,6 +25,7 @@ paths:
             type: array
             items:
               type: string
+              minLength: 1
               enum: [profile, settings]
       requestBody:
         content:
@@ -37,6 +39,7 @@ paths:
             X-Rate-Limit:
               schema:
                 type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -70,7 +73,7 @@ paths:
                 content:
                   application/json:
                     schema:
-                      type: string
+                      type: [string, integer]
               responses:
                 '200':
                   description: Callback received
@@ -86,6 +89,7 @@ webhooks:
               properties:
                 orderId:
                   type: string
+                  minLength: 1
                 event:
                   type: string
                   const: order.created
@@ -102,12 +106,14 @@ components:
         id:
           type: string
           format: uuid
+          minLength: 1
         name:
           type: string
+          minLength: 1
         address:
           $ref: '#/components/schemas/Address'
         favoriteItem:
-          type: null
+          type: ["null", string]
 
     Address:
       $ref: 'api-b.yaml#/components/schemas/Order'
@@ -117,6 +123,7 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
       additionalProperties: false
 
     OrderStatusEvent:
@@ -133,6 +140,7 @@ components:
         application/json:
           schema:
             type: number
+            minimum: 0
 
   requestBodies:
     OrderCreate:
@@ -144,6 +152,7 @@ components:
             properties:
               itemId:
                 type: string
+                minLength: 1
               quantity:
                 type: integer
                 minimum: 1
@@ -158,12 +167,14 @@ components:
       schema:
         type: integer
         default: 20
+        minimum: 0
 
   headers:
     X-Request-Id:
       schema:
         type: string
         format: uuid
+        minLength: 1
 
   examples:
     UserExample:

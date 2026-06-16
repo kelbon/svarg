@@ -7,6 +7,9 @@
 
 #include "svarg/ir/ir_object.hpp"
 
+// для некоторых схем не генерируется, так как они простые и это ожидаемо
+// (тривиальные схемы превращаются сразу в фундаментальную ссылку)
+
 std::unordered_set<std::string> a_jsonptrs{
     "/components/schemas/User",
     "/components/schemas/UserPatch",
@@ -19,7 +22,6 @@ std::unordered_set<std::string> a_jsonptrs{
     "/components/requestBodies/OrderCreate/content/application~1json/schema",
     "/components/schemas/User/properties/favoriteItem",
     "/components/schemas/UserPatch/properties/name",
-    "/components/schemas/UserPatch/additionalProperties",
     "/components/schemas/User/properties/id",
     "/components/schemas/User/properties/name",
     "/components/schemas/OrderStatusEvent/properties/status",
@@ -40,7 +42,6 @@ std::unordered_set<std::string> b_jsonptrs{
     "/components/schemas/Money",
     "/components/schemas/Order",
     "/components/schemas/Error",
-    "/paths/~1items~1{itemId}/get/responses/200/content/application~1json/schema",
     "/paths/~1items~1{itemId}/get/responses/default/content/application~1json/schema",
     "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema",
     "/components/schemas/Item/properties/tags/items",
