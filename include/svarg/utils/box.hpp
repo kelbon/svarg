@@ -153,6 +153,13 @@ struct SVARG_TRIVIAL_ABI box {
     return ptr;
   }
 
+  template <typename Me>
+  constexpr decltype(auto) value(this Me&& x) {
+    if (!x)
+      throw std::bad_optional_access();
+    return *std::forward<Me>(x);
+  }
+
   constexpr T& operator*() & noexcept {
     assert(ptr);
     return *ptr;

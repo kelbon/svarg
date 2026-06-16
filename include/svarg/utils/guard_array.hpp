@@ -10,11 +10,10 @@ namespace svarg {
 // массивом, но оно пустое
 template <typename Optional>
 [[nodiscard]] auto guard_array(Optional& o) {
-  assert(!o);
-
-  o.emplace();
+  if (!o)
+    o.emplace();
   return zal::scope_exit{[&o] {
-    if (o->empty())
+    if (o && o->empty())
       o.reset();
   }};
 }

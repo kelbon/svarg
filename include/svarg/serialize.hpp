@@ -29,6 +29,14 @@ boost::json::value to_json(const T& x) {
   return serialize<T>{}(x);
 }
 
+inline std::string to_json_string(const boost::json::value& v, bool pretty = true) {
+  if (pretty) {
+    std::stringstream ss;
+    pretty_print(ss, v);
+    return std::move(ss).str();
+  }
+  return boost::json::serialize(v);
+}
 std::string to_json_string(const auto& x, bool pretty = true) {
   if (pretty) {
     std::stringstream ss;

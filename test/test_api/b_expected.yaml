@@ -1,27 +1,16 @@
 "schemas":
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Item/properties/tags/items"
+    "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema"
     "data":
       "fundamental": "string"
   - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema"
+    "jsonptr": "/components/schemas/Item/properties/tags/items"
     "data":
       "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema"
     "data":
       "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Item/properties/tags"
-    "data":
-      "array":
-        "element":
-          "spec": "api-b.yaml"
-          "jsonptr": "/components/schemas/Item/properties/tags/items"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1items~1{itemId}/get/responses/200/content/application~1json/schema"
-    "data":
-      "any": {}
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
     "data":
@@ -30,14 +19,29 @@
     "jsonptr": "/components/parameters/LimitParam/schema"
     "data":
       "fundamental": "integer"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/paths/~1items~1{itemId}/get/responses/200/content/application~1json/schema"
+    "data":
+      "any": {}
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Item/properties/tags"
+    "data":
+      "array":
+        "element":
+          "spec": "api-b.yaml"
+          "jsonptr": "/components/schemas/Item/properties/tags/items"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
+    "data":
+      "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/name"
     "data":
       "fundamental": "string"
   - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
+    "jsonptr": "/paths/~1items~1{itemId}/get/responses/default/content/application~1json/schema"
     "data":
-      "fundamental": "string"
+      "any": {}
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User"
     "name": "User"
@@ -66,13 +70,9 @@
             "name": "address"
             "required": false
   - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1items~1{itemId}/get/responses/default/content/application~1json/schema"
+    "jsonptr": "/components/schemas/Item/properties/id"
     "data":
-      "any": {}
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error/properties/code"
-    "data":
-      "fundamental": "integer"
+      "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
@@ -101,9 +101,9 @@
             "name": "item"
             "required": false
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Item/properties/id"
+    "jsonptr": "/components/schemas/Error/properties/code"
     "data":
-      "fundamental": "string"
+      "fundamental": "integer"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Item/properties/title"
     "data":
@@ -140,10 +140,6 @@
             "name": "currency"
             "required": false
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/id"
-    "data":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Item"
     "name": "Item"
     "data":
@@ -170,6 +166,10 @@
               "jsonptr": "/components/schemas/Money"
             "name": "price"
             "required": true
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/id"
+    "data":
+      "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/id"
     "data":
@@ -292,4 +292,4 @@
           "schema":
             "spec": "api-b.yaml"
             "jsonptr": "/paths/~1items~1{itemId}/get/responses/default/content/application~1json/schema"
-"webhooks": []
+

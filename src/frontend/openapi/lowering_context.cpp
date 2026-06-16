@@ -10,6 +10,20 @@
 
 namespace svarg {
 
+#ifndef NDEBUG
+template <typename T>
+static bool parsable_as(const boost::json::value* j) {
+  if (!j)
+    return false;
+  try {
+    from_json<T>(*j);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+#endif
+
 static std::optional<std::string> try_get_name(const json_pointer& jp) {
   // ссылаться разрешено только на то что находится в schemas,
   // т.е. что-то типа /components/schemas/User => User
@@ -252,17 +266,15 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   res.spec = file.lexically_normal().generic_string();
   res.jsonptr = jp;
   auto ret_res = [&] {
-    // TODO такие проверки добавить и для операций и тд + нужно ещё проверять что оно парсится как схема
-    // TODO serialize/parse и для json pointer надо (escape/unescape)
-    assert(jp.access(load_as_json(res.spec)) && "invalidly generated scheme");
-    ir.schemas.insert(res);
+    assert(parsable_as<schema_object>(jp.access(load_as_json(res.spec))) && "invalidly generated scheme");
+    ir.schemas->insert(res);
     return schema_or_ref(std::move(res));
   };
   if (name)
     res.name = *name;
   else
     res.name = std::nullopt;
-  if (auto it = ir.schemas.find(res); it != ir.schemas.end())
+  if (auto it = ir.schemas->find(res); it != ir.schemas->end())
     return schema_or_ref{*it};
   // избегаем хранения jsonptr.view() (без escape возможно что совпадут пути "/" + "name" и "/name" одним
   // ключом)
@@ -362,7 +374,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       s.name = std::nullopt;
       s.data = std::move(schema);
       ir::schema_ref r = s.ref();
-      ir.schemas.insert(std::move(s));
+      ir.schemas->insert(std::move(s));
       res.add_requirement(std::move(r));
     }
   };
@@ -728,6 +740,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
                                                                       fs::path resolve_ref_file,
                                                                       json_pointer jp, std::string_view name,
                                                                       path_item_object item) {
+  assert(parsable_as<path_item_object>(jp.access(load_as_json(spec))) && "no such path item");
   string_map<ir::operation> result;
 
   for (auto [methodstr, o] : item.all_operations_with_method()) {
@@ -782,49 +795,51 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
 }
 
 ir::ir_object lowering_context::visit_and_generate_ir(const openapi_object& api, const fs::path& obj_file) {
-  ir::ir_object result;
+  auto& result = this->ir;
+  {
+    auto _1 = guard_array(result.schemas);
+    auto _2 = guard_array(result.operations);
+    auto _3 = guard_array(result.webhooks);
 
-  // собираем все схемы, в том числе из калбеков, вебхуков и paths
-  schemas_collector collector(obj_file, result.schemas, *this);
-  // TODO postparse надо на чето заменить видимо, чтобы парс + сериализация не меняли
-  // TODO в моём языке разрешить ссылки на фундаментальные типы: например #string, #number и тд
-  // чтобы например легко писать oneOf: - #string -#number
-  for_each_field_with_name(api, refvtor(collector));
+    // собираем все схемы, в том числе из калбеков, вебхуков и paths
+    schemas_collector collector(obj_file, *result.schemas, *this);
+    for_each_field_with_name(api, refvtor(collector));
 
-  visit_all_callbacks(
-      api, obj_file, *this,
-      [&](std::string_view name, const reference_or<callback_object>& cb, fs::path cbpath_, json_pointer jp) {
-        auto [rcb, cbpath, cbjp] = resolve_ref_and_ret(cb, cbpath_, jp, *this);
-        // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
-        for (auto&& [expr, pathItem] : rcb) {
-          // используем cbpath, т.к. ссылки могут указывать туда если он загружен оттуда
-          auto [rpi, rpipath, rpijp] = resolve_ref_and_ret(pathItem, cbpath, cbjp / expr, *this);
-          // используется путь откуда операция взялась, но она всё ещё декларирована в
-          // obj_file и является операцией этого апи
-          auto ops = path_item_object_lowering(
-              /*path=*/"", obj_file, rpipath, std::move(rpijp), name, std::move(rpi));
-          for (auto& [method, op] : ops)
-            result.webhooks.insert(std::move(op));
-        }
-      });
+    visit_all_callbacks(api, obj_file, *this,
+                        [&](std::string_view name, const reference_or<callback_object>& cb, fs::path cbpath_,
+                            json_pointer jp) {
+                          assert(parsable_as<callback_object>(jp.access(load_as_json(cbpath_))));
+                          auto [rcb, cbpath, cbjp] = resolve_ref_and_ret(cb, cbpath_, jp, *this);
+                          // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
+                          for (auto&& [expr, pathItem] : rcb) {
+                            // используем cbpath, т.к. ссылки могут указывать туда если он загружен оттуда
+                            auto [rpi, rpipath, rpijp] =
+                                resolve_ref_and_ret(pathItem, cbpath, cbjp / expr, *this);
+                            // используется путь откуда операция взялась, но она всё ещё декларирована в
+                            // obj_file и является операцией этого апи
+                            auto ops = path_item_object_lowering(
+                                /*path=*/"", obj_file, rpipath, std::move(rpijp), name, std::move(rpi));
+                            for (auto& [method, op] : ops)
+                              result.webhooks->insert(std::move(op));
+                          }
+                        });
 
-  if (api.paths) {
-    // если были pathItems и на них ссылались и в paths и в webhooks, то они продублируются на уровне IR
-    // но это нормально
-    for (auto& [path, item] : *api.paths) {
-      auto [ritem, file, item_jp] = resolve_ref_and_ret(item, obj_file, "/paths"_jp / path, *this);
-      string_map<std::string> name2path;
-      string_map<std::string> path2name;
-      std::string generatedname = path_to_name(path, name2path, path2name);
-      auto ops = path_item_object_lowering(path, obj_file, file, std::move(item_jp), generatedname,
-                                           std::move(ritem));
-      for (auto& [method, op] : ops)
-        result.operations.insert(op);
+    if (api.paths) {
+      // если были pathItems и на них ссылались и в paths и в webhooks, то они продублируются на уровне IR
+      // но это нормально
+      for (auto& [path, item] : *api.paths) {
+        auto [ritem, file, item_jp] = resolve_ref_and_ret(item, obj_file, "/paths"_jp / path, *this);
+        string_map<std::string> name2path;
+        string_map<std::string> path2name;
+        std::string generatedname = path_to_name(path, name2path, path2name);
+        auto ops = path_item_object_lowering(path, obj_file, file, std::move(item_jp), generatedname,
+                                             std::move(ritem));
+        for (auto& [method, op] : ops)
+          result.operations->insert(op);
+      }
     }
   }
-  return result;
+  return std::move(result);
 }
 
 }  // namespace svarg
-
-// TODO перенести файлы в openapi_frontend

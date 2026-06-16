@@ -17,13 +17,10 @@ TEST("generate ir from openapi") {
   svarg::ir::ir_object o = svarg::openapi2ir(
       std::filesystem::current_path(),
       {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"});
-  for (auto&& x : o.schemas) {
-    if (x.spec == "test_specs/TS29571_CommonData.yaml")
-      std::cout << x.jsonptr.view() << " NAME " << x.name.value_or("<unnamed>") << std::endl;
-  }
-  REQUIRE(o.schemas.size() == 1902);
-  REQUIRE(o.operations.size() == 6);
-  REQUIRE(o.webhooks.size() == 1);
+
+  REQUIRE(o.schemas && o.schemas->size() == 1902);
+  REQUIRE(o.operations && o.operations->size() == 6);
+  REQUIRE(o.webhooks && o.webhooks->size() == 1);
 }
 
 TEST("parse_spec") {

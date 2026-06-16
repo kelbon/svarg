@@ -44,6 +44,10 @@
     "data":
       "any": {}
   - "spec": "api-a.yaml"
+    "jsonptr": "/components/schemas/User/properties/id"
+    "data":
+      "fundamental": "string"
+  - "spec": "api-a.yaml"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
     "data":
       "enum":
@@ -52,10 +56,6 @@
           "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
         "values":
           - "order.created"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/id"
-    "data":
-      "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/UserPatch"
     "name": "UserPatch"
@@ -78,16 +78,20 @@
     "jsonptr": "/components/schemas/User/properties/name"
     "data":
       "fundamental": "string"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/id"
+    "data":
+      "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
     "data":
       "fundamental": "string"
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/id"
+    "jsonptr": "/components/schemas/Order/properties/status"
     "data":
       "fundamental": "string"
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/status"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
     "data":
       "fundamental": "string"
   - "spec": "api-a.yaml"
@@ -95,15 +99,11 @@
     "data":
       "fundamental": "integer"
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/id"
     "data":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1users~1{userId}/parameters/0/schema"
-    "data":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/id"
     "data":
       "fundamental": "string"
   - "spec": "api-b.yaml"
@@ -137,10 +137,6 @@
               "jsonptr": "/components/schemas/Money/properties/currency"
             "name": "currency"
             "required": false
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
-    "data":
-      "fundamental": "integer"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item"
     "data":
@@ -167,8 +163,8 @@
               "jsonptr": "/components/schemas/Money"
             "name": "price"
             "required": true
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error/properties/code"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
     "data":
       "fundamental": "integer"
   - "spec": "api-b.yaml"
@@ -198,6 +194,10 @@
               "jsonptr": "/components/schemas/Order/properties/item"
             "name": "item"
             "required": false
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Error/properties/code"
+    "data":
+      "fundamental": "integer"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User"
     "name": "User"

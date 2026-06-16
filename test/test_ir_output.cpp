@@ -70,7 +70,7 @@ TEST("json pointers are correct") {
   std::unordered_set<std::string> gota;
   std::unordered_set<std::string> gotb;
 
-  for (auto&& s : ir.schemas) {
+  for (auto&& s : ir.schemas.value()) {
     if (s.spec == "api-a.yaml")
       gota.insert(std::string(s.jsonptr.escaped()));
     else if (s.spec == "api-b.yaml")
@@ -103,32 +103,27 @@ TEST("json pointers are correct") {
   REQUIRE(gotb == b_jsonptrs);
 }
 
-template <typename T>
-static std::unordered_set<T> diff(const std::unordered_set<T>& a, const std::unordered_set<T>& b) {
-  std::unordered_set<T> result;
-  for (auto&& x : a) {
-    if (!b.contains(x))
-      result.insert(x);
+static bool json_eq(const boost::json::value& expected, const boost::json::value& actual,
+                    const std::string& path = "") {
+  if (expected != actual) {
+    std::println("EXPECTED: {}\nACTUAL: {}", to_json_string(expected), to_json_string(actual));
+    return false;
   }
-  for (auto&& x : b) {
-    if (!a.contains(x))
-      result.insert(x);
-  }
-  return result;
+  return true;
 }
 
 TEST("json repr") {
   ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"});
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
-    REQUIRE(to_json(ir) == j);
+    REQUIRE(json_eq(to_json(ir), j));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
   ir = openapi2ir("./test_api", {"api-b.yaml"});
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
-    REQUIRE(to_json(ir) == j);
+    REQUIRE(json_eq(to_json(ir), j));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });

@@ -514,11 +514,10 @@ struct hash<::svarg::ir::operation> {
 namespace svarg::ir {
 
 struct ir_object {
-  // TODO всё это optional должно быть
-  std::unordered_set<schema> schemas;
-  std::unordered_set<operation> operations;
+  std::optional<std::unordered_set<schema>> schemas;
+  std::optional<std::unordered_set<operation>> operations;
   // здесь помимо webhooks лежат callbacks (они то же самое, но ещё вычислимый url)
-  std::unordered_set<operation> webhooks;
+  std::optional<std::unordered_set<operation>> webhooks;
   // TODO servers
 
   // объединяет 2 ir в один
