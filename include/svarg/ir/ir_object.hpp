@@ -389,6 +389,7 @@ inline constexpr std::string_view e2str(status_range_e e) {
     case status_range_e::_5XX:
       return "5XX";
   }
+  std::unreachable();
 }
 
 inline constexpr void efromstr(std::string_view str, status_range_e& out) {

@@ -149,7 +149,7 @@ struct serialize<one_or_array<T>> {
 template <typename T>
 struct serialize<std::unordered_set<T>> {
   boost::json::value operator()(const std::unordered_set<T>& r) {
-    array<T> inefficiency(std::from_range, r);
+    array<T> inefficiency(r.begin(), r.end());
     // Не смотря на то что boost::json::value умеет сравниваться, порядок внутри массива всё равно ломает
     // сравнение на разных платформах
     std::ranges::sort(inefficiency);
