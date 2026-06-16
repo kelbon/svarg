@@ -4,15 +4,25 @@
 
 #include <boost/pfr.hpp>
 #include <boost/json.hpp>
+#include <unordered_set>
 
 #include "svarg/common_types.hpp"
 #include "svarg/utils/unescape_field_name.hpp"
 #include "svarg/utils/json_pretty.hpp"
+#include "svarg/utils/jsons_cache.hpp"
 
 namespace svarg {
 
 template <typename T>
 struct serialize {};
+
+template <typename E>
+  requires(std::is_enum_v<E>)
+struct serialize<E> {
+  boost::json::value operator()(E v) {
+    return boost::json::string(e2str(v));
+  }
+};
 
 template <typename T>
 boost::json::value to_json(const T& x) {
@@ -26,6 +36,10 @@ std::string to_json_string(const auto& x, bool pretty = true) {
     return std::move(ss).str();
   }
   return boost::json::serialize(to_json(x));
+}
+
+std::string to_yaml_string(const auto& x) {
+  return json2yaml(to_json_string(x, /*pretty=*/false));
 }
 
 template <>
@@ -67,13 +81,6 @@ template <>
 struct serialize<Any> {
   boost::json::value operator()(Any const& v) {
     return v.value;
-  }
-};
-
-template <>
-struct serialize<parameter_location> {
-  boost::json::value operator()(parameter_location v) {
-    return boost::json::string(e2str(v));
   }
 };
 
@@ -124,6 +131,30 @@ struct serialize<one_or_array<T>> {
     if (v.values.size() == 1)
       return to_json(v.values[0]);
     return to_json(v.values);
+  }
+};
+
+template <typename... Types>
+struct serialize<std::variant<Types...>> {
+  boost::json::value operator()(std::variant<Types...> const& v) {
+    return std::visit(
+        []<typename V>(V&& v) {
+          boost::json::object r;
+          r[discriminator_v<V>] = to_json(v);
+          return r;
+        },
+        v);
+  }
+};
+
+template <typename T>
+struct serialize<std::unordered_set<T>> {
+  boost::json::value operator()(const std::unordered_set<T>& r) {
+    boost::json::array a;
+    a.reserve(r.size());
+    for (const auto& t : r)
+      a.emplace_back(to_json(t));
+    return boost::json::value(std::move(a));
   }
 };
 

@@ -433,7 +433,7 @@ struct refvtor {
 
 // пылесосит объект в поисках всех схем, в том числе в других файлах на которые ссылаются $ref
 struct schemas_collector {
- public:  // TODO private
+ private:
   const fs::path& obj_file;
   lowering_context* ctx;
   std::unordered_set<ir::schema>& schemas;

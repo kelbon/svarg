@@ -3,6 +3,8 @@
 // этот файл - часть common_types.hpp (здесь #include common_types.hpp для подсветки)
 
 #include <boost/pfr.hpp>
+#include <unordered_set>
+
 #include "svarg/common_types.hpp"
 #include "svarg/errors.hpp"
 #include "svarg/utils/type_name.hpp"
@@ -233,6 +235,56 @@ struct parse<T> {
     noexport::parse_all_fields(*obj, out, std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
     postparse<T>{}(out);
     validate<T>{}(std::as_const(out));
+  }
+};
+
+template <typename... Types>
+struct parse<std::variant<Types...>> {
+  void operator()(const boost::json::value& v, std::variant<Types...>& out) {
+    if (!v.is_object())
+      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+    const boost::json::object& obj = v.as_object();
+    if (obj.size() != 1)
+      throw parse_error(" expected exactly one key, but `{}` keys present", obj.size());
+    std::string_view discriminator = obj.begin()->key();
+    auto tryone = [&]<typename T>(std::type_identity<T>) {
+      static_assert(std::ranges::count(std::array{discriminator_v<Types>...}, discriminator_v<T>) == 1);
+      if (discriminator == discriminator_v<T>) {
+        out.template emplace<T>(from_json<T>(obj.begin()->value()));
+        return true;
+      }
+      return false;
+    };
+    (tryone(std::type_identity<Types>{}) || ...);
+  }
+};
+
+template <typename E>
+  requires(std::is_enum_v<E>)
+struct parse<E> {
+  void operator()(const boost::json::value& v, E& out) {
+    efromstr(std::string_view(v.as_string()), out);
+  }
+};
+
+template <typename T>
+struct parse<std::unordered_set<T>> {
+  void operator()(boost::json::value const& v, std::unordered_set<T>& out) {
+    auto const* arr = v.if_array();
+    if (!arr)
+      throw parse_error(" array expected, got `{}`", e2str(v.kind()));
+    out.clear();
+    out.reserve(arr->size());
+    for (size_t i = 0; i < arr->size(); ++i) {
+      // не вставляем последний лишний элемент, если его не получится распарсить
+      T elem{};
+      try {
+        from_json((*arr)[i], elem);
+      } catch (parse_error const& e) {
+        throw parse_error("[{}]{}", i, e.what());
+      }
+      out.insert(std::move(elem));
+    }
   }
 };
 

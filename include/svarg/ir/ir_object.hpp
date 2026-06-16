@@ -41,19 +41,38 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
   out = loc;
 }
 
+inline std::string_view e2str(fundamental_e e) noexcept {
+  switch (e) {
+    case fundamental_e::null:
+      return "null";
+    case fundamental_e::boolean:
+      return "boolean";
+    case fundamental_e::integer:
+      return "integer";
+    case fundamental_e::number:
+      return "number";
+    case fundamental_e::string:
+      return "string";
+    case fundamental_e::array:
+      return "array";
+    case fundamental_e::object:
+      return "object";
+  }
+}
+
 struct schema_ref {
   std::optional<string> name;
   // может быть ссылкой на фундаментал (@string@ и тд)
   // generic путь до спеки
   string spec;
+  // путь в спеке (не обязательно он существует, в случае $ref + перекрытое поле может сгенерироваться)
   json_pointer jsonptr;
   // TODO тест с refers_to фундаментальные типы и тд
   [[nodiscard]] bool refers_to(const schema&) const noexcept;
 };
 
 [[nodiscard]] inline size_t hash_schema(std::string_view spec, const json_pointer& jp) {
-  // не требуется escape
-  return hash_combined(spec, jp.view());
+  return hash_combined(spec, jp.escaped());
 }
 
 // пытается распарсить ссылку на фундаментал
@@ -95,6 +114,8 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
 }
 
 struct enum_schema {
+  static constexpr std::string_view discriminator_value = "enum";
+
   std::optional<schema_ref> type;
   array<Any> values;
 };
@@ -107,16 +128,22 @@ struct discriminator_desc {
 };
 
 struct oneof_schema {
+  static constexpr std::string_view discriminator_value = "oneOf";
+
   std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct anyof_schema {
+  static constexpr std::string_view discriminator_value = "anyOf";
+
   std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct allof_schema {
+  static constexpr std::string_view discriminator_value = "allOf";
+
   array<schema_ref> schemas;
 };
 
@@ -133,25 +160,35 @@ struct object_field_info {
 };
 
 struct object_schema {
+  static constexpr std::string_view discriminator_value = "object";
+
   array<object_field_info> fields;
   std::optional<schema_ref> additional_fields;
 };
 
 struct array_schema {
+  static constexpr std::string_view discriminator_value = "array";
+
   schema_ref element;
 };
 
 struct not_schema {
+  static constexpr std::string_view discriminator_value = "not";
+
   schema_ref type;
 };
 
 // соответствует схеме false
 // т.е. любой тип должен проваливать проверку
-struct never_schema {};
+struct never_schema {
+  static constexpr std::string_view discriminator_value = "never";
+};
 
 // соответствует схеме true
 // т.е. любой тип подходит
-struct any_schema {};
+struct any_schema {
+  static constexpr std::string_view discriminator_value = "any";
+};
 
 // fundamental | enum | object_type | oneof | anyof | allof
 struct schema {
@@ -308,6 +345,35 @@ enum struct status_range_e {
   _5XX,
 };
 
+inline constexpr std::string_view e2str(status_range_e e) {
+  switch (e) {
+    case status_range_e::_1XX:
+      return "1XX";
+    case status_range_e::_2XX:
+      return "2XX";
+    case status_range_e::_3XX:
+      return "3XX";
+    case status_range_e::_4XX:
+      return "4XX";
+    case status_range_e::_5XX:
+      return "5XX";
+  }
+}
+
+inline constexpr void efromstr(std::string_view str, status_range_e& out) {
+  using enum status_range_e;
+  auto loc = ss::string_switch<status_range_e>(str)
+                 .case_("1XX", _1XX)
+                 .case_("2XX", _2XX)
+                 .case_("3XX", _3XX)
+                 .case_("4XX", _4XX)
+                 .case_("5XX", _5XX)
+                 .or_default(status_range_e(-1));
+  if (loc == status_range_e(-1))
+    throw parse_error("invalid status range type `{}`", str);
+  out = loc;
+}
+
 struct response_desc {
   // если респонс дефолтный, то у него выставлен статус 0
   static constexpr int64_t default_status_marker = 0;
@@ -448,6 +514,7 @@ struct hash<::svarg::ir::operation> {
 namespace svarg::ir {
 
 struct ir_object {
+  // TODO всё это optional должно быть
   std::unordered_set<schema> schemas;
   std::unordered_set<operation> operations;
   // здесь помимо webhooks лежат callbacks (они то же самое, но ещё вычислимый url)
@@ -456,9 +523,20 @@ struct ir_object {
 
   // объединяет 2 ir в один
   void merge(ir_object obj);
+
+  bool operator==(const ir_object&) const = default;
 };
 
 // TODO serialize/parse ir
 // TODO операции
 
 }  // namespace svarg::ir
+
+namespace svarg {
+
+template <>
+struct discriminator_t<ir::fundamental_e> {
+  static constexpr std::string_view value = "fundamental";
+};
+
+}  // namespace svarg

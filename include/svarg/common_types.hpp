@@ -14,6 +14,14 @@ namespace svarg {
 
 namespace fs = std::filesystem;
 
+template <typename T>
+struct discriminator_t {
+  static constexpr std::string_view value = T::discriminator_value;
+};
+// используется при сериализации и парсе типов вроде std::variant
+template <typename T>
+inline constexpr std::string_view discriminator_v = discriminator_t<std::remove_cvref_t<T>>::value;
+
 enum struct parameter_location : uint8_t {
   path,
   query,

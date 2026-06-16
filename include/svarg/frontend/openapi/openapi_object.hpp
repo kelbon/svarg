@@ -196,7 +196,7 @@ struct schema_object {
   std::optional<array<reference_or<schema_object>>> oneOf;
   optional<reference_or<schema_object>> not_;
 
-  // условия на схемах... (бесполезная хуйня, это никто не будет реализовывать)
+  // условия на схемах...
 
   // проверяет по схеме - если прошло, то проверяет ещё по then
   // если не прошло, проверяет по else (если их нет ничего не написано)

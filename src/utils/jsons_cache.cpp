@@ -28,6 +28,20 @@ std::string yaml2json(std::string_view yaml) {
   return ryml::emitrs_json<std::string>(tree);
 }
 
+inline void force_block_style(ryml::NodeRef node) {
+  if (node.is_map() || node.is_seq()) {
+    node.set_container_style(ryml::BLOCK);
+    for (ryml::NodeRef child : node.children()) {
+      force_block_style(child);
+    }
+  }
+}
+std::string json2yaml(std::string_view json) {
+  ryml::Tree tree = ryml::parse_in_arena(ryml::csubstr(json.data(), json.size()));
+  force_block_style(tree.rootref());
+  return ryml::emitrs_yaml<std::string>(tree);
+}
+
 inline std::string load_yaml_as_json(fs::path yaml) {
   boost::iostreams::mapped_file_source file(yaml.string());
   return yaml2json(std::string_view(file.data(), file.size()));

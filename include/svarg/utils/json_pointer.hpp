@@ -8,8 +8,8 @@
 
 #include <boost/json/value.hpp>
 
-#include "svarg/utils/from_chars.hpp"
 #include "svarg/utils/path_tools.hpp"
+#include "svarg/serialize.hpp"
 
 namespace svarg {
 
@@ -42,12 +42,6 @@ struct json_pointer {
     add_json_ptr(str);
   }
 
-  // precondition: str распарсится в сегменты нормально
-  explicit json_pointer(std::convertible_to<std::string_view> auto&& s, escaped_t) {
-    std::string_view str(s);
-    add_json_ptr(str, ::svarg::escaped);
-  }
-
   // json key
   void add_key(std::string_view key) {
     // хранится без escape
@@ -60,13 +54,8 @@ struct json_pointer {
     add_one_scope(std::string_view(stri, e));
   }
 
-  // str валидный json pointer
+  // str должен быть валидным json pointer
   void add_json_ptr(std::string_view str) {
-    if (!str.contains('/'))
-      return add_one_scope(str);
-    visit_path_segments(str, [&](std::string_view seg) { add_one_scope(seg); });
-  }
-  void add_json_ptr(std::string_view str, escaped_t) {
     if (!str.contains('/'))
       return add_one_scope(str);
     visit_path_segments(str, [&](std::string_view seg) { add_one_scope(seg, ::svarg::escaped); });
@@ -263,6 +252,22 @@ struct json_pointer {
     prevszs.push_back(data.size());
     data.push_back('/');
     data += str;
+  }
+};
+
+template <>
+struct parse<json_pointer> {
+  void operator()(const boost::json::value& v, json_pointer& out) {
+    // в v должен быть экранированный поинтер
+    std::string_view in = v.as_string();
+    out.add_json_ptr(in);
+  }
+};
+
+template <>
+struct serialize<json_pointer> {
+  boost::json::value operator()(const json_pointer& r) {
+    return boost::json::string(r.escaped());
   }
 };
 

@@ -9,6 +9,7 @@ namespace svarg {
 // то она вызывается, когда пришёл не объект чтобы распарсить агрегат
 template <typename T>
 struct parse {};
+
 // TODO складывать такие поля в meta
 template <typename>
 struct allow_additional_field {
