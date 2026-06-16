@@ -103,21 +103,13 @@ TEST("json pointers are correct") {
   REQUIRE(gotb == b_jsonptrs);
 }
 
-static bool json_eq(const boost::json::value& expected, const boost::json::value& actual) {
-  if (expected != actual) {
-    std::println("EXPECTED:\n{}\nACTUAL:\n{}", to_yaml_string(expected), to_yaml_string(actual));
-    return false;
-  }
-  return true;
-}
-
 TEST("json repr") {
   ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"});
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
     // крайне сложно сравнивать на разных платформах
     // порядок в массивах + unordered_set/map и то что они получены из порядкового обхода unordered_map и тд
-    // REQUIRE(json_eq(j, to_json(ir)));
+    // REQUIRE(j == to_json(ir));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });

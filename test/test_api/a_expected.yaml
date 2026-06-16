@@ -1,109 +1,61 @@
 "schemas":
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/headers/X-Request-Id/schema"
+    "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
     "type":
-      "fundamental": "string"
+      "enum":
+        "type":
+          "spec": "api-a.yaml"
+          "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
+        "values":
+          - "profile"
+          - "settings"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
+    "type":
+      "array":
+        "element":
+          "spec": "api-b.yaml"
+          "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/parameters/LimitParam/schema"
+    "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema"
+    "type":
+      "array":
+        "element":
+          "spec": "api-a.yaml"
+          "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema"
     "type":
       "fundamental": "integer"
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId"
-            "name": "itemId"
-            "required": true
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
-            "name": "quantity"
-            "required": true
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/callbackUrl"
-            "name": "callbackUrl"
-            "required": false
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/callbackUrl"
+    "jsonptr": "/components/schemas/UserPatch/properties/name"
     "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId"
     "type":
       "fundamental": "string"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/title"
     "type":
-      "fundamental": "integer"
+      "fundamental": "string"
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/responses/NotFound/content/application~1json/schema"
+    "jsonptr": "/components/schemas/UserPatch/additionalProperties"
     "type":
-      "fundamental": "number"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/OrderStatusEvent"
-    "name": "OrderStatusEvent"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
-            "name": "status"
-            "required": false
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
-    "type":
-      "enum":
-        "type":
-          "spec": "api-a.yaml"
-          "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
-        "values":
-          - "pending"
-          - "shipped"
-          - "delivered"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User"
-    "name": "User"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/schemas/User/properties/id"
-            "name": "id"
-            "required": true
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/schemas/User/properties/favoriteItem"
-            "name": "favoriteItem"
-            "required": false
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/schemas/User/properties/name"
-            "name": "name"
-            "required": true
-          - "type":
-              "name": "Order"
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order"
-            "name": "address"
-            "required": false
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/favoriteItem"
-    "type":
-      "any": {}
+      "fundamental": "any"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/id"
     "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/name"
+    "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
     "type":
-      "fundamental": "string"
+      "enum":
+        "type":
+          "spec": "api-a.yaml"
+          "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
+        "values":
+          - "order.created"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/UserPatch"
     "name": "UserPatch"
@@ -119,94 +71,56 @@
           "spec": "api-a.yaml"
           "jsonptr": "/components/schemas/UserPatch/additionalProperties"
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/UserPatch/additionalProperties"
+    "jsonptr": "/components/schemas/User/properties/favoriteItem"
     "type":
-      "any": {}
+      "fundamental": "any"
   - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/UserPatch/properties/name"
+    "jsonptr": "/components/schemas/User/properties/name"
+    "type":
+      "fundamental": "string"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/id"
     "type":
       "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
     "type":
       "fundamental": "string"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/status"
     "type":
-      "array":
-        "element":
-          "spec": "api-a.yaml"
-          "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
+      "fundamental": "string"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
     "type":
-      "enum":
-        "type":
-          "spec": "api-a.yaml"
-          "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
-        "values":
-          - "profile"
-          - "settings"
+      "fundamental": "string"
   - "spec": "api-a.yaml"
-    "jsonptr": "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema"
+    "jsonptr": "/components/parameters/LimitParam/schema"
     "type":
       "fundamental": "integer"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/id"
+    "type":
+      "fundamental": "string"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1users~1{userId}/parameters/0/schema"
     "type":
       "fundamental": "string"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Money/properties/amount"
     "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId"
-            "name": "orderId"
-            "required": false
-          - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
-            "name": "event"
-            "required": false
-  - "spec": "api-a.yaml"
-    "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
+      "fundamental": "number"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
       "enum":
         "type":
-          "spec": "api-a.yaml"
-          "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
+          "spec": "api-b.yaml"
+          "jsonptr": "/components/schemas/Money/properties/currency"
         "values":
-          - "order.created"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error"
-    "name": "Error"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Error/properties/message"
-            "name": "message"
-            "required": false
-          - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Error/properties/code"
-            "name": "code"
-            "required": false
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error/properties/code"
-    "type":
-      "fundamental": "integer"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error/properties/message"
-    "type":
-      "fundamental": "string"
+          - "USD"
+          - "EUR"
+          - "RUB"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Money"
     "name": "Money"
@@ -224,20 +138,35 @@
             "name": "currency"
             "required": false
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Money/properties/amount"
+    "jsonptr": "/components/schemas/Order/properties/item"
     "type":
-      "fundamental": "number"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Money/properties/currency"
+      "object":
+        "fields":
+          - "type":
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
+            "name": "tags"
+            "required": false
+          - "type":
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Order/properties/item/properties/id"
+            "name": "id"
+            "required": true
+          - "type":
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Order/properties/item/properties/title"
+            "name": "title"
+            "required": true
+          - "type":
+              "name": "Money"
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Money"
+            "name": "price"
+            "required": true
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
     "type":
-      "enum":
-        "type":
-          "spec": "api-b.yaml"
-          "jsonptr": "/components/schemas/Money/properties/currency"
-        "values":
-          - "USD"
-          - "EUR"
-          - "RUB"
+      "fundamental": "integer"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
@@ -266,56 +195,127 @@
             "name": "item"
             "required": false
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/id"
+    "jsonptr": "/components/schemas/Error/properties/code"
+    "type":
+      "fundamental": "integer"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/schemas/User"
+    "name": "User"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "api-a.yaml"
+              "jsonptr": "/components/schemas/User/properties/id"
+            "name": "id"
+            "required": true
+          - "type":
+              "spec": "api-a.yaml"
+              "jsonptr": "/components/schemas/User/properties/favoriteItem"
+            "name": "favoriteItem"
+            "required": false
+          - "type":
+              "spec": "api-a.yaml"
+              "jsonptr": "/components/schemas/User/properties/name"
+            "name": "name"
+            "required": true
+          - "type":
+              "name": "Order"
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Order"
+            "name": "address"
+            "required": false
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/responses/NotFound/content/application~1json/schema"
+    "type":
+      "fundamental": "number"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/callbackUrl"
+    "type":
+      "fundamental": "string"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "api-a.yaml"
+              "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId"
+            "name": "itemId"
+            "required": true
+          - "type":
+              "spec": "api-a.yaml"
+              "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
+            "name": "quantity"
+            "required": true
+          - "type":
+              "spec": "api-a.yaml"
+              "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/callbackUrl"
+            "name": "callbackUrl"
+            "required": false
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Error/properties/message"
     "type":
       "fundamental": "string"
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item"
+    "jsonptr": "/components/schemas/Error"
+    "name": "Error"
     "type":
       "object":
         "fields":
           - "type":
               "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
-            "name": "tags"
+              "jsonptr": "/components/schemas/Error/properties/message"
+            "name": "message"
             "required": false
           - "type":
               "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/item/properties/id"
-            "name": "id"
-            "required": true
+              "jsonptr": "/components/schemas/Error/properties/code"
+            "name": "code"
+            "required": false
+  - "spec": "api-a.yaml"
+    "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId"
+    "type":
+      "fundamental": "string"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema"
+    "type":
+      "object":
+        "fields":
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/item/properties/title"
-            "name": "title"
-            "required": true
+              "spec": "api-a.yaml"
+              "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId"
+            "name": "orderId"
+            "required": false
           - "type":
-              "name": "Money"
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Money"
-            "name": "price"
-            "required": true
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/id"
+              "spec": "api-a.yaml"
+              "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
+            "name": "event"
+            "required": false
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
     "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
+      "enum":
+        "type":
+          "spec": "api-a.yaml"
+          "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
+        "values":
+          - "pending"
+          - "shipped"
+          - "delivered"
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/schemas/OrderStatusEvent"
+    "name": "OrderStatusEvent"
     "type":
-      "array":
-        "element":
-          "spec": "api-b.yaml"
-          "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/title"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/status"
+      "object":
+        "fields":
+          - "type":
+              "spec": "api-a.yaml"
+              "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
+            "name": "status"
+            "required": false
+  - "spec": "api-a.yaml"
+    "jsonptr": "/components/headers/X-Request-Id/schema"
     "type":
       "fundamental": "string"
 "operations":

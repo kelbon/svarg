@@ -188,6 +188,12 @@ ir::object_schema lowering_context::make_object_type(schema_object const& schema
                                                      json_pointer jp) {
   ir::object_schema ot;
   if (schema.properties) {
+    if (schema.required) {
+      for (string const& x : *schema.required) {
+        if (!std::ranges::contains(*schema.properties | std::views::keys, x))
+          emit_warn(file, jp.escaped(), "required property `{}` does not appear in `properties`, ignored", x);
+      }
+    }
     for (auto& [prop_name, prop_sor] : *schema.properties) {
       ir::object_field_info fi;
       fi.name = prop_name;
@@ -213,6 +219,14 @@ ir::object_schema lowering_context::make_object_type(schema_object const& schema
         }
       }
       ot.fields.push_back(std::move(fi));
+    }
+  } else if (schema.required) {
+    // неявно считаем будто properties определены с type: true
+    for (auto& name : *schema.required) {
+      ir::object_field_info fi;
+      fi.name = name;
+      fi.type = ir::make_fundamental_ref(ir::fundamental_e::any);
+      fi.required = true;
     }
   }
   if (schema.additionalProperties) {
@@ -288,14 +302,14 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   };
   // ── boolean schema ──────────────────────────────────────────────────────────
   if (schema.allow_always()) {
-    res.type.data = ir::any_schema{};
+    res.type.data = ir::fundamental_e::any;
     return ret_res();
   }
   if (schema.allow_never()) {
-    res.type.data = ir::never_schema{};
+    res.type.data = ir::fundamental_e::never;
     return ret_res();
   }
-  res.type.data = ir::any_schema{};  // позже заменится (или нет)
+  res.type.data = ir::fundamental_e::any;  // позже заменится (или нет)
 
   // если нужно anyOf/... парсить как требования, а не как представление типа
   bool as_requirements = schema.enum_ || schema.type;
@@ -303,6 +317,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   // ── enum_ / const ─────────────────────────────────────────────────────────
   assert(!schema.const_);                        // postparse должен был удалить
   assert(!(!schema.type && schema.properties));  // postparse должен был обработать
+  assert(!(!schema.type && schema.required));
 
   if (schema.enum_) {
     if (schema.enum_->empty())
@@ -345,10 +360,6 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       for (auto& t : rtypes) {
         ir::fundamental_e fe;
         efromstr(t, fe);
-        if (fe == ir::fundamental_e::object || fe == ir::fundamental_e::array) {
-          throw semantic_error(
-              "field type with several types, where one of them object or array is not supported");
-        }
         anyof.schemas.push_back(make_fundamental_ref(fe));
       }
       res.type.data = std::move(anyof);
@@ -356,12 +367,11 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   }
 
   if (!as_requirements) {
-    // TODO warning
     as_requirements = count_true(schema.anyOf, schema.allOf, schema.oneOf, schema.not_) > 1;
     // если указано более одного, непонятно что отвечает за представление, а что за требование
     // поэтому тип any, но написанные схемы используются для валидации
     if (as_requirements)
-      res.type.data = ir::any_schema{};
+      res.type.data = ir::fundamental_e::any;
   }
 
   auto collect_result = [&](std::string_view fieldname, auto schema) {

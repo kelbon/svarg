@@ -22,8 +22,8 @@ enum struct fundamental_e {
   integer,
   number,
   string,
-  array,
-  object,
+  any,    // type: true
+  never,  // type: never
 };
 
 inline void efromstr(std::string_view s, fundamental_e& out) {
@@ -34,8 +34,8 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
                  .case_("integer", integer)
                  .case_("number", number)
                  .case_("string", string)
-                 .case_("array", array)
-                 .case_("object", object)
+                 .case_("any", any)
+                 .case_("never", never)
                  .or_default(fundamental_e(-1));
   if (loc == fundamental_e(-1))
     throw parse_error("unknown fundamental type `{}`", s);
@@ -54,11 +54,12 @@ inline std::string_view e2str(fundamental_e e) noexcept {
       return "number";
     case fundamental_e::string:
       return "string";
-    case fundamental_e::array:
-      return "array";
-    case fundamental_e::object:
-      return "object";
+    case fundamental_e::any:
+      return "any";
+    case fundamental_e::never:
+      return "never";
   }
+  std::unreachable();
 }
 
 struct schema_ref {
@@ -83,20 +84,6 @@ struct schema_ref {
   return hash_combined(spec, jp.escaped());
 }
 
-// пытается распарсить ссылку на фундаментал
-// (у меня используются "ссылки" на фундаментальные типы для удобства реализации)
-// таких ссылок нет и не может быть в openapi yaml, они есть только на уровне IR
-inline std::optional<fundamental_e> try_parse_as_fundamental_ref(std::string_view ref) {
-  // подчёркивание в начале чтобы избежать ошибки и принять это за локальную ссылку
-  return ss::string_switch<std::optional<fundamental_e>>(ref)
-      .case_("@null@", fundamental_e::null)
-      .case_("@boolean@", fundamental_e::boolean)
-      .case_("@integer@", fundamental_e::integer)
-      .case_("@number@", fundamental_e::number)
-      .case_("@string@", fundamental_e::string)
-      .or_default(std::nullopt);
-}
-
 // precondition: e != array && s != object
 inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
   schema_ref ref;
@@ -112,9 +99,10 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
         return "@number@";
       case fundamental_e::string:
         return "@string@";
-      case fundamental_e::array:
-      case fundamental_e::object:
-        std::unreachable();
+      case fundamental_e::any:
+        return "@any@";
+      case fundamental_e::never:
+        return "@never@";
     }
   };
   ref.spec = f2scope();
@@ -176,23 +164,14 @@ struct not_schema {
   schema_ref type;
 };
 
-// соответствует схеме false
-// т.е. любой тип должен проваливать проверку
-struct never_schema {};
-
-// соответствует схеме true
-// т.е. любой тип подходит
-struct any_schema {};
-
 struct schema_type {
-  std::variant<any_schema, fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
-               object_schema, array_schema, not_schema, never_schema>
+  std::variant<fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema, object_schema,
+               array_schema, not_schema>
       data;
 
   std::string_view discriminator() const noexcept {
     return std::visit(
         matcher_r<std::string_view>(
-            [](const any_schema&) { return "any"; }, [](const never_schema&) { return "never"; },
             [](const not_schema&) { return "not"; }, [](const array_schema&) { return "array"; },
             [](const object_schema&) { return "object"; }, [](const allof_schema&) { return "allOf"; },
             [](const anyof_schema&) { return "anyOf"; }, [](const oneof_schema&) { return "oneOf"; },
@@ -200,11 +179,7 @@ struct schema_type {
         data);
   }
   void set_type_from_discriminator(std::string_view s) {
-    if (s == "any")
-      data.emplace<any_schema>();
-    else if (s == "never")
-      data.emplace<never_schema>();
-    else if (s == "not")
+    if (s == "not")
       data.emplace<not_schema>();
     else if (s == "array")
       data.emplace<array_schema>();
