@@ -70,6 +70,13 @@ struct schema_ref {
   json_pointer jsonptr;
   // TODO тест с refers_to фундаментальные типы и тд
   [[nodiscard]] bool refers_to(const schema&) const noexcept;
+
+  bool operator==(const schema_ref& r) const noexcept {
+    return operator<=>(r) == std::strong_ordering::equal;
+  }
+  std::strong_ordering operator<=>(const schema_ref& r) const noexcept {
+    return std::tie(spec, jsonptr) <=> std::tie(r.spec, r.jsonptr);
+  }
 };
 
 [[nodiscard]] inline size_t hash_schema(std::string_view spec, const json_pointer& jp) {
@@ -150,6 +157,10 @@ struct object_field_info {
   // * тип НЕ readOnly/writeOnly (там необходимость передавать зависит от запрос/ответ, но тип то один)
   // if/then/else игнорируются
   bool required = false;
+
+  std::strong_ordering operator<=>(const object_field_info& r) const noexcept {
+    return type <=> r.type;
+  }
 };
 
 struct object_schema {
