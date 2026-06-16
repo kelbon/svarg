@@ -232,7 +232,10 @@ struct json_pointer {
   }
 
   bool operator==(const json_pointer& other) const noexcept {
-    return view() == other.view();
+    return operator<=>(other) == std::strong_ordering::equal;
+  }
+  std::strong_ordering operator<=>(const json_pointer& other) const noexcept {
+    return escaped() <=> other.escaped();
   }
 
  private:

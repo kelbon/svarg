@@ -7,9 +7,19 @@
 namespace svarg {
 
 // case insensitive
+inline std::strong_ordering compare_ci(std::string_view a, std::string_view b) {
+  size_t n = std::min(a.size(), b.size());
+  for (size_t i = 0; i < n; ++i) {
+    unsigned char ca = std::tolower(static_cast<unsigned char>(a[i]));
+    unsigned char cb = std::tolower(static_cast<unsigned char>(b[i]));
+    if (ca != cb)
+      return ca <=> cb;
+  }
+  return a.size() <=> b.size();
+}
+
 inline bool is_equal_ci(std::string_view a, std::string_view b) {
-  return std::ranges::equal(
-      a, b, [](char x, char y) { return std::tolower((unsigned char)x) == std::tolower((unsigned char)y); });
+  return compare_ci(a, b) == std::strong_ordering::equal;
 }
 
 struct str_equal_to {

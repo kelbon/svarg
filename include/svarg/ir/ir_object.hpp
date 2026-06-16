@@ -10,6 +10,7 @@
 #include "svarg/utils/strcmp.hpp"
 #include "svarg/utils/combined_hash.hpp"
 #include "svarg/utils/from_chars.hpp"
+#include "svarg/utils/matcher.hpp"
 
 namespace svarg::ir {
 
@@ -229,6 +230,9 @@ struct schema {
   bool operator==(const schema& x) const noexcept {
     return spec == x.spec && jsonptr == x.jsonptr && name == x.name;
   }
+  std::strong_ordering operator<=>(const schema& x) const noexcept {
+    return std::tie(spec, jsonptr, name) <=> std::tie(x.spec, x.jsonptr, x.name);
+  }
 };
 
 [[nodiscard]] inline bool is_meta_key(std::string_view key) noexcept {
@@ -267,6 +271,9 @@ struct header {
 
   bool operator==(const header& r) const noexcept {
     return is_equal_ci(name, r.name);
+  }
+  std::strong_ordering operator<=>(const header& r) const noexcept {
+    return compare_ci(name, r.name);
   }
 };
 
@@ -310,8 +317,11 @@ struct body {
   // по умолчанию false
   std::optional<bool> streaming;
 
-  bool operator==(const body& b) const noexcept {
-    return contentType == b.contentType;
+  bool operator==(const body& r) const noexcept {
+    return operator<=>(r) == std::strong_ordering::equal;
+  }
+  std::strong_ordering operator<=>(const body& r) const noexcept {
+    return contentType <=> r.contentType;
   }
 };
 
@@ -338,7 +348,7 @@ struct hash<::svarg::ir::schema_ref> {
 namespace svarg::ir {
 
 enum struct status_range_e {
-  _1XX,
+  _1XX = 1,
   _2XX,
   _3XX,
   _4XX,
@@ -373,16 +383,31 @@ inline constexpr void efromstr(std::string_view str, status_range_e& out) {
     throw parse_error("invalid status range type `{}`", str);
   out = loc;
 }
+// TODO нормально чтоб выводило
+struct status_t {
+  static constexpr std::string_view discriminator_value = "status";
+
+  int64_t status = 0;
+
+  auto operator<=>(const status_t&) const = default;
+};
+
+struct status_range_t {
+  static constexpr std::string_view discriminator_value = "statusRange";
+
+  status_range_e statusRange = status_range_e::_1XX;
+
+  auto operator<=>(const status_range_t&) const = default;
+};
+
+struct default_response_t {
+  static constexpr std::string_view discriminator_value = "default";
+
+  auto operator<=>(const default_response_t&) const = default;
+};
 
 struct response_desc {
-  // если респонс дефолтный, то у него выставлен статус 0
-  static constexpr int64_t default_status_marker = 0;
-
-  // всегда должен быть одно - либо status либо statusRange
-  // допустимые значения - [100; 600)
-  std::optional<int64_t> status;
-  // допустимые значения 100, 200, 300, 400, 500
-  std::optional<status_range_e> statusRange;
+  std::variant<default_response_t, status_t, status_range_t> status;
   // content-type игнорируется (даже не попадает в этот список)
   // регистронезависимо
   std::optional<std::unordered_set<header>> headers;
@@ -390,12 +415,10 @@ struct response_desc {
   std::optional<std::unordered_set<body>> bodies;
 
   [[nodiscard]] bool is_default() const noexcept {
-    return status && *status == default_status_marker;
+    return std::holds_alternative<default_response_t>(status);
   }
   void make_default() noexcept {
-    if (statusRange)
-      statusRange = std::nullopt;
-    status = default_status_marker;
+    status.emplace<default_response_t>();
   }
   void set_status(std::string_view s) {
     std::optional range = ss::string_switch<std::optional<status_range_e>>(s)
@@ -405,23 +428,24 @@ struct response_desc {
                               .case_("4XX", status_range_e::_4XX)
                               .case_("5XX", status_range_e::_5XX)
                               .or_default(std::nullopt);
-    if (range)
-      statusRange = *range;
+    if (range) {
+      status.emplace<status_range_t>(*range);
+      return;
+    }
     size_t num = 0;
     if (!try_from_chars(s, num))
       throw parse_error("invalid status, not number and not valid range: `{}`", s);
-    if (num == 0)
-      throw validate_error("invalid status value 0");
+    if (num < 100)
+      throw validate_error("invalid status value {}", num);
     // не проверяем статус, вдруг кто-то сделал 1023 валидным статусом
-    status = num;
+    status.emplace<status_t>(num);
   }
 
   bool operator==(const response_desc& r) const noexcept {
-    if (status && r.status)
-      return *status == *r.status;
-    if (statusRange && r.statusRange)
-      return *statusRange == *r.statusRange;
-    return false;
+    return status == r.status;
+  }
+  std::strong_ordering operator<=>(const response_desc& r) const noexcept {
+    return status <=> r.status;
   }
 };
 
@@ -432,16 +456,14 @@ namespace std {
 template <>
 struct hash<::svarg::ir::response_desc> {
   size_t operator()(const ::svarg::ir::response_desc& o) const {
-    assert(!(o.status && o.statusRange));
-    if (o.status) {
-      return ::svarg::hash_combined(*o.status);
-    } else if (o.statusRange) {
-      // значения из енама меньше 100, поэтому не должны пересекаться с status никогда
-      return ::svarg::hash_combined(std::to_underlying(*o.statusRange));
-    } else {
-      // должен быть status или statusRange
-      unreachable();
-    }
+    return std::visit(::svarg::matcher{
+                          [](::svarg::ir::default_response_t) { return ::svarg::combined_hash(int64_t(0)); },
+                          [](::svarg::ir::status_range_t r) {
+                            return ::svarg::combined_hash(std::to_underlying(r.statusRange));
+                          },
+                          [](::svarg::ir::status_t s) { return ::svarg::combined_hash(s.status); },
+                      },
+                      o.status);
   }
 };
 
@@ -476,7 +498,13 @@ struct operation {
   bool operator==(const operation& r) const noexcept {
     // имя не участвует в сравнении, так как при отправлении на тот же путь с тем же методом
     // неважно как оно называется (при этом из разных спек это всё же разные операции)
-    return spec == r.spec && method == r.method && is_equal_paths_template_insensitve(path, r.path);
+    return operator<=>(r) == std::strong_ordering::equal;
+  }
+  std::strong_ordering operator<=>(const operation& r) const noexcept {
+    std::strong_ordering res = std::tie(spec, method) <=> std::tie(r.spec, r.method);
+    if (res != std::strong_ordering::equal)
+      return res;
+    return compare_paths_template_insensitve(path, r.path);
   }
 };
 

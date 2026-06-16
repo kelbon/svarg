@@ -37,6 +37,10 @@ inline std::string to_json_string(const boost::json::value& v, bool pretty = tru
   }
   return boost::json::serialize(v);
 }
+inline std::string to_yaml_string(const boost::json::value& v) {
+  return json2yaml(to_json_string(v, /*pretty=*/false));
+}
+
 std::string to_json_string(const auto& x, bool pretty = true) {
   if (pretty) {
     std::stringstream ss;
@@ -158,11 +162,11 @@ struct serialize<std::variant<Types...>> {
 template <typename T>
 struct serialize<std::unordered_set<T>> {
   boost::json::value operator()(const std::unordered_set<T>& r) {
-    boost::json::array a;
-    a.reserve(r.size());
-    for (const auto& t : r)
-      a.emplace_back(to_json(t));
-    return boost::json::value(std::move(a));
+    array<T> inefficiency(std::from_range, r);
+    // Не смотря на то что boost::json::value умеет сравниваться, порядок внутри массива всё равно ломает
+    // сравнение на разных платформах
+    std::ranges::sort(inefficiency);
+    return to_json(inefficiency);
   }
 };
 

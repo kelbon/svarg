@@ -103,10 +103,9 @@ TEST("json pointers are correct") {
   REQUIRE(gotb == b_jsonptrs);
 }
 
-static bool json_eq(const boost::json::value& expected, const boost::json::value& actual,
-                    const std::string& path = "") {
+static bool json_eq(const boost::json::value& expected, const boost::json::value& actual) {
   if (expected != actual) {
-    std::println("EXPECTED: {}\nACTUAL: {}", to_json_string(expected), to_json_string(actual));
+    std::println("EXPECTED:\n{}\nACTUAL:\n{}", to_yaml_string(expected), to_yaml_string(actual));
     return false;
   }
   return true;
@@ -116,14 +115,14 @@ TEST("json repr") {
   ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"});
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
-    REQUIRE(json_eq(to_json(ir), j));
+    REQUIRE(json_eq(j, to_json(ir)));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
   ir = openapi2ir("./test_api", {"api-b.yaml"});
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
-    REQUIRE(json_eq(to_json(ir), j));
+    REQUIRE(json_eq(j, to_json(ir)));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });

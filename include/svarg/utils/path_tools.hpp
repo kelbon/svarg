@@ -50,21 +50,31 @@ void visit_path_segments(std::string_view path, F&& callback) {
 }
 
 // сравниваем так что users/{id} == users/{name}
-[[nodiscard]] constexpr inline bool is_equal_paths_template_insensitve(std::string_view a,
-                                                                       std::string_view b) noexcept {
+[[nodiscard]] constexpr inline std::strong_ordering compare_paths_template_insensitve(
+    std::string_view a, std::string_view b) noexcept {
   while (!a.empty() && !b.empty()) {
-    auto sega = cut_path_segment(a);
-    auto segb = cut_path_segment(b);
-    // любые шаблонизированные сегменты равны
-    if (sega.starts_with('{')) {
-      if (!segb.starts_with('{'))
-        return false;
-    } else {
-      if (sega != segb)
-        return false;
+    std::string_view sega = cut_path_segment(a);
+    std::string_view segb = cut_path_segment(b);
+    bool atem = sega.starts_with('{');
+    bool btem = segb.starts_with('{');
+    if (atem && btem)
+      continue;  // любые шаблонизированные сегменты равны
+    if (atem)
+      return std::strong_ordering::less;  // шаблонизированный сегмент "меньше" обычного
+    else if (btem)
+      return std::strong_ordering::greater;
+    else {
+      std::strong_ordering c = sega <=> segb;
+      if (c != std::strong_ordering::equal)
+        return c;
     }
   }
-  return a.empty() == b.empty();
+  return a.empty() <=> b.empty();
+}
+
+[[nodiscard]] constexpr inline bool is_equal_paths_template_insensitve(std::string_view a,
+                                                                       std::string_view b) noexcept {
+  return compare_paths_template_insensitve(a, b) == std::strong_ordering::equal;
 }
 
 // одновременно валидирует что символы валидны для path
