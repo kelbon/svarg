@@ -765,12 +765,9 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
   return result;
 }
 
-// TODO сделать required по дефолту если присутствует в path и валидировать что оно есть в строке path
 ir::operation_parameter lowering_context::parameter_lowering(const parameter_object& param, fs::path file,
                                                              json_pointer jp, std::string_view path) {
   ir::operation_parameter result;
-  // TODO здесь где то со скоупом накосячено
-  // а может и не здесь... А там где первый раз резолвятся эти штуки
   result.location = param.in;
   result.name = param.name;
   if (param.schema)
