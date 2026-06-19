@@ -44,22 +44,9 @@ from jinja2 import (
     FileSystemLoader,
 )
 
-from .helpers import FILTERS, GLOBALS
+from .helpers import FILTERS, GLOBALS, GeneratorError, _reset_output_path, _set_output_path, _is_output_path_missing, _is_output_path_setted_by_user, _get_output_path
 
 logger = logging.getLogger(__name__)
-
-# Sentinel: атрибут output_path вообще не был выставлен в шаблоне
-_MISSING = object()
-
-
-# ---------------------------------------------------------------------------
-# Исключения
-# ---------------------------------------------------------------------------
-
-
-class GeneratorError(Exception):
-    """Базовый класс ошибок генератора."""
-
 
 class MissingOutputPathError(GeneratorError):
     """Шаблон не выставил переменную output_path."""
@@ -73,12 +60,6 @@ class MissingOutputPathError(GeneratorError):
         )
         self.template_file = template_file
         self.entity_repr = entity_repr
-
-
-# ---------------------------------------------------------------------------
-# Результат одного рендера (публичный)
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class RenderedFile:
@@ -142,6 +123,7 @@ def _render_one(
 ) -> _RenderResult:
     template = env.get_template(template_name)
 
+    _reset_output_path()
     try:
         content = template.render(**context)
     except TemplateError as e:
@@ -150,13 +132,10 @@ def _render_one(
             f"while processing {entity_repr}: {e}"
         ) from e
 
-    module = template.make_module(context)
-    raw: Any = getattr(module, "output_path", _MISSING)
-
-    if raw is _MISSING:
+    if _is_output_path_missing():
         raise MissingOutputPathError(template_file, entity_repr)
 
-    if raw is None:
+    if not _is_output_path_setted_by_user():
         logger.debug(
             "skipped (output_path=none): %s via '%s'", entity_repr, template_file.name
         )
@@ -167,7 +146,7 @@ def _render_one(
             entity_repr=entity_repr,
         )
 
-    relative = Path(str(raw))
+    relative = Path(_get_output_path())
     if relative.is_absolute():
         raise GeneratorError(
             f"output_path must be relative to output_dir, "
@@ -182,12 +161,7 @@ def _render_one(
         entity_repr=entity_repr,
     )
 
-
-# ---------------------------------------------------------------------------
-# Cleanup при ошибке
-# ---------------------------------------------------------------------------
-
-
+# on_scope_failure { filesystem::remove(touched) }
 @contextmanager
 def _cleanup_on_error(touched: set[Path], debug: bool) -> Iterator[None]:
     """
@@ -213,50 +187,33 @@ def _cleanup_on_error(touched: set[Path], debug: bool) -> Iterator[None]:
 
 
 # ---------------------------------------------------------------------------
-# Запись одного результата на диск (вызывается сразу после рендера)
+# Запись одного результата
 # ---------------------------------------------------------------------------
-
-
-def _write_one(
-    result: _RenderResult,
-    *,
-    touched: set[Path],
-    written_in_run: set[Path],
-) -> RenderedFile | None:
+def _write_one(result: _RenderResult, touched: set[Path]) -> None:
     """
     Записывает или дописывает один _RenderResult на диск.
 
     touched        — множество путей этого запуска для cleanup; пополняется здесь.
-    written_in_run — пути, куда уже начали писать в этом запуске (для append).
 
-    Возвращает RenderedFile или None если skip.
     """
-    if result.is_skip:
-        return None
+    assert not result.is_skip
 
     path = result.output_path  # type: ignore[assignment]
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    if path not in written_in_run:
+    if path not in touched:
         # Первая запись в этот путь: удаляем старый файл чтобы не дописывать к нему.
         if path.exists():
             path.unlink()
             logger.debug("removed existing file before overwrite: '%s'", path)
         touched.add(path)
         path.write_text(result.content, encoding="utf-8")
-        written_in_run.add(path)
         logger.info("wrote '%s'  ← %s", path, result.entity_repr)
     else:
         with path.open("a", encoding="utf-8") as f:
             f.write(result.content)
         logger.info("appended '%s'  ← %s", path, result.entity_repr)
 
-    return RenderedFile(
-        output_path=path,
-        content=result.content,
-        template_file=result.template_file,
-        entity_repr=result.entity_repr,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +249,7 @@ class Generator:
     # Публичный API
     # ------------------------------------------------------------------
 
-    def generate(self, ir: Any) -> list[RenderedFile]:
+    def generate(self, ir: Any) -> list[Path]:
         """
         Запускает генерацию по IrObject.
 
@@ -303,21 +260,18 @@ class Generator:
         При ошибке (если debug=False) все затронутые файлы удаляются.
         """
         touched: set[Path] = set()           # файлы этого запуска для cleanup
-        written_in_run: set[Path] = set()    # для append-семантики
-        written: list[RenderedFile] = []
 
         with _cleanup_on_error(touched, self.debug):
             for result in self._render_all(ir):
-                rf = _write_one(result, touched=touched, written_in_run=written_in_run)
-                if rf is not None:
-                    written.append(rf)
+                if result.output_path is not None:
+                    _write_one(result, touched)
 
         logger.info(
             "generation complete: %d file(s) written to '%s'",
-            len(written),
+            len(touched),
             self.output_dir,
         )
-        return written
+        return list(touched)
 
     # ------------------------------------------------------------------
     # Внутренние методы

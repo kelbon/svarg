@@ -184,6 +184,36 @@ def indent_filter(s: str, width: int = 4, first: bool = False) -> str:
     return "".join(result)
 
 
+class GeneratorError(Exception):
+    """Базовый класс ошибок генератора."""
+
+# маркер не выставленного в шаблоне output_path
+_MISSING = object()
+_svarg_output_path = _MISSING
+# проверки в этом модуле, чтобы глобал не экспортировать (он станет глобалом другого модуля - другой переменной)
+def _reset_output_path() -> None:
+    global _svarg_output_path
+    _svarg_output_path = _MISSING
+
+def _is_output_path_missing() -> bool:
+    global _svarg_output_path
+    return _svarg_output_path is _MISSING
+
+def _is_output_path_setted_by_user() -> bool:
+    global _svarg_output_path
+    return _svarg_output_path is not None
+
+def _set_output_path(s: str | None) -> str:
+    global _svarg_output_path
+    if _svarg_output_path is not _MISSING:
+        raise GeneratorError(f'output_path setted twice in template!')
+    _svarg_output_path = s
+    return "" # возвращаем пустоту чтобы не влиять на вывод генератора
+
+def _get_output_path() -> str:
+    global _svarg_output_path
+    return str(_svarg_output_path)
+
 # ---------------------------------------------------------------------------
 # Реестр — что регистрируется в Jinja Environment
 # ---------------------------------------------------------------------------
@@ -201,6 +231,9 @@ FILTERS: dict[str, object] = {
 
 #: Глобальные функции, добавляемые в env.globals (доступны без | синтаксиса)
 GLOBALS: dict[str, object] = {
+    # специальный фильтр который каждый шаблон должен использовать один раз
+    # выставляет путь относительно output директории куда писать результат рендера
+    "set_output_path": _set_output_path,
     "cpp_id": cpp_id,
     "cpp_type_id": cpp_type_id,
     "snake_case": snake_case,

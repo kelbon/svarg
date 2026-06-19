@@ -88,7 +88,7 @@ class TestBasicGeneration:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "type.j2", """\
-            {% set output_path = schema.name ~ ".hpp" %}
+            {{ set_output_path(schema.name ~ ".hpp") }}
             // schema: {{ schema.name }}
         """)
         ir = MockIr(schemas=[MockSchema(name="UserProfile")])
@@ -103,7 +103,7 @@ class TestBasicGeneration:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "operation", "handler.j2", """\
-            {% set output_path = operation.id ~ ".cpp" %}
+            {{ set_output_path(operation.id ~ ".cpp") }}
             // operation: {{ operation.id }}
         """)
         ir = MockIr(operations=[MockOperation(id="getUser")])
@@ -116,7 +116,7 @@ class TestBasicGeneration:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "type.j2", """\
-            {% set output_path = schema.name ~ ".hpp" %}
+            {{ set_output_path(schema.name ~ ".hpp") }}
             struct {{ schema.name }};
         """)
         ir = MockIr(schemas=[MockSchema("Foo"), MockSchema("Bar"), MockSchema("Baz")])
@@ -130,11 +130,11 @@ class TestBasicGeneration:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "operation", "header.j2", """\
-            {% set output_path = operation.id ~ ".hpp" %}
+            {{ set_output_path(operation.id ~ ".hpp") }}
             // header for {{ operation.id }}
         """)
         write_template(templates_dir, "operation", "source.j2", """\
-            {% set output_path = operation.id ~ ".cpp" %}
+            {{ set_output_path(operation.id ~ ".cpp") }}
             // source for {{ operation.id }}
         """)
         ir = MockIr(operations=[MockOperation(id="createOrder")])
@@ -148,7 +148,7 @@ class TestBasicGeneration:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "type.j2", """\
-            {% set output_path = "include/models/" ~ schema.name ~ ".hpp" %}
+            {{ set_output_path("include/models/" ~ schema.name ~ ".hpp") }}
             struct {{ schema.name }} {};
         """)
         ir = MockIr(schemas=[MockSchema("Order")])
@@ -168,14 +168,14 @@ class TestAppendSemantics:
     ) -> None:
         # Две схемы пишут в один файл — контент должен быть конкатенирован
         write_template(templates_dir, "schema", "all.j2", """\
-            {% set output_path = "all_types.hpp" %}
+            {{ set_output_path("all_types.hpp") }}
             struct {{ schema.name }};
         """)
         ir = MockIr(schemas=[MockSchema("Foo"), MockSchema("Bar")])
         results = generator.generate(ir)
 
-        # Два RenderedFile, один физический файл
-        assert len(results) == 2
+        # только один файл написан (оба в all_types.hpp)
+        assert len(results) == 1
         content = (output_dir / "all_types.hpp").read_text()
         assert "Foo" in content
         assert "Bar" in content
@@ -189,7 +189,7 @@ class TestAppendSemantics:
         existing.write_text("// OLD CONTENT\n", encoding="utf-8")
 
         write_template(templates_dir, "schema", "t.j2", """\
-            {% set output_path = "types.hpp" %}
+            {{ set_output_path("types.hpp") }}
             struct {{ schema.name }};
         """)
         ir = MockIr(schemas=[MockSchema("New")])
@@ -203,7 +203,7 @@ class TestAppendSemantics:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "all.j2", """\
-            {% set output_path = "out.hpp" %}
+            {{ set_output_path("out.hpp") }}
             // {{ schema.name }}
         """)
         ir = MockIr(schemas=[MockSchema("Alpha"), MockSchema("Beta"), MockSchema("Gamma")])
@@ -226,7 +226,7 @@ class TestSkip:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "type.j2", """\
-            {% set output_path = none %}
+            {{ set_output_path(none) }}
             // этот контент не должен появиться нигде
         """)
         ir = MockIr(schemas=[MockSchema("Foo")])
@@ -242,9 +242,9 @@ class TestSkip:
         # Пропускаем схему с именем "Skip", генерируем остальные
         write_template(templates_dir, "schema", "type.j2", """\
             {% if schema.name == "Skip" %}
-            {% set output_path = none %}
+            {{ set_output_path(none) }}
             {% else %}
-            {% set output_path = schema.name ~ ".hpp" %}
+            {{ set_output_path(schema.name ~ ".hpp") }}
             {% endif %}
             struct {{ schema.name }};
         """)
@@ -266,7 +266,7 @@ class TestWebhookFallback:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "webhook", "hook.j2", """\
-            {% set output_path = webhook.id ~ ".hpp" %}
+            {{ set_output_path(webhook.id ~ ".hpp") }}
             // webhook-specific: {{ webhook.id }}
         """)
         ir = MockIr(webhooks=[MockOperation(id="onOrderCreated")])
@@ -285,7 +285,7 @@ class TestWebhookFallback:
         # webhook/ намеренно не создаём
 
         write_template(templates_dir, "operation", "op.j2", """\
-            {% set output_path = operation.id ~ ".hpp" %}
+            {{ set_output_path(operation.id ~ ".hpp") }}
             // ir_kind={{ ir_kind }}, id={{ operation.id }}
         """)
         gen = Generator(templates_dir=templates_dir, output_dir=output_dir)
@@ -302,7 +302,7 @@ class TestWebhookFallback:
     ) -> None:
         # templates/webhook/ существует, но пуста → тоже fallback
         write_template(templates_dir, "operation", "op.j2", """\
-            {% set output_path = operation.id ~ ".hpp" %}
+            {{ set_output_path(operation.id ~ ".hpp") }}
             // fallback: {{ operation.id }}
         """)
         # webhook/ уже создана фикстурой, но пуста
@@ -319,7 +319,7 @@ class TestWebhookFallback:
         (templates_dir / "operation").mkdir()
 
         write_template(templates_dir, "operation", "op.j2", """\
-            {% set output_path = "out.txt" %}
+            {{ set_output_path("out.txt") }}
             {{ ir_kind }}
         """)
         gen = Generator(templates_dir=templates_dir, output_dir=output_dir)
@@ -347,7 +347,7 @@ class TestCleanupOnError:
     ) -> None:
         # Первый шаблон успешно создаёт файл, второй падает
         write_template(templates_dir, "schema", "a_good.j2", """\
-            {% set output_path = "good.hpp" %}
+            {{ set_output_path("good.hpp") }}
             // ok
         """)
         write_template(templates_dir, "schema", "b_bad.j2", """\
@@ -370,7 +370,7 @@ class TestCleanupOnError:
         existing.write_text("// OLD\n")
 
         write_template(templates_dir, "schema", "a_good.j2", """\
-            {% set output_path = "types.hpp" %}
+            {{ set_output_path("types.hpp") }}
             // new content
         """)
         write_template(templates_dir, "schema", "b_bad.j2", """\
@@ -389,7 +389,7 @@ class TestCleanupOnError:
         self, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "a_good.j2", """\
-            {% set output_path = "good.hpp" %}
+            {{ set_output_path("good.hpp") }}
             // partial output
         """)
         write_template(templates_dir, "schema", "b_bad.j2", """\
@@ -415,7 +415,7 @@ class TestHelpersInTemplates:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "operation", "op.j2", """\
-            {% set output_path = "out.hpp" %}
+            {{ set_output_path("out.hpp") }}
             void {{ operation.id | cpp_id }}();
         """)
         ir = MockIr(operations=[MockOperation(id="getUserById")])
@@ -427,7 +427,7 @@ class TestHelpersInTemplates:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "type.j2", """\
-            {% set output_path = "out.hpp" %}
+            {{ set_output_path("out.hpp") }}
             struct {{ schema.name | cpp_type_id }} {};
         """)
         ir = MockIr(schemas=[MockSchema(name="user_profile")])
@@ -444,7 +444,7 @@ class TestHelpersInTemplates:
             extra_context={"namespace": "my_api"},
         )
         write_template(templates_dir, "schema", "type.j2", """\
-            {% set output_path = "out.hpp" %}
+            {{ set_output_path("out.hpp") }}
             namespace {{ namespace }} {}
         """)
         ir = MockIr(schemas=[MockSchema(name="Foo")])
@@ -480,7 +480,7 @@ class TestErrorHandling:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "bad.j2", f"""\
-            {{% set output_path = "{absolute_path_example()}" %}}
+            {{{{ set_output_path("{absolute_path_example()}") }}}}
             x
         """)
         ir = MockIr(schemas=[MockSchema(name="Foo")])
@@ -491,7 +491,7 @@ class TestErrorHandling:
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "schema", "bad.j2", """\
-            {% set output_path = "out.hpp" %}
+            {{ set_output_path("out.hpp") }}
             {{ schema.nonexistent_field }}
         """)
         ir = MockIr(schemas=[MockSchema(name="Foo")])

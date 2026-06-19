@@ -414,7 +414,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
         res.type.data = fe;
       }
     } else {
-      // Несколько схем → anyOf из фундаментальных schema_ref-ов
+      // Несколько схем => anyOf из фундаментальных schema_ref-ов
       // Например: ["string", "null"] или ["integer", "string"]
       ir::anyof_schema anyof;
       for (auto& t : rtypes) {
