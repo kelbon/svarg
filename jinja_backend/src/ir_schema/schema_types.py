@@ -17,10 +17,6 @@ from typing import Any, Optional, Union
 
 from .serde import Serializable, field_with_key, kw_only_dataclass
 
-
-JsonPointer = str  # json_pointer в C++ — для нас просто escaped-строка
-
-
 # ---------------------------------------------------------------------------
 # fundamental_e
 # ---------------------------------------------------------------------------
@@ -61,7 +57,7 @@ def make_fundamental_ref(e: FundamentalE) -> "SchemaRef":
 @kw_only_dataclass
 class SchemaRef(Serializable):
     spec: str
-    jsonptr: Optional[JsonPointer] = None
+    jsonptr: Optional[str] = None
     name: Optional[str] = None
 
     def refers_to_fundamental(self) -> Optional[FundamentalE]:
@@ -201,7 +197,7 @@ class SchemaType(Serializable):
 @kw_only_dataclass
 class Schema(Serializable):
     spec: str
-    jsonptr: JsonPointer
+    jsonptr: str
     type: SchemaType
     name: Optional[str] = None
     # схемы которые не влияют на представление, только на валидацию

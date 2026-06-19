@@ -6,7 +6,7 @@
 выставить переменную output_path (или none для пропуска).
 
 Структура папки шаблонов:
-
+# TODO дополнить filters/globals etc, что прокидывается шаблоны
     templates_dir/
         operation/      # шаблоны для каждой Operation и (при fallback) webhook
             header.j2
@@ -17,7 +17,7 @@
             handler.j2  # webhooks рендерятся здесь; иначе fallback на operation/
 
 Каждый .j2-файл:
-1. Обязан установить {% set output_path = "<relative/path>" %}
+1. Обязан установить {{ set_output_path("<relative/path>") }}
    или {% set output_path = none %} чтобы пропустить генерацию файла.
 2. Тело шаблона целиком становится содержимым выходного файла.
 3. output_path интерпретируется относительно output_dir.
@@ -36,6 +36,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Generator as TypingGenerator, Iterator
+
+import importlib.util
+from pathlib import Path
+import sys
+import types
 
 from jinja2 import (
     Environment,
@@ -88,10 +93,37 @@ class _RenderResult:
         return self.output_path is None
 
 
-# ---------------------------------------------------------------------------
-# Jinja Environment
-# ---------------------------------------------------------------------------
+def _load_extensions(env: Environment, directory: Path) -> None:
+    directory = Path(directory).resolve()
+    pkg_name = directory.name  # "cxx_gen"
 
+    # Регистрируем папку как пакет, чтобы плагины могли делать from .filters import ...
+    if pkg_name not in sys.modules:
+        pkg = types.ModuleType(pkg_name)
+        pkg.path = [str(directory)]
+        sys.modules[pkg_name] = pkg
+
+    def _load_module(path: Path):
+        mod_name = f"{pkg_name}.{path.stem}"  # "cxx_gen.globals"
+        spec = importlib.util.spec_from_file_location(mod_name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = module        # регистрируем ДО exec
+        spec.loader.exec_module(module)
+        return module
+
+    filters_path = directory / "filters.py"
+    if filters_path.is_file():
+        module = _load_module(filters_path)
+        filters = getattr(module, "FILTERS", None)
+        if filters:
+            env.filters.update(filters)
+
+    globals_path = directory / "globals.py"
+    if globals_path.is_file():
+        module = _load_module(globals_path)
+        glbls = getattr(module, "GLOBALS", None)
+        if glbls:
+            env.globals.update(glbls)
 
 def _make_jinja_env(templates_dir: Path) -> Environment:
     env = Environment(
@@ -102,6 +134,7 @@ def _make_jinja_env(templates_dir: Path) -> Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    _load_extensions(env, templates_dir)
     env.filters.update(FILTERS)
     env.globals.update(GLOBALS)
     return env

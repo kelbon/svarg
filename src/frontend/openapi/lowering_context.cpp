@@ -817,6 +817,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
       op.id = *o.operationId;
     else {
       op.id = std::string(methodstr);
+      // TODO с большой буквы чтоб не было postabc => postAbc
       *op.id += name;
     }
     op.method = methodstr;

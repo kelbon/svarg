@@ -1,0 +1,61 @@
+{#-
+  Генерирует C++-определение для ОДНОЙ `schema` (dataclass Schema).
+
+  На вход:
+    schema  -- объект Schema (см. schema_types.py)
+
+  Диспатч по варианту `schema.type.data` через фильтр `schema_kind`:
+    object  -> struct с полями (необязательные поля -> std::optional<T>)
+    array   -> using = std::vector<T>
+    enum    -> enum class
+    oneof   -> using = std::variant<...>
+    anyof   -> using = std::variant<...>
+    allof   -> struct : public A, public B, ...
+    not     -> validation-only, структуры нет (alias на any)
+    fundamental -> using = <примитив>
+
+  IR плоский: вложенные типы НЕ инлайнятся, а ссылаются по SchemaRef
+  (фильтр cpp_type_for_ref), поэтому шаблон выдаёт ровно одно определение.
+  Имена других схем должны быть объявлены заранее (forward decl) на уровне
+  файла-обёртки; рекурсивные/self-ref типы могут требовать обёртки в
+  указатель — это вне ответственности данного шаблона.
+-#}
+{{ set_output_path(schema | cpp_schema_name ~ ".hpp") }}
+{%- set data = schema.type.data -%}
+{%- set name = schema | cpp_schema_name -%}
+{%- set kind = data | schema_kind -%}
+{%- if kind == "object" -%}
+struct {{ name }} {
+{%- for f in data.fields %}
+    {{ f | cpp_field_type }} {{ f.name | cpp_ident }};
+{%- endfor %}
+{%- if data.additional_fields is not none %}
+    std::map<std::string, {{ data.additional_fields | cpp_type_for_ref }}> additional_properties;
+{%- endif %}
+};
+{%- elif kind == "array" -%}
+using {{ name }} = std::vector<{{ data.element | cpp_type_for_ref }}>;
+{%- elif kind == "enum" -%}
+enum class {{ name }} {
+{%- for v in data.values %}
+    {{ v | cpp_enum_value }},
+{%- endfor %}
+};
+{%- elif kind == "oneof" or kind == "anyof" -%}
+using {{ name }} = std::variant<
+{%- for ref in data.schemas %}
+    {{ ref | cpp_type_for_ref }}{{ "," if not loop.last else "" }}
+{%- endfor %}
+>;
+{%- elif kind == "allof" -%}
+struct {{ name }}{% for ref in data.schemas %}{{ " :" if loop.first else "," }} public {{ ref | cpp_type_for_ref }}{% endfor %} {
+};
+{%- elif kind == "fundamental" -%}
+using {{ name }} = {{ data | cpp_fundamental }};
+{%- elif kind == "not" -%}
+// `not`-схема влияет только на валидацию и не имеет структурного представления.
+// Запрещает: {{ data.type | cpp_type_for_ref }}
+using {{ name }} = {{ any_type() }};
+{%- else -%}
+// неподдерживаемый вид схемы: {{ kind }}
+{%- endif -%}

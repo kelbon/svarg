@@ -22,10 +22,10 @@ import logging
 import sys
 from pathlib import Path
 
-import yaml  # PyYAML
+import yaml
 
 from .generator import Generator, GeneratorError
-
+from .ir_schema import IrObject
 
 def _parse_var(s: str) -> tuple[str, str]:
     """Разбирает 'key=value' в кортеж."""
@@ -73,6 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--debug",
+        action="store_true",
+        help="do not delete files on failure",
+    )
+    p.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable debug logging",
@@ -108,17 +113,6 @@ def main(argv: list[str] | None = None) -> int:
         logging.error("Failed to load IR file '%s': %s", ir_path, e)
         return 1
 
-    # Импортируем IrObject здесь, чтобы codegen.cli работал независимо от
-    # конкретного размещения ir_types в проекте пользователя.
-    # Пользователь должен убедиться, что ir_types в PYTHONPATH.
-    try:
-        from ir_types.ir_object import IrObject  # type: ignore[import]
-    except ImportError as e:
-        logging.error(
-            "Could not import IrObject. Make sure 'ir_types' is in PYTHONPATH.\n%s", e
-        )
-        return 1
-
     try:
         ir = IrObject.from_dict(raw)
     except Exception as e:
@@ -133,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             templates_dir=templates_dir,
             output_dir=output_dir,
             extra_context=extra_context,
+            debug=args.debug if args.debug else False
         )
         results = generator.generate(ir)
     except GeneratorError as e:
@@ -145,6 +140,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Done: {len(results)} file(s) written to '{output_dir}'")
     return 0
 
-
+# запускать из корня jinja_backend: python -m src.cli --ir ./tests/example_ir.yaml --templates ./cxx_gen --output ./myout
 if __name__ == "__main__":
     sys.exit(main())

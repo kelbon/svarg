@@ -1,0 +1,60 @@
+{#-
+  Генерирует C++-структуру, описывающую ОДНУ `operation` (dataclass Operation).
+
+  На вход:
+    operation  -- объект Operation (см. operations.py)
+
+  Тела/параметры/ответы ссылаются на схемы по SchemaRef и резолвятся через
+  те же фильтры, что и в schema-шаблоне (cpp_type_for_ref). Сами типы схем
+  должны генерироваться отдельно schema-шаблоном.
+
+  Раскладка:
+    struct <OpName> {
+        static constexpr method / path / id ...
+        struct Parameters { ... };    // если есть параметры
+        <тип|variant> request_body;   // если есть тела запроса
+        struct Responses { ... };     // поле на каждый статус ответа
+    };
+-#}
+{{ set_output_path(operation.spec ~ "/" ~ (operation | cpp_operation_name) ~ ".hpp") }}
+{%- set name = operation | cpp_operation_name -%}
+{%- set responses = (operation.responses or []) + ([operation.default_response] if operation.default_response else []) -%}
+struct {{ name }} {
+    static constexpr std::string_view method = "{{ operation.method }}";
+    static constexpr std::string_view path = "{{ operation.path }}";
+{%- if operation.id %}
+    static constexpr std::string_view operation_id = "{{ operation.id }}";
+{%- endif %}
+{%- if operation.parameters %}
+
+    struct Parameters {
+{%- for p in operation.parameters %}
+        {{ p | cpp_param_type }} {{ p.name | cpp_ident }};  // in: {{ p.location.value if p.location.value is defined else p.location }}
+{%- endfor %}
+    };
+    Parameters parameters;
+{%- endif %}
+{%- if operation.bodies %}
+
+{%- if operation.bodies | length == 1 %}
+    {{ operation.bodies[0] | cpp_body_type }} request_body;  // {{ operation.bodies[0].content_type }}
+{%- else %}
+    using RequestBody = std::variant<
+{%- for b in operation.bodies %}
+        {{ b | cpp_body_type }}{{ "," if not loop.last else "" }}  // {{ b.content_type }}
+{%- endfor %}
+    >;
+    RequestBody request_body;
+{%- endif %}
+{%- endif %}
+{%- if responses %}
+
+    struct Responses {
+{%- for r in responses %}
+{%- set body_type = (r.bodies[0] | cpp_body_type) if r.bodies else "std::monostate" %}
+        {{ body_type }} {{ r | cpp_status_ident }};
+{%- endfor %}
+    };
+    Responses responses;
+{%- endif %}
+};

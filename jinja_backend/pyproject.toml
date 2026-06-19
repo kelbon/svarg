@@ -3,24 +3,26 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sj"
+name = "codegen"
 version = "0.1.0"
 description = "svarg jinja2 backend"
 requires-python = ">=3.11"
+
 dependencies = [
     "jinja2>=3.1",
     "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+]
 
 [project.scripts]
-sj = "sj.cli:main"
+codegen = "generator.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
