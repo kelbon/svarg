@@ -64,7 +64,7 @@ std::unordered_set<std::string> b_jsonptrs{
     "/components/schemas/Order/properties/item",
 };
 using namespace svarg;
-// TODO тест с оптимизацией
+
 static bool expect_json_ptrs(const ir::ir_object& ir, const std::unordered_set<std::string> aptrs,
                              const std::unordered_set<std::string>& bptrs) {
   std::unordered_set<std::string> gota;

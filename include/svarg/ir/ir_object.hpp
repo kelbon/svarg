@@ -64,8 +64,7 @@ inline std::string_view e2str(fundamental_e e) noexcept {
 
 struct schema_ref {
   std::optional<string> name;
-  // может быть ссылкой на фундаментал (@string@ и тд)
-  // generic путь до спеки
+  // .filename() спеки где объявлена схема ИЛИ ссылка на фундаментал (типа @string@)
   string spec;
   // путь в спеке (не обязательно он существует, в случае $ref + перекрытое поле может сгенерироваться)
   // не указано, если ссылка на фундаментальный тип
@@ -207,7 +206,7 @@ struct schema_type {
 
 // fundamental | enum | object_type | oneof | anyof | allof
 struct schema {
-  // generic строка файла
+  // .filename() спеки где написана схема
   string spec;
   json_pointer jsonptr;
 
@@ -492,7 +491,7 @@ struct operation {
   // operationId, если нет, используется method + путь (каким-то образом)
   // лучше бы было
   std::optional<string> id;
-  // спека где объявлена операция
+  // .filename() спеки где объявлена операция
   string spec;
   // путь относительно url сервера. Должен начинаться с / (если не пустой)
   // path + method + spec должны быть уникальны. Шаблонизированность не учитывается

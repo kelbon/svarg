@@ -324,10 +324,10 @@ static ir::fundamental_e detect_enum_type(const array<Any>& values) noexcept {
 schema_or_ref lowering_context::schema_lowering(const schema_object& schema, const fs::path& file,
                                                 json_pointer jp, std::optional<std::string_view> name) {
   ir::schema res;
-  res.spec = file.lexically_normal().generic_string();
+  res.spec = file.filename().generic_string();
   res.jsonptr = jp;
   auto ret_schema = [&] {
-    assert(parsable_as<schema_object>(jp.access(load_as_json(res.spec))) && "invalidly generated scheme");
+    assert(parsable_as<schema_object>(jp.access(load_as_json(file))) && "invalidly generated scheme");
     ir.schemas->insert(res);
     return schema_or_ref(std::move(res));
   };
@@ -812,7 +812,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
 
   for (auto [methodstr, o] : item.all_operations_with_method()) {
     ir::operation op;
-    op.spec = spec.generic_string();
+    op.spec = spec.filename().generic_string();
     if (o.operationId)
       op.id = *o.operationId;
     else {
