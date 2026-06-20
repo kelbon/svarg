@@ -137,10 +137,41 @@ std::unordered_set<std::string> b_jsonptrs_optimized{
 };
 
 TEST("json pointers are correct (optimized)") {
-  // делаем без оптимизаций здесь
   ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
   ir = pass_rm_trivial_schemas(std::move(ir));
   REQUIRE(expect_json_ptrs(ir, a_jsonptrs_optimized, b_jsonptrs_optimized));
+}
+
+std::unordered_set<std::string> a_jsonptrs_optimized2{
+    "/components/schemas/User",
+    "/components/schemas/UserPatch",
+    "/paths/~1users~1{userId}/get/parameters/0/schema",
+    ("/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/"
+     "application~1json/schema"),
+    "/components/requestBodies/OrderCreate/content/application~1json/schema",
+};
+
+std::unordered_set<std::string> b_jsonptrs_optimized2_no_exception{
+    "/components/schemas/Order",
+    "/components/schemas/Error",
+};
+std::unordered_set<std::string> b_jsonptrs_optimized2_with_exception{
+    "/components/schemas/Order",
+    "/components/schemas/Error",
+    "/components/schemas/Money/properties/currency",
+};
+
+TEST("json pointers are correct (optimized + rm unused)") {
+  ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
+  ir = pass_rm_trivial_schemas(std::move(ir));
+  ir::ir_object ir2 =
+      pass_rm_unused_schemas(ir, {ir::schema_ref{
+                                     .spec = "api-b.yaml",
+                                     .jsonptr = "/components/schemas/Money/properties/currency"_jp,
+                                 }});
+  REQUIRE(expect_json_ptrs(ir2, a_jsonptrs_optimized2, b_jsonptrs_optimized2_with_exception));
+  ir::ir_object ir3 = pass_rm_unused_schemas(ir);
+  REQUIRE(expect_json_ptrs(ir3, a_jsonptrs_optimized2, b_jsonptrs_optimized2_no_exception));
 }
 
 TEST("json repr") {

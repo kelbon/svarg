@@ -17,4 +17,9 @@ namespace svarg {
 // фундаментальные ссылки, упрощая IR
 [[nodiscard]] ir::ir_object pass_rm_trivial_schemas(ir::ir_object);
 
+// убирает все схемы, которые не используются в операциях/вебхуках (кроме тех что в exceptions)
+// применяется не всегда (так как иногда такие схемы нужно оставить для использования кодом)
+[[nodiscard]] ir::ir_object pass_rm_unused_schemas(ir::ir_object,
+                                                   std::unordered_set<ir::schema_ref> exceptions = {});
+
 }  // namespace svarg
