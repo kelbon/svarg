@@ -4,6 +4,7 @@
 #include <print>
 
 #include "svarg/frontend/openapi/generate_ir.hpp"
+#include "svarg/ir/optimization_passes.hpp"
 
 #include "svarg/ir/ir_object.hpp"
 
@@ -138,7 +139,7 @@ std::unordered_set<std::string> b_jsonptrs_optimized{
 
 TEST("json pointers are correct (optimized)") {
   ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
-  ir = pass_rm_trivial_schemas(std::move(ir));
+  ir = ir::pass_rm_trivial_schemas(std::move(ir));
   REQUIRE(expect_json_ptrs(ir, a_jsonptrs_optimized, b_jsonptrs_optimized));
 }
 
@@ -163,14 +164,14 @@ std::unordered_set<std::string> b_jsonptrs_optimized2_with_exception{
 
 TEST("json pointers are correct (optimized + rm unused)") {
   ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
-  ir = pass_rm_trivial_schemas(std::move(ir));
+  ir = ir::pass_rm_trivial_schemas(std::move(ir));
   ir::ir_object ir2 =
-      pass_rm_unused_schemas(ir, {ir::schema_ref{
-                                     .spec = "api-b.yaml",
-                                     .jsonptr = "/components/schemas/Money/properties/currency"_jp,
-                                 }});
+      ir::pass_rm_unused_schemas(ir, {ir::schema_ref{
+                                         .spec = "api-b.yaml",
+                                         .jsonptr = "/components/schemas/Money/properties/currency"_jp,
+                                     }});
   REQUIRE(expect_json_ptrs(ir2, a_jsonptrs_optimized2, b_jsonptrs_optimized2_with_exception));
-  ir::ir_object ir3 = pass_rm_unused_schemas(ir);
+  ir::ir_object ir3 = ir::pass_rm_unused_schemas(ir);
   REQUIRE(expect_json_ptrs(ir3, a_jsonptrs_optimized2, b_jsonptrs_optimized2_no_exception));
 }
 
