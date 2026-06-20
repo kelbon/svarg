@@ -1,6 +1,6 @@
 #pragma once
 
-#include "svarg/ir/ir_object.hpp"
+#include "svarg/utils/json_pointer.hpp"
 
 namespace svarg::cxx {
 
