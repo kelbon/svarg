@@ -1,43 +1,10 @@
 "schemas":
   - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Item/properties/tags/items"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/parameters/LimitParam/schema"
-    "type":
-      "fundamental": "integer"
-  - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Item/properties/tags"
     "type":
       "array":
         "element":
-          "spec": "api-b.yaml"
-          "jsonptr": "/components/schemas/Item/properties/tags/items"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/name"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/paths/~1items~1{itemId}/get/responses/default/content/application~1json/schema"
-    "type":
-      "fundamental": "any"
+          "spec": "@string@"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User"
     "name": "User"
@@ -45,18 +12,15 @@
       "object":
         "fields":
           - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/schemas/User/properties/id"
+              "spec": "@string@"
             "name": "id"
             "required": true
           - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/schemas/User/properties/favoriteItem"
+              "spec": "@string@"
             "name": "favoriteItem"
             "required": false
           - "type":
-              "spec": "api-a.yaml"
-              "jsonptr": "/components/schemas/User/properties/name"
+              "spec": "@string@"
             "name": "name"
             "required": true
           - "type":
@@ -65,10 +29,6 @@
               "jsonptr": "/components/schemas/Order"
             "name": "address"
             "required": false
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Item/properties/id"
-    "type":
-      "fundamental": "string"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
@@ -82,13 +42,11 @@
             "name": "buyer"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/id"
+              "spec": "@string@"
             "name": "id"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/status"
+              "spec": "@string@"
             "name": "status"
             "required": false
           - "type":
@@ -96,18 +54,6 @@
               "jsonptr": "/components/schemas/Order/properties/item"
             "name": "item"
             "required": false
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error/properties/code"
-    "type":
-      "fundamental": "integer"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Item/properties/title"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Money/properties/amount"
-    "type":
-      "fundamental": "number"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
@@ -125,8 +71,7 @@
       "object":
         "fields":
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Money/properties/amount"
+              "spec": "@number@"
             "name": "amount"
             "required": false
           - "type":
@@ -146,13 +91,11 @@
             "name": "tags"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Item/properties/id"
+              "spec": "@string@"
             "name": "id"
             "required": true
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Item/properties/title"
+              "spec": "@string@"
             "name": "title"
             "required": true
           - "type":
@@ -162,36 +105,11 @@
             "name": "price"
             "required": true
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/id"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/id"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-a.yaml"
-    "jsonptr": "/components/schemas/User/properties/favoriteItem"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/status"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
     "type":
       "array":
         "element":
-          "spec": "api-b.yaml"
-          "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/id"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/title"
-    "type":
-      "fundamental": "string"
+          "spec": "@string@"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item"
     "type":
@@ -203,13 +121,11 @@
             "name": "tags"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/item/properties/id"
+              "spec": "@string@"
             "name": "id"
             "required": true
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/item/properties/title"
+              "spec": "@string@"
             "name": "title"
             "required": true
           - "type":
@@ -219,23 +135,17 @@
             "name": "price"
             "required": true
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error/properties/message"
-    "type":
-      "fundamental": "string"
-  - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Error"
     "name": "Error"
     "type":
       "object":
         "fields":
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Error/properties/message"
+              "spec": "@string@"
             "name": "message"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Error/properties/code"
+              "spec": "@integer@"
             "name": "code"
             "required": false
 "operations":
@@ -247,16 +157,14 @@
       - "location": "path"
         "name": "orderId"
         "schema":
-          "spec": "api-b.yaml"
-          "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema"
+          "spec": "@string@"
         "required": true
     "responses":
       - "status": "200"
         "bodies":
           - "contentType": "application/json"
             "schema":
-              "spec": "api-b.yaml"
-              "jsonptr": "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema"
+              "spec": "@string@"
   - "id": "getItem"
     "spec": "api-b.yaml"
     "path": "/items/{itemId}"
@@ -265,13 +173,11 @@
       - "location": "query"
         "name": "limit"
         "schema":
-          "spec": "api-a.yaml"
-          "jsonptr": "/components/parameters/LimitParam/schema"
+          "spec": "@integer@"
       - "location": "path"
         "name": "itemId"
         "schema":
-          "spec": "api-b.yaml"
-          "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
+          "spec": "@string@"
         "required": true
     "responses":
       - "status": "200"
@@ -284,5 +190,4 @@
       "bodies":
         - "contentType": "application/json"
           "schema":
-            "spec": "api-b.yaml"
-            "jsonptr": "/paths/~1items~1{itemId}/get/responses/default/content/application~1json/schema"
+            "spec": "@any@"

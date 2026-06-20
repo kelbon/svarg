@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <variant>
 
 namespace svarg {
 
@@ -23,6 +24,11 @@ constexpr auto matcher_r(Foos&&... foos) noexcept(
     // and no one literaly needed to pass member pointers here
     return static_cast<Ret>(m(std::forward<decltype(args)>(args)...));
   };
+}
+
+template <typename Variant, typename... Foos>
+decltype(auto) visit_one(Variant&& v, Foos&&... foos) {
+  return std::visit(matcher(std::forward<Foos>(foos)...), std::forward<Variant>(v));
 }
 
 }  // namespace svarg

@@ -9,7 +9,6 @@
 
 // для некоторых схем не генерируется, так как они простые и это ожидаемо
 // (тривиальные схемы превращаются сразу в фундаментальную ссылку)
-
 std::unordered_set<std::string> a_jsonptrs{
     "/components/schemas/User",
     "/components/schemas/UserPatch",
@@ -65,9 +64,9 @@ std::unordered_set<std::string> b_jsonptrs{
     "/components/schemas/Order/properties/item",
 };
 using namespace svarg;
-TEST("json pointers are correct") {
-  ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml", "api-b.yaml"});
-
+// TODO тест с оптимизацией
+static bool expect_json_ptrs(const ir::ir_object& ir, const std::unordered_set<std::string> aptrs,
+                             const std::unordered_set<std::string>& bptrs) {
   std::unordered_set<std::string> gota;
   std::unordered_set<std::string> gotb;
 
@@ -77,31 +76,71 @@ TEST("json pointers are correct") {
     else if (s.spec == "api-b.yaml")
       gotb.insert(std::string(s.jsonptr.escaped()));
     else
-      FAIL("invalid spec");
+      return false;
   }
   for (auto&& got : gota) {
-    if (!a_jsonptrs.contains(got)) {
+    if (!aptrs.contains(got)) {
       std::println("UNEXPECTED A: {}", got);
     }
   }
 
   for (auto&& got : gotb) {
-    if (!b_jsonptrs.contains(got)) {
+    if (!bptrs.contains(got)) {
       std::println("UNEXPECTED B: {}", got);
     }
   }
-  for (auto&& expected : a_jsonptrs) {
+  for (auto&& expected : aptrs) {
     if (!gota.contains(expected)) {
       std::println("NOT FOUND A: {}", expected);
     }
   }
-  for (auto&& expected : b_jsonptrs) {
+  for (auto&& expected : bptrs) {
     if (!gotb.contains(expected)) {
       std::println("NOT FOUND B: {}", expected);
     }
   }
-  REQUIRE(gota == a_jsonptrs);
-  REQUIRE(gotb == b_jsonptrs);
+  return gota == aptrs && gotb == bptrs;
+}
+
+TEST("json pointers are correct") {
+  // делаем без оптимизаций здесь
+  ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
+
+  REQUIRE(expect_json_ptrs(ir, a_jsonptrs, b_jsonptrs));
+}
+
+std::unordered_set<std::string> a_jsonptrs_optimized{
+    "/components/schemas/User",
+    "/components/schemas/UserPatch",
+    "/components/schemas/OrderStatusEvent",
+    "/paths/~1users~1{userId}/get/parameters/0/schema",
+    ("/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/"
+     "application~1json/schema"),
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema",
+    "/components/requestBodies/OrderCreate/content/application~1json/schema",
+    "/components/schemas/OrderStatusEvent/properties/status",
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event",
+    "/paths/~1users~1{userId}/get/parameters/0/schema/items",
+};
+
+std::unordered_set<std::string> b_jsonptrs_optimized{
+    "/components/schemas/Item",
+    "/components/schemas/Money",
+    "/components/schemas/Order",
+    "/components/schemas/Error",
+    "/components/schemas/Item/properties/tags",
+    "/components/schemas/Money/properties/currency",
+    // сгенерированные через $ref с перекрытым полем
+    // т.е. инлайн схемы продублированы, указывает поинтер в объект которого в ямле нет
+    "/components/schemas/Order/properties/item/properties/tags",
+    "/components/schemas/Order/properties/item",
+};
+
+TEST("json pointers are correct (optimized)") {
+  // делаем без оптимизаций здесь
+  ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
+  ir = pass_rm_trivial_schemas(std::move(ir));
+  REQUIRE(expect_json_ptrs(ir, a_jsonptrs_optimized, b_jsonptrs_optimized));
 }
 
 TEST("json repr") {

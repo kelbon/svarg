@@ -77,7 +77,7 @@ struct schema_ref {
     return operator<=>(r) == std::strong_ordering::equal;
   }
   std::strong_ordering operator<=>(const schema_ref& r) const noexcept {
-    return std::tie(spec, jsonptr) <=> std::tie(r.spec, r.jsonptr);
+    return std::tie(spec, jsonptr, name) <=> std::tie(r.spec, r.jsonptr, name);
   }
 };
 
@@ -210,6 +210,9 @@ struct schema {
   // generic строка файла
   string spec;
   json_pointer jsonptr;
+
+  // всё что ниже не влияет на хеш/сравнение
+
   // если имени нет это инлайн схема
   std::optional<string> name;
   // представление типа (то что получит пользователь генератора)
@@ -237,6 +240,12 @@ struct schema {
     r.spec = noadl::forwardLike<Me>(self.spec);
     r.jsonptr = noadl::forwardLike<Me>(self.jsonptr);
     return r;
+  }
+
+  bool is_trivial() const noexcept {
+    // именованная схема считается нетривиальной, чтобы генерировать все типы, написанные в
+    // /components/schemas
+    return !name && (!required || required->empty()) && std::holds_alternative<fundamental_e>(type.data);
   }
 
   bool operator==(const schema& x) const noexcept {
