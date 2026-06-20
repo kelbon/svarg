@@ -2,17 +2,8 @@
 Дополнительные фильтры для jinja2-окружения кодогенератора C++.
 
 Регистрация:
-
     from codegen import filters
     env.filters.update(filters.FILTERS)
-
-Фильтры намеренно работают через duck typing (`type(x).__name__`,
-`getattr`), чтобы НЕ импортировать модули `schema_types` / `operations`
-и не завязываться на их путь. Передавать сюда нужно живые dataclass-объекты
-(Schema, SchemaRef, ObjectFieldInfo, ...), а не их .to_dict()-представление.
-
-Всё, что касается соответствия "тип IR -> тип C++", вынесено в CONFIG —
-правьте его под свой проект (namespace, тип для `any`, контейнеры и т.п.).
 """
 
 from __future__ import annotations
@@ -23,52 +14,48 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
-# Конфигурация маппинга на C++. Меняйте под свой проект.
+# Конфигурация маппинга на C++
 # ---------------------------------------------------------------------------
 
 CONFIG: dict[str, Any] = {
+    "namespace": "cxxgen",
     "optional": "std::optional",
     "vector": "std::vector",
     "variant": "std::variant",
     "map": "std::map",
     "string": "std::string",
-    # Тип для schema = `any` / meta / additionalProperties без схемы и т.п.
     "any_type": "nlohmann::json",
-    # fundamental_e -> тип C++
     "fundamentals": {
-        "null": "std::nullptr_t",
+        "null":    "std::nullptr_t",
         "boolean": "bool",
         "integer": "std::int64_t",
-        "number": "double",
-        "string": "std::string",
-        "any": "nlohmann::json",
-        "never": "std::monostate",
+        "number":  "double",
+        "string":  "std::string",
+        "any":     "nlohmann::json",
+        "never":   "std::monostate",
     },
 }
 
-# @string@ / @integer@ / ... (spec фундаментального schema_ref) -> fundamental_e
 _SPEC_TO_FUNDAMENTAL = {
-    "@null@": "null",
+    "@null@":    "null",
     "@boolean@": "boolean",
     "@integer@": "integer",
-    "@number@": "number",
-    "@string@": "string",
-    "@any@": "any",
-    "@never@": "never",
+    "@number@":  "number",
+    "@string@":  "string",
+    "@any@":     "any",
+    "@never@":   "never",
 }
 
-# имя класса варианта schema_type.data -> короткий "kind" для dispatch в шаблоне
 _KIND_BY_CLASS = {
     "ObjectSchema": "object",
-    "ArraySchema": "array",
-    "EnumSchema": "enum",
-    "OneofSchema": "oneof",
-    "AnyofSchema": "anyof",
-    "AllofSchema": "allof",
-    "NotSchema": "not",
+    "ArraySchema":  "array",
+    "EnumSchema":   "enum",
+    "OneofSchema":  "oneof",
+    "AnyofSchema":  "anyof",
+    "AllofSchema":  "allof",
+    "NotSchema":    "not",
 }
 
-# https://en.cppreference.com/w/cpp/keyword
 _CPP_KEYWORDS = {
     "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor",
     "bool", "break", "case", "catch", "char", "char8_t", "char16_t",
@@ -92,10 +79,9 @@ _CPP_KEYWORDS = {
 # ---------------------------------------------------------------------------
 
 def _split_words(s: str) -> list[str]:
-    """Разбивает строку на слова: режет по не-буквам/цифрам и по camelCase."""
     s = re.sub(r"[^0-9A-Za-z]+", " ", str(s))
-    s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", s)  # fooBar -> foo Bar
-    s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", s)  # HTTPServer -> HTTP Server
+    s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", s)
+    s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", s)
     return [w for w in s.split() if w]
 
 
@@ -116,7 +102,7 @@ def to_snake_case(s: str) -> str:
 
 
 def cpp_ident(s: str) -> str:
-    """snake_case-идентификатор поля + защита от C++ keyword."""
+    """snake_case + защита от ключевых слов C++."""
     name = to_snake_case(s)
     if name in _CPP_KEYWORDS:
         name += "_"
@@ -124,7 +110,6 @@ def cpp_ident(s: str) -> str:
 
 
 def type_name_from_jsonptr(jp: Any) -> str:
-    """json pointer вида /components/schemas/User -> User."""
     parts = [p for p in str(jp).split("/") if p]
     return to_pascal_case(parts[-1]) if parts else "Anonymous"
 
@@ -134,14 +119,12 @@ def type_name_from_jsonptr(jp: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def schema_kind(data: Any) -> str:
-    """Короткий тег варианта schema_type.data для dispatch в шаблоне."""
-    if isinstance(data, Enum):  # FundamentalE
+    if isinstance(data, Enum):
         return "fundamental"
     return _KIND_BY_CLASS.get(type(data).__name__, "unknown")
 
 
 def cpp_schema_name(schema: Any) -> str:
-    """Имя C++ типа для верхнеуровневой Schema (по name, иначе по jsonptr)."""
     name = getattr(schema, "name", None)
     if name:
         return to_pascal_case(name)
@@ -149,10 +132,6 @@ def cpp_schema_name(schema: Any) -> str:
 
 
 def cpp_type_for_ref(ref: Any) -> str:
-    """SchemaRef -> имя/тип C++.
-
-    Порядок: фундаментальный тип (@string@ и т.п.) -> name -> jsonptr -> spec.
-    """
     spec = getattr(ref, "spec", None)
     fund = _SPEC_TO_FUNDAMENTAL.get(spec)
     if fund is not None:
@@ -167,7 +146,6 @@ def cpp_type_for_ref(ref: Any) -> str:
 
 
 def cpp_fundamental(e: Any) -> str:
-    """FundamentalE -> тип C++."""
     value = e.value if isinstance(e, Enum) else str(e)
     return CONFIG["fundamentals"].get(value, CONFIG["any_type"])
 
@@ -177,11 +155,10 @@ def cpp_optional(type_str: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Поля / параметры / тела / enum-значения
+# Поля / параметры / тела / enum
 # ---------------------------------------------------------------------------
 
 def cpp_field_type(field: Any) -> str:
-    """ObjectFieldInfo -> тип C++ с учётом required (обёртка в optional<>)."""
     t = cpp_type_for_ref(field.type)
     if not getattr(field, "required", False):
         t = cpp_optional(t)
@@ -193,11 +170,6 @@ def _location_value(loc: Any) -> str:
 
 
 def cpp_param_type(param: Any) -> str:
-    """OperationParameter -> тип C++.
-
-    path-параметры всегда обязательны; остальные — optional, если
-    required не выставлен явно в True.
-    """
     t = cpp_type_for_ref(param.schema)
     required = (getattr(param, "required", None) is True) or \
         _location_value(getattr(param, "location", None)) == "path"
@@ -222,12 +194,6 @@ def _enum_identifier(value: Any) -> str:
 
 
 def cpp_enum_value(value: Any) -> str:
-    """Значение из EnumSchema.values -> enumerator C++.
-
-    enum class в C++ хранит только целочисленные значения, поэтому для int
-    подставляем `= N`, а для строк/прочего генерируем идентификатор и
-    оставляем исходное значение в комментарии.
-    """
     ident = _enum_identifier(value)
     if isinstance(value, bool) or not isinstance(value, int):
         return f"{ident} /* {value!r} */"
@@ -235,7 +201,7 @@ def cpp_enum_value(value: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Имена для операций / статусов ответов
+# Операции / ответы
 # ---------------------------------------------------------------------------
 
 def cpp_operation_name(op: Any) -> str:
@@ -248,31 +214,122 @@ def cpp_operation_name(op: Any) -> str:
 
 
 def cpp_status_ident(resp: Any) -> str:
-    """ResponseDesc -> имя поля в struct Responses."""
     status = getattr(resp, "status", None)
     s = status.to_string() if hasattr(status, "to_string") else str(status)
     if s == "default":
-        return "default_response"
+        return "response_default"
     return "response_" + s.lower()
+
+
+# ---------------------------------------------------------------------------
+# Пути выходных файлов
+# ---------------------------------------------------------------------------
+
+def _unescape_jsonptr_segment(s: str) -> str:
+    """RFC 6901: ~1 -> /, ~0 -> ~ (порядок важен)."""
+    return s.replace("~1", "/").replace("~0", "~")
+
+
+def _safe_fs_segment(s: str) -> str:
+    """Делает из раскодированного сегмента JSON-указателя безопасный путь ФС."""
+    # Слэши внутри сегмента (появляются после ~1-декодирования) -> _
+    s = s.replace("/", "_").replace("\\", "_")
+    # Убираем ведущие точки (скрытые файлы Unix)
+    s = s.lstrip(".")
+    return s or "_"
+
+
+def schema_output_path(schema: Any) -> str:
+    """Schema -> относительный путь .hpp файла.
+
+    Структура: <spec>/<ptr-dirs...>/<name|last-segment>.hpp
+    Пример:
+      spec='petstore.yaml', jsonptr='/components/schemas/User', name='User'
+      -> petstore.yaml/components/schemas/User/User.hpp
+
+      spec='petstore.yaml', jsonptr='/components/schemas/User', name=None
+      -> petstore.yaml/components/schemas/User.hpp
+
+      jsonptr='/paths/~1pets~1{id}/get', name=None
+      -> petstore.yaml/paths/_pets_{id}/get.hpp
+    """
+    spec    = str(getattr(schema, "spec", "unknown"))
+    jsonptr = str(getattr(schema, "jsonptr", "") or "")
+    name    = getattr(schema, "name", None)
+
+    # Декодируем и санируем каждый сегмент указателя
+    ptr_parts = [
+        _safe_fs_segment(_unescape_jsonptr_segment(seg))
+        for seg in jsonptr.strip("/").split("/")
+        if seg
+    ]
+
+    if name:
+        # Имя есть -> кладём рядом с последним сегментом указателя как отдельный файл
+        filename = to_pascal_case(name) + ".hpp"
+    elif ptr_parts:
+        # Нет имени -> файл называется по последнему сегменту указателя
+        filename = ptr_parts[-1] + ".hpp"
+        ptr_parts = ptr_parts[:-1]
+    else:
+        filename = "schema.hpp"
+
+    parts = [spec] + ptr_parts + [filename]
+    return "/".join(parts)
+
+
+def operation_output_path(op: Any) -> str:
+    """Operation -> относительный путь .hpp файла.
+
+    Структура: <spec>/operations/<OperationName>.hpp
+    Если operation_id есть -> PascalCase от него.
+    Иначе -> METHOD_path_slug.hpp
+    """
+    spec   = str(getattr(op, "spec", "unknown"))
+    op_id  = getattr(op, "id", None)
+    method = str(getattr(op, "method", "op"))
+    path   = str(getattr(op, "path", ""))
+
+    if op_id:
+        filename = to_pascal_case(op_id) + ".hpp"
+    else:
+        path_slug = re.sub(r"[^0-9A-Za-z_]+", "_", path.strip("/")).strip("_")
+        if path_slug:
+            filename = f"{method.upper()}_{path_slug}.hpp"
+        else:
+            filename = f"{method.upper()}.hpp"
+
+    return f"{spec}/operations/{filename}"
+
+
+# ---------------------------------------------------------------------------
+# cxxgen:: helpers (используются из шаблонов)
+# ---------------------------------------------------------------------------
+
+def cxxgen_ns() -> str:
+    return CONFIG["namespace"]
 
 
 FILTERS = {
     # имена
-    "to_pascal_case": to_pascal_case,
-    "to_snake_case": to_snake_case,
-    "cpp_ident": cpp_ident,
-    # резолв типов
-    "schema_kind": schema_kind,
-    "cpp_schema_name": cpp_schema_name,
-    "cpp_type_for_ref": cpp_type_for_ref,
-    "cpp_fundamental": cpp_fundamental,
-    "cpp_optional": cpp_optional,
+    "to_pascal_case":      to_pascal_case,
+    "to_snake_case":       to_snake_case,
+    "cpp_ident":           cpp_ident,
+    # типы
+    "schema_kind":         schema_kind,
+    "cpp_schema_name":     cpp_schema_name,
+    "cpp_type_for_ref":    cpp_type_for_ref,
+    "cpp_fundamental":     cpp_fundamental,
+    "cpp_optional":        cpp_optional,
     # поля / параметры / тела / enum
-    "cpp_field_type": cpp_field_type,
-    "cpp_param_type": cpp_param_type,
-    "cpp_body_type": cpp_body_type,
-    "cpp_enum_value": cpp_enum_value,
+    "cpp_field_type":      cpp_field_type,
+    "cpp_param_type":      cpp_param_type,
+    "cpp_body_type":       cpp_body_type,
+    "cpp_enum_value":      cpp_enum_value,
     # операции
-    "cpp_operation_name": cpp_operation_name,
-    "cpp_status_ident": cpp_status_ident,
+    "cpp_operation_name":  cpp_operation_name,
+    "cpp_status_ident":    cpp_status_ident,
+    # пути выходных файлов
+    "schema_output_path":  schema_output_path,
+    "operation_output_path": operation_output_path,
 }

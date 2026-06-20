@@ -2,14 +2,8 @@
 Дополнительные глобалы для jinja2-окружения кодогенератора C++.
 
 Регистрация:
-
     from codegen import globals as g
     env.globals.update(g.GLOBALS)
-
-Здесь — то, что удобно звать в шаблоне как функцию/константу без `|`:
-маппинг-конфиг, тип для `any`, и хелперы для сборки целого .hpp-файла
-(баннер / include-и / открытие-закрытие namespace) поверх отдельных
-определений, которые рендерят schema/operation шаблоны.
 """
 
 from __future__ import annotations
@@ -18,8 +12,12 @@ from .filters import CONFIG
 
 
 def any_type() -> str:
-    """Тип C++ для schema `any` / additionalProperties без схемы / meta."""
     return CONFIG["any_type"]
+
+
+def cxxgen_ns() -> str:
+    """Namespace для cxxgen-примитивов (one_of, any_of, ...)."""
+    return CONFIG["namespace"]
 
 
 def cpp_config() -> dict:
@@ -35,7 +33,6 @@ def generated_banner() -> str:
 
 
 def default_includes() -> list[str]:
-    """Базовый набор include-ов для сгенерированных типов."""
     return [
         "<cstdint>",
         "<map>",
@@ -44,6 +41,7 @@ def default_includes() -> list[str]:
         "<variant>",
         "<vector>",
         "<nlohmann/json.hpp>",
+        "<cxxgen/common_types.hpp>",
     ]
 
 
@@ -63,11 +61,12 @@ def close_namespace(ns: str) -> str:
 
 
 GLOBALS = {
-    "any_type": any_type,
-    "cpp_config": cpp_config,
-    "generated_banner": generated_banner,
-    "default_includes": default_includes,
-    "render_includes": render_includes,
-    "open_namespace": open_namespace,
-    "close_namespace": close_namespace,
+    "any_type":          any_type,
+    "cxxgen_ns":         cxxgen_ns,
+    "cpp_config":        cpp_config,
+    "generated_banner":  generated_banner,
+    "default_includes":  default_includes,
+    "render_includes":   render_includes,
+    "open_namespace":    open_namespace,
+    "close_namespace":   close_namespace,
 }

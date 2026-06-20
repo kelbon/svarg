@@ -1,61 +1,158 @@
 {#-
-  Генерирует C++-определение для ОДНОЙ `schema` (dataclass Schema).
+  cpp_schema.j2 — генерирует одно .hpp-определение для Schema.
 
-  На вход:
-    schema  -- объект Schema (см. schema_types.py)
+  Вход:
+    schema  — объект Schema (schema_types.py)
 
-  Диспатч по варианту `schema.type.data` через фильтр `schema_kind`:
-    object  -> struct с полями (необязательные поля -> std::optional<T>)
-    array   -> using = std::vector<T>
-    enum    -> enum class
-    oneof   -> using = std::variant<...>
-    anyof   -> using = std::variant<...>
-    allof   -> struct : public A, public B, ...
-    not     -> validation-only, структуры нет (alias на any)
-    fundamental -> using = <примитив>
+  Диспатч по schema.type.data через фильтр schema_kind:
+    fundamental -> using Name = <primitive>;
+    array       -> using Name = cxxgen::array_of<Element>;
+    enum        -> enum class Name { ... };
+    oneof       -> using Name = cxxgen::one_of<A, B, ...>;
+    anyof       -> using Name = cxxgen::any_of<A, B, ...>;
+    allof       -> using Name = cxxgen::all_of<A, B, ...>;
+    not         -> using Name = cxxgen::not_<ForbiddenType>;
+    object      -> struct Name { fields...; [required_schemas]; };
 
-  IR плоский: вложенные типы НЕ инлайнятся, а ссылаются по SchemaRef
-  (фильтр cpp_type_for_ref), поэтому шаблон выдаёт ровно одно определение.
-  Имена других схем должны быть объявлены заранее (forward decl) на уровне
-  файла-обёртки; рекурсивные/self-ref типы могут требовать обёртки в
-  указатель — это вне ответственности данного шаблона.
+  required (Schema.required) -> using required_schemas = cxxgen::typelist<...>;
+    для object: вложен внутрь struct
+    для остальных: в обёртке struct detail_Name
+
+  Строка set_output_path генерирует путь через фильтр schema_output_path.
 -#}
-{{ set_output_path(schema | cpp_schema_name ~ ".hpp") }}
-{%- set data = schema.type.data -%}
-{%- set name = schema | cpp_schema_name -%}
-{%- set kind = data | schema_kind -%}
-{%- if kind == "object" -%}
-struct {{ name }} {
-{%- for f in data.fields %}
-    {{ f | cpp_field_type }} {{ f.name | cpp_ident }};
-{%- endfor %}
-{%- if data.additional_fields is not none %}
-    std::map<std::string, {{ data.additional_fields | cpp_type_for_ref }}> additional_properties;
-{%- endif %}
-};
-{%- elif kind == "array" -%}
-using {{ name }} = std::vector<{{ data.element | cpp_type_for_ref }}>;
-{%- elif kind == "enum" -%}
-enum class {{ name }} {
-{%- for v in data.values %}
-    {{ v | cpp_enum_value }},
-{%- endfor %}
-};
-{%- elif kind == "oneof" or kind == "anyof" -%}
-using {{ name }} = std::variant<
-{%- for ref in data.schemas %}
-    {{ ref | cpp_type_for_ref }}{{ "," if not loop.last else "" }}
-{%- endfor %}
->;
-{%- elif kind == "allof" -%}
-struct {{ name }}{% for ref in data.schemas %}{{ " :" if loop.first else "," }} public {{ ref | cpp_type_for_ref }}{% endfor %} {
-};
-{%- elif kind == "fundamental" -%}
+{%- set _path = schema | schema_output_path -%}
+{{- set_output_path(_path) -}}
+#pragma once
+#include <cxxgen/common_types.hpp>
+{% set ns    = cxxgen_ns() -%}
+{%- set data  = schema.type.data -%}
+{%- set name  = schema | cpp_schema_name -%}
+{%- set kind  = data | schema_kind -%}
+
+{#— вспомогательный макрос: required_schemas из Schema.required —#}
+{%- macro required_typelist(schema) %}
+{%- if schema.required %}
+    using required_schemas = {{ ns }}::typelist<
+{% for ref in schema.required %}
+        {{ ref | cpp_type_for_ref }}{{ "," if not loop.last else "" }}
+{% endfor %}
+    >;
+{% endif %}
+{%- endmacro %}
+
+{#==================================================================
+   fundamental
+===================================================================#}
+{%- if kind == "fundamental" %}
 using {{ name }} = {{ data | cpp_fundamental }};
-{%- elif kind == "not" -%}
-// `not`-схема влияет только на валидацию и не имеет структурного представления.
-// Запрещает: {{ data.type | cpp_type_for_ref }}
-using {{ name }} = {{ any_type() }};
-{%- else -%}
-// неподдерживаемый вид схемы: {{ kind }}
-{%- endif -%}
+{%- if schema.required %}
+
+struct detail_{{ name }} {
+{{ required_typelist(schema) }}
+};
+{%- endif %}
+
+{#==================================================================
+   array
+===================================================================#}
+{%- elif kind == "array" %}
+using {{ name }} = {{ ns }}::array_of<{{ data.element | cpp_type_for_ref }}>;
+{%- if schema.required %}
+
+struct detail_{{ name }} {
+{{ required_typelist(schema) }}
+};
+{%- endif %}
+
+{#==================================================================
+   enum
+===================================================================#}
+{%- elif kind == "enum" %}
+enum class {{ name }} {
+{% for v in data.values %}
+    {{ v | cpp_enum_value }},
+{% endfor %}
+};
+{%- if schema.required %}
+
+struct detail_{{ name }} {
+{{ required_typelist(schema) }}
+};
+{%- endif %}
+
+{#==================================================================
+   oneof
+===================================================================#}
+{%- elif kind == "oneof" %}
+using {{ name }} = {{ ns }}::one_of<
+{% for ref in data.schemas %}
+    {{ ref | cpp_type_for_ref }}{{ "," if not loop.last else "" }}
+{% endfor %}
+>;
+{%- if schema.required %}
+
+struct detail_{{ name }} {
+{{ required_typelist(schema) }}
+};
+{%- endif %}
+
+{#==================================================================
+   anyof
+===================================================================#}
+{%- elif kind == "anyof" %}
+using {{ name }} = {{ ns }}::any_of<
+{% for ref in data.schemas %}
+    {{ ref | cpp_type_for_ref }}{{ "," if not loop.last else "" }}
+{% endfor %}
+>;
+{%- if schema.required %}
+
+struct detail_{{ name }} {
+{{ required_typelist(schema) }}
+};
+{%- endif %}
+
+{#==================================================================
+   allof
+===================================================================#}
+{%- elif kind == "allof" %}
+using {{ name }} = {{ ns }}::all_of<
+{% for ref in data.schemas %}
+    {{ ref | cpp_type_for_ref }}{{ "," if not loop.last else "" }}
+{% endfor %}
+>;
+{%- if schema.required %}
+
+struct detail_{{ name }} {
+{{ required_typelist(schema) }}
+};
+{%- endif %}
+
+{#==================================================================
+   not
+===================================================================#}
+{%- elif kind == "not" %}
+using {{ name }} = {{ ns }}::not_<{{ data.type | cpp_type_for_ref }}>;
+{%- if schema.required %}
+
+struct detail_{{ name }} {
+{{ required_typelist(schema) }}
+};
+{%- endif %}
+
+{#==================================================================
+   object
+===================================================================#}
+{%- elif kind == "object" %}
+struct {{ name }} {
+{% for f in data.fields %}
+    {{ f | cpp_field_type }} {{ f.name | cpp_ident }};
+{% endfor %}
+{%- if data.additional_fields is not none %}
+    {{ ns }}::additional_properties<{{ data.additional_fields | cpp_type_for_ref }}> additional_properties;
+{% endif %}
+{{ required_typelist(schema) }}};
+
+{%- else %}
+// неизвестный вид схемы: {{ kind }}
+{%- endif %}
