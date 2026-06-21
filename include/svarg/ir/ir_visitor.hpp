@@ -26,8 +26,13 @@ struct ir_visitor_base {
     for (auto&& v : x)
       self(v);
   }
-  template <typename T>
-  void operator()(this auto&& self, const string_map<T>& x) {
+  template <typename... Types>
+  void operator()(this auto&& self, const std::unordered_map<Types...>& x) {
+    for (auto&& [_, v] : x)
+      self(v);
+  }
+  template <typename... Types>
+  void operator()(this auto&& self, const std::map<Types...>& x) {
     for (auto&& [_, v] : x)
       self(v);
   }

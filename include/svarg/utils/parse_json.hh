@@ -131,24 +131,43 @@ struct parse<array<T>> {
   }
 };
 
-// TODO ещё нужно провалидировать там какие-то паттерны, вроде в servers и в path
-// пути должны не быть типа x/{name} x/{id}, т.е. уникальны без учета этих имён
-template <typename T>
-struct parse<string_map<T>> {
-  void operator()(boost::json::value const& v, string_map<T>& out) {
+template <typename K, typename V, typename... Types>
+struct parse<std::unordered_map<K, V, Types...>> {
+  void operator()(boost::json::value const& v, std::unordered_map<K, V, Types...>& out) {
     auto const* obj = v.if_object();
     if (!obj)
       throw parse_error(" object expected, got `{}`", e2str(v.kind()));
     out.clear();
     for (auto const& [key, val] : *obj) {
-      T elem{};
+      V elem{};
       try {
         from_json(val, elem);
       } catch (parse_error const& e) {
         throw parse_error("/`{}`{}", std::string_view(key), e.what());
       }
       if (out.contains(key))
-        throw parse_error(" {} contains duplicated key `{}`", type_name<T>(), std::string_view(key));
+        throw parse_error(" {} contains duplicated key `{}`", type_name<V>(), std::string_view(key));
+      out.emplace(key, std::move(elem));
+    }
+  }
+};
+
+template <typename K, typename V, typename... Types>
+struct parse<std::map<K, V, Types...>> {
+  void operator()(boost::json::value const& v, std::map<K, V, Types...>& out) {
+    auto const* obj = v.if_object();
+    if (!obj)
+      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+    out.clear();
+    for (auto const& [key, val] : *obj) {
+      V elem{};
+      try {
+        from_json(val, elem);
+      } catch (parse_error const& e) {
+        throw parse_error("/`{}`{}", std::string_view(key), e.what());
+      }
+      if (out.contains(key))
+        throw parse_error(" {} contains duplicated key `{}`", type_name<V>(), std::string_view(key));
       out.emplace(key, std::move(elem));
     }
   }

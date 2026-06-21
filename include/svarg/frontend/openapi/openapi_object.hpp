@@ -279,7 +279,7 @@ struct encoding_object {
   optional<string> contentType;
   // должно быть проигнорировано, если у запроса тело не multipart
   // и Content-Disposition / Content-Type тоже описываются отдельно и игнорируются
-  optional<string_map<reference_or<header_object>>> headers;
+  optional<string_map_ci<reference_or<header_object>>> headers;
   // то же самое что в parameter_object
   optional<string> style;
   optional<bool> explode;

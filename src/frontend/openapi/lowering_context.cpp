@@ -551,8 +551,8 @@ struct schemas_collector {
   }
   SVARG_ADD_EXCEPTION_INFO(parse_error, name)
 
-  template <typename T>
-  void operator()(std::string_view name, const string_map<T>& f) try {
+  template <typename... Types>
+  void operator()(std::string_view name, const std::unordered_map<Types...>& f) try {
     dbgprint(name);
     currentjp.add_key(name);
     on_scope_exit {

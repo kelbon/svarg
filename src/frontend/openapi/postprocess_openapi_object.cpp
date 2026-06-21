@@ -43,8 +43,7 @@ static void remove_content_type_from_encoding_headers(optional<string_map<encodi
     return;
   for (auto& [_, enc] : *encoding)
     if (enc.headers) {
-      // TODO case insentisive
-      enc.headers->erase("Content-Type");
+      // регистронезависимо
       enc.headers->erase("content-type");
     }
 }

@@ -198,15 +198,14 @@ TEST("json repr") {
   ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"});
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
-    // крайне сложно сравнивать на разных платформах
-    // порядок в массивах + unordered_set/map и то что они получены из порядкового обхода unordered_map и тд
-    // REQUIRE(j == to_json(ir));
+    REQUIRE(j == to_json(ir));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
   ir = openapi2ir("./test_api", {"api-b.yaml"});
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
+    REQUIRE(j == to_json(ir));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });

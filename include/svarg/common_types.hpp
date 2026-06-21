@@ -4,6 +4,8 @@
 
 #include <boost/json/value.hpp>
 
+#include <map>
+
 #include "svarg/utils/number.hpp"
 #include "svarg/utils/box.hpp"
 #include "svarg/utils/strcmp.hpp"
@@ -40,8 +42,16 @@ using optional = box<T>;
 using std::string;
 template <typename T>
 using array = std::vector<T>;
+
 template <typename T>
 using string_map = std::unordered_map<string, T, str_hash, str_equal_to>;
+template <typename T>
+using string_map_ci = std::unordered_map<string, T, str_hash_ci, str_equal_to_ci>;
+
+template <typename T>
+using ordered_string_map = std::map<string, T, str_less>;
+template <typename T>
+using ordered_string_map_ci = std::map<string, T, str_less_ci>;
 
 // тег для парсинга
 template <typename T>

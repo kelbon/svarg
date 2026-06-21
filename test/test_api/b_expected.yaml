@@ -24,19 +24,19 @@
             "name": "address"
             "required": false
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Unused"
-    "name": "Unused"
+    "jsonptr": "/components/schemas/Error"
+    "name": "Error"
     "type":
       "object":
         "fields":
           - "type":
               "spec": "@string@"
-            "name": "f1"
-            "required": true
+            "name": "message"
+            "required": false
           - "type":
-              "spec": "@any@"
-            "name": "f2"
-            "required": true
+              "spec": "@integer@"
+            "name": "code"
+            "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Item"
     "name": "Item"
@@ -63,21 +63,11 @@
             "name": "price"
             "required": true
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
+    "jsonptr": "/components/schemas/Item/properties/tags"
     "type":
       "array":
         "element":
           "spec": "@string@"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Money/properties/currency"
-    "type":
-      "enum":
-        "type":
-          "spec": "@string@"
-        "values":
-          - "USD"
-          - "EUR"
-          - "RUB"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Money"
     "name": "Money"
@@ -94,29 +84,15 @@
             "name": "currency"
             "required": false
   - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Order/properties/item"
+    "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
-            "name": "tags"
-            "required": false
-          - "type":
-              "spec": "@string@"
-            "name": "id"
-            "required": true
-          - "type":
-              "spec": "@string@"
-            "name": "title"
-            "required": true
-          - "type":
-              "name": "Money"
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Money"
-            "name": "price"
-            "required": true
+      "enum":
+        "type":
+          "spec": "@string@"
+        "values":
+          - "USD"
+          - "EUR"
+          - "RUB"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
@@ -143,6 +119,50 @@
             "name": "item"
             "required": false
   - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/item"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
+            "name": "tags"
+            "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "id"
+            "required": true
+          - "type":
+              "spec": "@string@"
+            "name": "title"
+            "required": true
+          - "type":
+              "name": "Money"
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Money"
+            "name": "price"
+            "required": true
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
+    "type":
+      "array":
+        "element":
+          "spec": "@string@"
+  - "spec": "api-b.yaml"
+    "jsonptr": "/components/schemas/Unused"
+    "name": "Unused"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "f1"
+            "required": true
+          - "type":
+              "spec": "@any@"
+            "name": "f2"
+            "required": true
+  - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/UnusedSelfRecursive"
     "name": "UnusedSelfRecursive"
     "type":
@@ -154,43 +174,7 @@
               "jsonptr": "/components/schemas/UnusedSelfRecursive"
             "name": "f1"
             "required": false
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Item/properties/tags"
-    "type":
-      "array":
-        "element":
-          "spec": "@string@"
-  - "spec": "api-b.yaml"
-    "jsonptr": "/components/schemas/Error"
-    "name": "Error"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@string@"
-            "name": "message"
-            "required": false
-          - "type":
-              "spec": "@integer@"
-            "name": "code"
-            "required": false
 "operations":
-  - "id": "getOrder"
-    "spec": "api-b.yaml"
-    "path": "/orders/{orderId}"
-    "method": "get"
-    "parameters":
-      - "location": "path"
-        "name": "orderId"
-        "schema":
-          "spec": "@string@"
-        "required": true
-    "responses":
-      - "status": "200"
-        "bodies":
-          - "contentType": "application/json"
-            "schema":
-              "spec": "@string@"
   - "id": "getItem"
     "spec": "api-b.yaml"
     "path": "/items/{itemId}"
@@ -217,3 +201,19 @@
         - "contentType": "application/json"
           "schema":
             "spec": "@any@"
+  - "id": "getOrder"
+    "spec": "api-b.yaml"
+    "path": "/orders/{orderId}"
+    "method": "get"
+    "parameters":
+      - "location": "path"
+        "name": "orderId"
+        "schema":
+          "spec": "@string@"
+        "required": true
+    "responses":
+      - "status": "200"
+        "bodies":
+          - "contentType": "application/json"
+            "schema":
+              "spec": "@string@"

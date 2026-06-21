@@ -107,9 +107,19 @@ struct serialize<array<T>> {
   }
 };
 
-template <typename T>
-struct serialize<string_map<T>> {
-  boost::json::value operator()(string_map<T> const& map) {
+template <typename... Types>
+struct serialize<std::unordered_map<Types...>> {
+  boost::json::value operator()(std::unordered_map<Types...> const& map) {
+    boost::json::object out;
+    for (auto const& [key, val] : map)
+      out.emplace(key, to_json(val));
+    return out;
+  }
+};
+
+template <typename... Types>
+struct serialize<std::map<Types...>> {
+  boost::json::value operator()(std::map<Types...> const& map) {
     boost::json::object out;
     for (auto const& [key, val] : map)
       out.emplace(key, to_json(val));
@@ -149,6 +159,17 @@ struct serialize<one_or_array<T>> {
 template <typename T>
 struct serialize<std::unordered_set<T>> {
   boost::json::value operator()(const std::unordered_set<T>& r) {
+    boost::json::array out;
+    out.reserve(r.size());
+    for (auto const& elem : r)
+      out.push_back(to_json(elem));
+    return out;
+  }
+};
+
+template <typename T>
+struct serialize<std::set<T>> {
+  boost::json::value operator()(const std::set<T>& r) {
     boost::json::array out;
     out.reserve(r.size());
     for (auto const& elem : r)
