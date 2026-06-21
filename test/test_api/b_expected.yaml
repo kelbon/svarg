@@ -7,12 +7,12 @@
         "fields":
           - "type":
               "spec": "@string@"
-            "name": "id"
-            "required": true
-          - "type":
-              "spec": "@string@"
             "name": "favoriteItem"
             "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "id"
+            "required": true
           - "type":
               "spec": "@string@"
             "name": "name"
@@ -30,12 +30,12 @@
       "object":
         "fields":
           - "type":
-              "spec": "@string@"
-            "name": "message"
-            "required": false
-          - "type":
               "spec": "@integer@"
             "name": "code"
+            "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "message"
             "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Item"
@@ -44,14 +44,14 @@
       "object":
         "fields":
           - "type":
+              "spec": "@string@"
+            "name": "id"
+            "required": true
+          - "type":
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Item/properties/tags"
             "name": "tags"
             "required": false
-          - "type":
-              "spec": "@string@"
-            "name": "id"
-            "required": true
           - "type":
               "spec": "@string@"
             "name": "title"
@@ -90,9 +90,9 @@
         "type":
           "spec": "@string@"
         "values":
-          - "USD"
           - "EUR"
           - "RUB"
+          - "USD"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
@@ -110,13 +110,13 @@
             "name": "id"
             "required": false
           - "type":
-              "spec": "@string@"
-            "name": "status"
-            "required": false
-          - "type":
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Order/properties/item"
             "name": "item"
+            "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "status"
             "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item"
@@ -124,23 +124,23 @@
       "object":
         "fields":
           - "type":
+              "name": "Money"
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Money"
+            "name": "price"
+            "required": true
+          - "type":
+              "spec": "@string@"
+            "name": "id"
+            "required": true
+          - "type":
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
             "name": "tags"
             "required": false
           - "type":
               "spec": "@string@"
-            "name": "id"
-            "required": true
-          - "type":
-              "spec": "@string@"
             "name": "title"
-            "required": true
-          - "type":
-              "name": "Money"
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Money"
-            "name": "price"
             "required": true
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
@@ -155,12 +155,12 @@
       "object":
         "fields":
           - "type":
-              "spec": "@string@"
-            "name": "f1"
-            "required": true
-          - "type":
               "spec": "@any@"
             "name": "f2"
+            "required": true
+          - "type":
+              "spec": "@string@"
+            "name": "f1"
             "required": true
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/UnusedSelfRecursive"
@@ -180,15 +180,15 @@
     "path": "/items/{itemId}"
     "method": "get"
     "parameters":
-      - "location": "query"
-        "name": "limit"
-        "schema":
-          "spec": "@integer@"
       - "location": "path"
         "name": "itemId"
         "schema":
           "spec": "@string@"
         "required": true
+      - "location": "query"
+        "name": "limit"
+        "schema":
+          "spec": "@integer@"
     "responses":
       - "status": "200"
         "bodies":

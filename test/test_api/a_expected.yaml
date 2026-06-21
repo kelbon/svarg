@@ -6,16 +6,16 @@
         "fields":
           - "type":
               "spec": "@string@"
+            "name": "callbackUrl"
+            "required": false
+          - "type":
+              "spec": "@string@"
             "name": "itemId"
             "required": true
           - "type":
               "spec": "@integer@"
             "name": "quantity"
             "required": true
-          - "type":
-              "spec": "@string@"
-            "name": "callbackUrl"
-            "required": false
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/OrderStatusEvent"
     "name": "OrderStatusEvent"
@@ -34,9 +34,9 @@
         "type":
           "spec": "@string@"
         "values":
+          - "delivered"
           - "pending"
           - "shipped"
-          - "delivered"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User"
     "name": "User"
@@ -45,12 +45,12 @@
         "fields":
           - "type":
               "spec": "@string@"
-            "name": "id"
-            "required": true
-          - "type":
-              "spec": "@string@"
             "name": "favoriteItem"
             "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "id"
+            "required": true
           - "type":
               "spec": "@string@"
             "name": "name"
@@ -102,13 +102,13 @@
       "object":
         "fields":
           - "type":
-              "spec": "@string@"
-            "name": "orderId"
-            "required": false
-          - "type":
               "spec": "api-a.yaml"
               "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
             "name": "event"
+            "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "orderId"
             "required": false
   - "spec": "api-a.yaml"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
@@ -125,12 +125,12 @@
       "object":
         "fields":
           - "type":
-              "spec": "@string@"
-            "name": "message"
-            "required": false
-          - "type":
               "spec": "@integer@"
             "name": "code"
+            "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "message"
             "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Money"
@@ -154,9 +154,9 @@
         "type":
           "spec": "@string@"
         "values":
-          - "USD"
           - "EUR"
           - "RUB"
+          - "USD"
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
@@ -174,13 +174,13 @@
             "name": "id"
             "required": false
           - "type":
-              "spec": "@string@"
-            "name": "status"
-            "required": false
-          - "type":
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Order/properties/item"
             "name": "item"
+            "required": false
+          - "type":
+              "spec": "@string@"
+            "name": "status"
             "required": false
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item"
@@ -188,23 +188,23 @@
       "object":
         "fields":
           - "type":
+              "name": "Money"
+              "spec": "api-b.yaml"
+              "jsonptr": "/components/schemas/Money"
+            "name": "price"
+            "required": true
+          - "type":
+              "spec": "@string@"
+            "name": "id"
+            "required": true
+          - "type":
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
             "name": "tags"
             "required": false
           - "type":
               "spec": "@string@"
-            "name": "id"
-            "required": true
-          - "type":
-              "spec": "@string@"
             "name": "title"
-            "required": true
-          - "type":
-              "name": "Money"
-              "spec": "api-b.yaml"
-              "jsonptr": "/components/schemas/Money"
-            "name": "price"
             "required": true
   - "spec": "api-b.yaml"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"

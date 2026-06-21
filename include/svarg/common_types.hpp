@@ -2,13 +2,12 @@
 
 #include <strswitch/strswitch.hpp>
 
-#include <boost/json/value.hpp>
-
 #include <map>
 
 #include "svarg/utils/number.hpp"
 #include "svarg/utils/box.hpp"
 #include "svarg/utils/strcmp.hpp"
+#include "svarg/utils/json_compare.hpp"
 
 namespace std::filesystem {}
 
@@ -34,7 +33,12 @@ void efromstr(std::string_view s, parameter_location& out);
 struct Any {
   boost::json::value value;
 
-  bool operator==(const Any&) const = default;
+  bool operator==(const Any& r) const {
+    return value == r.value;
+  }
+  std::strong_ordering operator<=>(const Any& r) const {
+    return json_compare(value, r.value);
+  }
 };
 
 template <typename T>

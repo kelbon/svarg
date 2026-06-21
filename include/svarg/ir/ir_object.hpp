@@ -88,7 +88,6 @@ struct schema_ref {
   return h;
 }
 
-// precondition: e != array && s != object
 inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
   schema_ref ref;
   auto f2scope = [&]() -> std::string_view {
@@ -278,6 +277,9 @@ struct operation_parameter {
 
   bool operator==(const operation_parameter& r) const noexcept {
     return location == r.location && name == r.name;
+  }
+  std::strong_ordering operator<=>(const operation_parameter& r) const noexcept {
+    return std::tie(location, name) <=> std::tie(r.location, r.name);
   }
 };
 

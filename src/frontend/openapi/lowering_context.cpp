@@ -1,5 +1,6 @@
 #include "svarg/frontend/openapi/lowering_context.hpp"
 #include "svarg/ir/ir_object.hpp"
+#include "svarg/ir/ir_visitor.hpp"
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/merge_with_override.hpp"
 #include "svarg/utils/json_pointer.hpp"
@@ -905,6 +906,52 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
       }
     }
   }
+}
+
+struct arrays_sorter : ir::ir_visitor_base {
+  using ir::ir_visitor_base::operator();
+
+  template <typename T>
+  void operator()(const array<T>& obj) {
+    // массивы не влияют на хеш/сравнения в IR, const_cast безопасен
+    auto& arr = const_cast<array<T>&>(obj);
+    std::sort(arr.begin(), arr.end());
+  }
+};
+
+ir::ir_object lowering_context::generate_specs(fs::path specsdir, std::vector<fs::path> specs2generate,
+                                               openapi_options options) {
+  // подготовка
+  if (!fs::exists(specsdir) || !fs::is_directory(specsdir))
+    throw parse_error("specs directory not exist, provided path: {}", specsdir.generic_string());
+  specs_dir = fs::canonical(specsdir);
+  std::unordered_set<fs::path> loaded_specs;
+  std::unordered_map<fs::path, openapi_object> specs;
+
+  // парсинг спек
+
+  for (fs::path& s : specs2generate) {
+    s = find_existing_file(std::move(s), specs_dir);
+    if (!specs.contains(s)) {
+      specs[s] = do_parse_spec_file(s);
+      loaded_specs.insert(std::move(s));
+    }
+  }
+
+  // перевод в IR
+
+  for (auto& p : loaded_specs) {
+    try {
+      // результат собирается в this->result_ir
+      visit_and_generate_ir(specs.at(p), p);
+    } catch (std ::exception& e) {
+      throw parse_error("{}/{}", p.generic_string(), e.what());
+    }
+  }
+  // сортируем все массивы, чтобы получать всегда одинаковый IR
+  // (порядок заполнения мог зависеть от реализации)
+  arrays_sorter{}.visit(result_ir);
+  return std::move(result_ir);
 }
 
 }  // namespace svarg
