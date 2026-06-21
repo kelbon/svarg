@@ -4,6 +4,7 @@
 
 #include <boost/pfr.hpp>
 #include <unordered_set>
+#include <set>
 
 #include "svarg/common_types.hpp"
 #include "svarg/errors.hpp"
@@ -246,14 +247,34 @@ struct parse<E> {
   }
 };
 
-template <typename T>
-struct parse<std::unordered_set<T>> {
-  void operator()(boost::json::value const& v, std::unordered_set<T>& out) {
+template <typename T, typename... Types>
+struct parse<std::unordered_set<T, Types...>> {
+  void operator()(boost::json::value const& v, std::unordered_set<T, Types...>& out) {
     auto const* arr = v.if_array();
     if (!arr)
       throw parse_error(" array expected, got `{}`", e2str(v.kind()));
     out.clear();
     out.reserve(arr->size());
+    for (size_t i = 0; i < arr->size(); ++i) {
+      // не вставляем последний лишний элемент, если его не получится распарсить
+      T elem{};
+      try {
+        from_json((*arr)[i], elem);
+      } catch (parse_error const& e) {
+        throw parse_error("[{}]{}", i, e.what());
+      }
+      out.insert(std::move(elem));
+    }
+  }
+};
+
+template <typename T, typename... Types>
+struct parse<std::set<T, Types...>> {
+  void operator()(boost::json::value const& v, std::set<T, Types...>& out) {
+    auto const* arr = v.if_array();
+    if (!arr)
+      throw parse_error(" array expected, got `{}`", e2str(v.kind()));
+    out.clear();
     for (size_t i = 0; i < arr->size(); ++i) {
       // не вставляем последний лишний элемент, если его не получится распарсить
       T elem{};

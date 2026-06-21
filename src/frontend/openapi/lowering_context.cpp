@@ -328,7 +328,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   res.jsonptr = jp;
   auto ret_schema = [&] {
     assert(parsable_as<schema_object>(jp.access(load_as_json(file))) && "invalidly generated scheme");
-    ir.schemas->insert(res);
+    result_ir.schemas->insert(res);
     return schema_or_ref(std::move(res));
   };
 
@@ -336,7 +336,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     res.name = *name;
   else
     res.name = std::nullopt;
-  if (auto it = ir.schemas->find(res); it != ir.schemas->end())
+  if (auto it = result_ir.schemas->find(res); it != result_ir.schemas->end())
     return schema_or_ref{*it};
   // избегаем хранения jsonptr.view() (без escape возможно что совпадут пути "/" + "name" и "/name" одним
   // ключом)
@@ -444,7 +444,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       s.name = std::nullopt;
       s.type.data = std::move(schema);
       ir::schema_ref r = s.ref();
-      ir.schemas->insert(std::move(s));
+      result_ir.schemas->insert(std::move(s));
       res.add_requirement(std::move(r));
     }
   };
@@ -518,15 +518,13 @@ struct schemas_collector {
  private:
   const fs::path& obj_file;
   lowering_context* ctx;
-  std::unordered_set<ir::schema>& schemas;
   json_pointer currentjp;
 
 #define recursion (*this)
 
  public:
-  explicit schemas_collector(const fs::path& obj_file, std::unordered_set<ir::schema>& schemas,
-                             lowering_context& ctx)
-      : obj_file(obj_file), ctx(&ctx), schemas(schemas) {
+  explicit schemas_collector(const fs::path& obj_file, lowering_context& ctx)
+      : obj_file(obj_file), ctx(&ctx) {
   }
 
 #define SVARG_ADD_EXCEPTION_INFO(EXTYPE, INFO) \
@@ -629,7 +627,7 @@ struct schemas_collector {
       if constexpr (!std::is_same_v<T, schema_object>) {
         // проходимся на зарезолвленном объекте, чтобы собрать всё что упомянуто там
         auto [resolved, path, jp] = resolve_ref_and_ret(x, obj_file, currentjp / name, *ctx);
-        schemas_collector inner(path, schemas, *ctx);
+        schemas_collector inner(path, *ctx);
         inner.currentjp = std::move(jp);
         std::string lastseg = inner.currentjp.last_segment();
         if (!inner.currentjp.empty())
@@ -795,9 +793,9 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
   // TODO result.meta
   return result;
 }
-std::unordered_set<ir::body> lowering_context::request_body_lowering(request_body_object obj, fs::path file,
-                                                                     json_pointer jp) {
-  std::unordered_set<ir::body> result;
+std::set<ir::body> lowering_context::request_body_lowering(request_body_object obj, fs::path file,
+                                                           json_pointer jp) {
+  std::set<ir::body> result;
   for (auto& [content_type, mediaobj] : obj.content)
     result.insert(media_type_object_lowering(mediaobj, file, jp / "content" / content_type, content_type));
   return result;
@@ -862,15 +860,15 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
   return result;
 }
 
-ir::ir_object lowering_context::visit_and_generate_ir(const openapi_object& api, const fs::path& obj_file) {
-  auto& result = this->ir;
+void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs::path& obj_file) {
+  auto& result = this->result_ir;
   {
     auto _1 = guard_array(result.schemas);
     auto _2 = guard_array(result.operations);
     auto _3 = guard_array(result.webhooks);
 
     // собираем все схемы, в том числе из калбеков, вебхуков и paths
-    schemas_collector collector(obj_file, *result.schemas, *this);
+    schemas_collector collector(obj_file, *this);
     for_each_field_with_name(api, refvtor(collector));
 
     visit_all_callbacks(api, obj_file, *this,
@@ -907,7 +905,6 @@ ir::ir_object lowering_context::visit_and_generate_ir(const openapi_object& api,
       }
     }
   }
-  return std::move(result);
 }
 
 }  // namespace svarg

@@ -21,8 +21,8 @@ struct ir_visitor_base {
   void operator()(this auto&& self, const aggregate auto& x) {
     boost::pfr::for_each_field(x, self);
   }
-  template <typename T>
-  void operator()(this auto&& self, const std::unordered_set<T>& x) {
+  template <typename... Types>
+  void operator()(this auto&& self, const std::set<Types...>& x) {
     for (auto&& v : x)
       self(v);
   }

@@ -49,10 +49,10 @@ struct lowering_context {
   // схемы создаваемые прямо сейчас (scope + name), чтобы избегать рекурсии
   std::unordered_set<strpair> schemas_in_progress;
 
- public:
   // просто хранится здесь как в контексте
-  ir::ir_object ir;
+  ir::ir_object result_ir;
 
+ public:
   // принимает путь до директории спек и пути до всех спецификаций кодогенерацию для которых нужно сделать
   // пути могут быть или относительно spec dir или абсолютные
   // Note: инклуд директории из опций распространяются на specs
@@ -79,12 +79,13 @@ struct lowering_context {
 
     for (auto& p : loaded_specs) {
       try {
-        ir.merge(visit_and_generate_ir(specs.at(p), p));
+        // результат собирается в this->result_ir
+        visit_and_generate_ir(specs.at(p), p);
       } catch (std ::exception& e) {
         throw parse_error("{}/{}", p.generic_string(), e.what());
       }
     }
-    return std::move(ir);
+    return std::move(result_ir);
   }
 
   // reffile - файл где написана ссылка
@@ -160,7 +161,7 @@ struct lowering_context {
 
   ir::operation_parameter parameter_lowering(const parameter_object& param, fs::path file, json_pointer,
                                              std::string_view path);
-  std::unordered_set<ir::body> request_body_lowering(request_body_object, fs::path file, json_pointer jp);
+  std::set<ir::body> request_body_lowering(request_body_object, fs::path file, json_pointer jp);
   ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
                                       fs::path file, json_pointer);
   ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
@@ -196,7 +197,7 @@ struct lowering_context {
     return parse_spec(std::as_const(v), opts);
   }
 
-  ir::ir_object visit_and_generate_ir(const openapi_object& obj, const fs::path& obj_file);
+  void visit_and_generate_ir(const openapi_object& obj, const fs::path& obj_file);
 };
 
 }  // namespace svarg

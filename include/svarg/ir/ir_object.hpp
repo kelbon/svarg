@@ -2,7 +2,7 @@
 
 #include <boost/json/serialize.hpp>
 #include <boost/container_hash/hash.hpp>
-#include <unordered_set>
+#include <set>  // используется для стабильности вывода вместо unordered_set
 
 #include "svarg/utils/forward_like.hpp"
 #include "svarg/utils/path_tools.hpp"
@@ -450,9 +450,9 @@ struct response_desc {
   response_status status;
   // content-type игнорируется (даже не попадает в этот список)
   // регистронезависимо
-  std::optional<std::unordered_set<header>> headers;
+  std::optional<std::set<header>> headers;
   // на каждый contentType своё тело
-  std::optional<std::unordered_set<body>> bodies;
+  std::optional<std::set<body>> bodies;
 
   [[nodiscard]] bool is_default() const noexcept {
     return std::holds_alternative<default_response_t>(status.status);
@@ -506,8 +506,8 @@ struct operation {
   string method;
   std::optional<array<operation_parameter>> parameters;
   // на каждый contentType своё тело
-  std::optional<std::unordered_set<body>> bodies;
-  std::optional<std::unordered_set<response_desc>> responses;
+  std::optional<std::set<body>> bodies;
+  std::optional<std::set<response_desc>> responses;
   std::optional<response_desc> defaultResponse;
   std::optional<meta_t> meta;
 
@@ -558,10 +558,10 @@ struct hash<::svarg::ir::operation> {
 namespace svarg::ir {
 
 struct ir_object {
-  std::optional<std::unordered_set<schema>> schemas;
-  std::optional<std::unordered_set<operation>> operations;
+  std::optional<std::set<schema>> schemas;
+  std::optional<std::set<operation>> operations;
   // здесь помимо webhooks лежат callbacks (они то же самое, но ещё вычислимый url)
-  std::optional<std::unordered_set<operation>> webhooks;
+  std::optional<std::set<operation>> webhooks;
   // TODO servers
 
   // объединяет 2 ir в один
