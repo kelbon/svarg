@@ -12,9 +12,9 @@ struct schema_ref_vtor : ir_visitor {
 
   using ir_visitor::operator();
 
-  void operator()(const schema_ref& s) {
+  void operator()(this auto&& self, const schema_ref& s) {
     // схемы не влияют на кеш и сравнения в unordered сетах, поэтому const cast здесь нормален
-    f(const_cast<schema_ref&>(s));
+    self.f(const_cast<schema_ref&>(s));
   }
 };
 
