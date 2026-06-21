@@ -78,7 +78,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{matrix.build_type}}     \
             -DCMAKE_CXX_COMPILER=${{matrix.compiler}}     \
             -DCMAKE_CXX_STANDARD=${{matrix.cpp_standard}} \
-            -Dsvarg_ENABLE_ASAN=ON  \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5            \
+            -Dsvarg_ENABLE_ASAN=ON                        \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache           \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache         \
             -B build_asan -G "Ninja"
@@ -99,7 +100,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{matrix.build_type}}     \
             -DCMAKE_CXX_COMPILER=${{matrix.compiler}}     \
             -DCMAKE_CXX_STANDARD=${{matrix.cpp_standard}} \
-            -Dsvarg_ENABLE_UBSAN=ON  \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5            \
+            -Dsvarg_ENABLE_UBSAN=ON                       \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache           \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache         \
             -B build_ubsan -G "Ninja"
