@@ -48,6 +48,19 @@ paths:
 
 components:
   schemas:
+    Unused:
+      type: object
+      required: [f1, f2]
+      properties:
+        f1:
+          type: string
+        f2:
+          type: null
+    UnusedSelfRecursive:
+      type: object
+      properties:
+        f1:
+          $ref: '#/components/schemas/UnusedSelfRecursive'
     Item:
       type: object
       required: [id, title, price]

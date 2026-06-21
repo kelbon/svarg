@@ -45,6 +45,15 @@ ir_object pass_rm_unused_schemas(ir_object ir, std::unordered_set<schema_ref> ex
   if (!ir.schemas)
     return ir;
   std::unordered_set<schema_ref> used = std::move(exceptions);
+  for (const ir::schema& s : *ir.schemas) {
+    auto foo = [&](const schema_ref& r) {
+      // не складываем ссылки написанные в самом типе, чтобы саморекурсивные типы удалялись корректно
+      if (!r.refers_to(s))
+        used.insert(r);
+    };
+    schema_ref_vtor collector(foo);
+    collector.visit(s);
+  }
   auto foo = [&](const schema_ref& r) { used.insert(r); };
   schema_ref_vtor collector(foo);
   collector.visit(ir.operations);
