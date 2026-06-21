@@ -440,6 +440,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       res.type.data = std::move(schema);
     } else {
       ir::schema s;
+      s.spec = res.spec;
       // создаём что-то типа file#abc/anyOf
       s.jsonptr = res.jsonptr / fieldname;
       s.name = std::nullopt;

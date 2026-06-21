@@ -4,6 +4,7 @@
 
 #include "svarg/frontend/openapi/openapi_object.hpp"
 #include "svarg/utils/jsons_cache.hpp"
+#include "svarg/ir/options.hpp"
 
 /*
 в этом файле openapi_object из спецификации openapi 3.1
@@ -25,7 +26,8 @@ struct openapi_options {
   // TODO unordered_map<string> known_formats?
   // Зависят от порядка. При резолве ссылки берётся первый существующий файл
   // spec dir это тоже include dir и она имеет приоритет
-  std::vector<fs::path> include_dirs;
+  std::vector<fs::path> include_dirs = {};
+  ir::ir_options ir_opts = {};
 };
 
 // резолвит ссылки без #

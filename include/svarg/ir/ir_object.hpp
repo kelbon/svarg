@@ -72,6 +72,24 @@ struct schema_ref {
 
   [[nodiscard]] bool refers_to(const schema&) const noexcept;
 
+  [[nodiscard]] std::optional<fundamental_e> if_fundamental() const noexcept {
+    using enum fundamental_e;
+    return ss::string_switch<fundamental_e>(spec)
+        .case_("@null@", null)
+        .case_("@boolean@", boolean)
+        .case_("@integer@", integer)
+        .case_("@number@", number)
+        .case_("@string@", string)
+        .case_("@any@", any)
+        .case_("@never@", never)
+        .or_nullopt();
+  }
+
+  // возвращает true если ссылается на фундаментал
+  [[nodiscard]] bool is_fundamental() const noexcept {
+    return if_fundamental() != std::nullopt;
+  }
+
   bool operator==(const schema_ref& r) const noexcept {
     return operator<=>(r) == std::strong_ordering::equal;
   }
@@ -172,6 +190,81 @@ struct schema_type {
                array_schema, not_schema>
       data;
 
+  bool is_fundamental() const noexcept {
+    return std::holds_alternative<fundamental_e>(data);
+  }
+  bool is_enum() const noexcept {
+    return std::holds_alternative<enum_schema>(data);
+  }
+  bool is_oneof() const noexcept {
+    return std::holds_alternative<oneof_schema>(data);
+  }
+  bool is_anyof() const noexcept {
+    return std::holds_alternative<anyof_schema>(data);
+  }
+  bool is_allof() const noexcept {
+    return std::holds_alternative<allof_schema>(data);
+  }
+  bool is_object() const noexcept {
+    return std::holds_alternative<object_schema>(data);
+  }
+  bool is_array() const noexcept {
+    return std::holds_alternative<array_schema>(data);
+  }
+  bool is_not() const noexcept {
+    return std::holds_alternative<not_schema>(data);
+  }
+
+  auto* if_fundamental() noexcept {
+    return std::get_if<fundamental_e>(&data);
+  }
+  auto* if_enum() noexcept {
+    return std::get_if<enum_schema>(&data);
+  }
+  auto* if_oneof() noexcept {
+    return std::get_if<oneof_schema>(&data);
+  }
+  auto* if_anyof() noexcept {
+    return std::get_if<anyof_schema>(&data);
+  }
+  auto* if_allof() noexcept {
+    return std::get_if<allof_schema>(&data);
+  }
+  auto* if_object() noexcept {
+    return std::get_if<object_schema>(&data);
+  }
+  auto* if_array() noexcept {
+    return std::get_if<array_schema>(&data);
+  }
+  auto* if_not() noexcept {
+    return std::get_if<not_schema>(&data);
+  }
+
+  auto* if_fundamental() const noexcept {
+    return std::get_if<fundamental_e>(&data);
+  }
+  auto* if_enum() const noexcept {
+    return std::get_if<enum_schema>(&data);
+  }
+  auto* if_oneof() const noexcept {
+    return std::get_if<oneof_schema>(&data);
+  }
+  auto* if_anyof() const noexcept {
+    return std::get_if<anyof_schema>(&data);
+  }
+  auto* if_allof() const noexcept {
+    return std::get_if<allof_schema>(&data);
+  }
+  auto* if_object() const noexcept {
+    return std::get_if<object_schema>(&data);
+  }
+  auto* if_array() const noexcept {
+    return std::get_if<array_schema>(&data);
+  }
+  auto* if_not() const noexcept {
+    return std::get_if<not_schema>(&data);
+  }
+
   std::string_view discriminator() const noexcept {
     return std::visit(
         matcher_r<std::string_view>(
@@ -224,6 +317,15 @@ struct schema {
     return std::format("{}#{}", spec, jsonptr.escaped());
   }
 
+  bool has_requirements() const noexcept {
+    return required && !required->empty();
+  }
+
+  void add_requirements(const array<schema_ref>& reqs) {
+    if (!required)
+      required.emplace();
+    required->append_range(reqs);
+  }
   void add_requirement(schema_ref s) {
     if (!required)
       required.emplace();
@@ -252,6 +354,23 @@ struct schema {
   std::strong_ordering operator<=>(const schema& x) const noexcept {
     return std::tie(spec, jsonptr, name) <=> std::tie(x.spec, x.jsonptr, x.name);
   }
+
+  struct schema_cmp {
+    using is_transparent = int;
+
+    bool operator()(const schema& a, const schema& b) const {
+      return a < b;
+    }
+    bool operator()(const schema& a, const schema_ref& b) const {
+      return std::tie(a.spec, a.jsonptr, a.name) < std::tie(b.spec, b.jsonptr, b.name);
+    }
+    bool operator()(const schema_ref& a, const schema& b) const {
+      return std::tie(a.spec, a.jsonptr, a.name) < std::tie(b.spec, b.jsonptr, b.name);
+    }
+    bool operator()(const schema_ref& a, const schema_ref& b) const {
+      return std::tie(a.spec, a.jsonptr, a.name) < std::tie(b.spec, b.jsonptr, b.name);
+    }
+  };
 };
 
 [[nodiscard]] inline bool is_meta_key(std::string_view key) noexcept {
@@ -559,8 +678,10 @@ struct hash<::svarg::ir::operation> {
 
 namespace svarg::ir {
 
+using schemas_t = std::set<schema, schema::schema_cmp>;
+
 struct ir_object {
-  std::optional<std::set<schema>> schemas;
+  std::optional<schemas_t> schemas;
   std::optional<std::set<operation>> operations;
   // здесь помимо webhooks лежат callbacks (они то же самое, но ещё вычислимый url)
   std::optional<std::set<operation>> webhooks;

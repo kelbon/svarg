@@ -70,4 +70,19 @@ struct ir_visitor_base {
   }
 };
 
+template <typename Foo>
+struct schema_ref_vtor : ir_visitor_base {
+  Foo f;
+
+  explicit schema_ref_vtor(Foo f) : f(std::move(f)) {
+  }
+
+  using ir_visitor_base::operator();
+
+  void operator()(const schema_ref& s) {
+    // схемы не влияют на кеш и сравнения в unordered сетах, поэтому const cast здесь нормален
+    f(const_cast<schema_ref&>(s));
+  }
+};
+
 }  // namespace svarg::ir

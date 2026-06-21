@@ -182,12 +182,14 @@ std::unordered_set<std::string> b_jsonptrs_optimized2_with_exception{
 TEST("json pointers are correct (optimized + rm unused)") {
   ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
   ir = ir::pass_rm_trivial_schemas(std::move(ir));
-  ir::ir_object ir2 = ir::pass_rm_unused_schemas(ir, {ir::schema_ref{
-                                                         .spec = "api-b.yaml",
-                                                         .jsonptr = "/components/schemas/Unused"_jp,
-                                                     }});
+  ir::ir_options opts;
+  opts.marked_used.insert(ir::schema_ref{
+      .spec = "api-b.yaml",
+      .jsonptr = "/components/schemas/Unused"_jp,
+  });
+  ir::ir_object ir2 = ir::pass_rm_unused_schemas(ir, opts);
   REQUIRE(expect_json_ptrs(ir2, a_jsonptrs_optimized2, b_jsonptrs_optimized2_with_exception));
-  ir::ir_object ir3 = ir::pass_rm_unused_schemas(ir);
+  ir::ir_object ir3 = ir::pass_rm_unused_schemas(ir, ir::ir_options{});
   REQUIRE(expect_json_ptrs(ir3, a_jsonptrs_optimized2, b_jsonptrs_optimized2_no_exception));
 }
 
@@ -195,14 +197,14 @@ TEST("json repr") {
   // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-a.yaml"}));
   // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-b.yaml"}));
   // return;
-  ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"});
+  ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"}, {.ir_opts = {.allow_rm_unused = false}});
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
     REQUIRE(j == to_json(ir));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
-  ir = openapi2ir("./test_api", {"api-b.yaml"});
+  ir = openapi2ir("./test_api", {"api-b.yaml"}, {.ir_opts = {.allow_rm_unused = false}});
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
     REQUIRE(j == to_json(ir));

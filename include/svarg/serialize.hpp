@@ -156,9 +156,9 @@ struct serialize<one_or_array<T>> {
   }
 };
 
-template <typename T>
-struct serialize<std::unordered_set<T>> {
-  boost::json::value operator()(const std::unordered_set<T>& r) {
+template <typename... Types>
+struct serialize<std::unordered_set<Types...>> {
+  boost::json::value operator()(const std::unordered_set<Types...>& r) {
     boost::json::array out;
     out.reserve(r.size());
     for (auto const& elem : r)
@@ -167,9 +167,9 @@ struct serialize<std::unordered_set<T>> {
   }
 };
 
-template <typename T>
-struct serialize<std::set<T>> {
-  boost::json::value operator()(const std::set<T>& r) {
+template <typename... Types>
+struct serialize<std::set<Types...>> {
+  boost::json::value operator()(const std::set<Types...>& r) {
     boost::json::array out;
     out.reserve(r.size());
     for (auto const& elem : r)

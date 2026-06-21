@@ -16,9 +16,10 @@ TEST("json is an yaml") {
 TEST("generate ir from openapi") {
   svarg::ir::ir_object o = svarg::openapi2ir(
       std::filesystem::current_path(),
-      {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"});
+      {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"},
+      {.ir_opts = {.allow_rm_unused = false}});
 
-  REQUIRE(o.schemas && o.schemas->size() == 1341);
+  REQUIRE(o.schemas && o.schemas->size() == 1321);
   REQUIRE(o.operations && o.operations->size() == 6);
   REQUIRE(o.webhooks && o.webhooks->size() == 1);
 }
