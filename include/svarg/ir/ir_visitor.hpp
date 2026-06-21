@@ -5,8 +5,9 @@
 namespace svarg::ir {
 
 // просто проходит по всему по дефолту, включая в свои перегрузки и перегрузки наследника
-// Note: наследник должен не забыть сделать using ir_visitor::operator()
-struct ir_visitor {
+// Note: наследник должен не забыть сделать using ir_visitor_base::operator()
+struct ir_visitor_base {
+ protected:
   template <typename T>
   void operator()(this auto&& self, const std::optional<T>& x) {
     if (x)
@@ -58,6 +59,7 @@ struct ir_visitor {
   void operator()(this auto&& self, const uint64_t&) {
   }
 
+ public:
   void visit(this auto&& self, auto&& x) {
     self(std::as_const(x));
   }

@@ -4,17 +4,17 @@
 namespace svarg::ir {
 
 template <typename Foo>
-struct schema_ref_vtor : ir_visitor {
+struct schema_ref_vtor : ir_visitor_base {
   Foo f;
 
   schema_ref_vtor(Foo f) : f(std::move(f)) {
   }
 
-  using ir_visitor::operator();
+  using ir_visitor_base::operator();
 
-  void operator()(this auto&& self, const schema_ref& s) {
+  void operator()(const schema_ref& s) {
     // схемы не влияют на кеш и сравнения в unordered сетах, поэтому const cast здесь нормален
-    self.f(const_cast<schema_ref&>(s));
+    f(const_cast<schema_ref&>(s));
   }
 };
 
@@ -27,11 +27,11 @@ ir_object pass_rm_trivial_schemas(ir_object obj) {
     auto& s = *it;
     if (s.is_trivial()) {
       schema_ref replace = make_fundamental_ref(std::get<fundamental_e>(s.type.data));
-      auto vtor = [&](schema_ref& r) {
+      auto foo = [&](schema_ref& r) {
         if (r.refers_to(s))
           r = replace;
       };
-      schema_ref_vtor replacer(vtor);
+      schema_ref_vtor replacer(foo);
       replacer.visit(obj);
       it = obj.schemas->erase(it);
     } else {
@@ -45,8 +45,8 @@ ir_object pass_rm_unused_schemas(ir_object ir, std::unordered_set<schema_ref> ex
   if (!ir.schemas)
     return ir;
   std::unordered_set<schema_ref> used = std::move(exceptions);
-  auto vtor = [&](const schema_ref& r) { used.insert(r); };
-  schema_ref_vtor collector(vtor);
+  auto foo = [&](const schema_ref& r) { used.insert(r); };
+  schema_ref_vtor collector(foo);
   collector.visit(ir.operations);
   collector.visit(ir.webhooks);
 
