@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <variant>
+#include <utility>
 
 #include "svarg/errors.hpp"
 
