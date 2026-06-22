@@ -17,7 +17,7 @@ TEST("generate ir from openapi") {
   svarg::ir::ir_object o = svarg::openapi2ir(
       std::filesystem::current_path(),
       {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"},
-      {.ir_opts = {.allow_rm_unused = false}});
+      {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
 
   REQUIRE(o.schemas && o.schemas->size() == 1321);
   REQUIRE(o.operations && o.operations->size() == 6);

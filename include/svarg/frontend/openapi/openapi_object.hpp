@@ -103,7 +103,7 @@ struct schema_object {
   }
   // схема не пускает никого
   [[nodiscard]] bool allow_never() const noexcept {
-    return _keyfield_boolean_schema && !_keyfield_boolean_schema;
+    return _keyfield_boolean_schema && !*_keyfield_boolean_schema;
   }
 
   // "int32", "password" и тд, в том числе расширенные форматы известные пользователю

@@ -285,13 +285,6 @@ struct validate<schema_object> {
       throw validate_error("schema_object: `prefixItems` must not be empty");
     if ((v.then || v.else_) && !v.if_)
       throw validate_error("schema_object: `then`/`else` have no effect without `if`");
-    if (v.type) {
-      auto it = std::ranges::find(v.type->values, "null");
-      // один null всегда убирается при postparse. Так что если найден ещё один - это дубль в списке type:
-      // [...]
-      if (it != v.type->values.end())
-        throw validate_error("schema_object: `type` with duplicated null values");
-    }
   }
 };
 
@@ -309,8 +302,11 @@ struct postparse<schema_object> {
     }
 
     if (schema.type) {
+      if (std::ranges::count(schema.type->values, "null") > 1)
+        throw validate_error("schema_object: `type` with duplicated null values");
       auto it = std::ranges::find(schema.type->values, "null");
-      if (it != schema.type->values.end()) {
+      // если type: "null", то оставляем как есть, это не nullable
+      if (it != schema.type->values.end() && schema.type->values.size() != 1) {
         schema.nullable = true;
         schema.type->values.erase(it);
       }

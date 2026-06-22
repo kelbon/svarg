@@ -4,6 +4,7 @@
 #include <boost/container_hash/hash.hpp>
 #include <set>  // используется для стабильности вывода вместо unordered_set
 
+#include "svarg/utils/algo.hpp"
 #include "svarg/utils/forward_like.hpp"
 #include "svarg/utils/path_tools.hpp"
 #include "svarg/utils/json_pointer.hpp"
@@ -324,7 +325,7 @@ struct schema {
   void add_requirements(const array<schema_ref>& reqs) {
     if (!required)
       required.emplace();
-    required->append_range(reqs);
+    append_range(*required, reqs);
   }
   void add_requirement(schema_ref s) {
     if (!required)
@@ -343,9 +344,7 @@ struct schema {
   }
 
   bool is_trivial() const noexcept {
-    // именованная схема считается нетривиальной, чтобы генерировать все типы, написанные в
-    // /components/schemas
-    return !name && (!required || required->empty()) && std::holds_alternative<fundamental_e>(type.data);
+    return (!required || required->empty()) && std::holds_alternative<fundamental_e>(type.data);
   }
 
   bool operator==(const schema& x) const noexcept {
@@ -692,6 +691,8 @@ struct ir_object {
 
   bool operator==(const ir_object&) const = default;
 };
+
+[[nodiscard]] bool validate_ir_object(ir_object& ir);
 
 }  // namespace svarg::ir
 

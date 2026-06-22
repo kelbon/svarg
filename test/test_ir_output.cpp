@@ -35,6 +35,7 @@ std::unordered_set<std::string> a_jsonptrs{
     "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema",
     "/paths/~1users~1{userId}/get/parameters/0/schema/items",
     "/paths/~1users~1{userId}/parameters/0/schema",
+    "/components/schemas/UserPatch/additionalProperties",
 };
 
 std::unordered_set<std::string> b_jsonptrs{
@@ -58,6 +59,7 @@ std::unordered_set<std::string> b_jsonptrs{
     "/paths/~1orders~1{orderId}/get/parameters/0/schema",
     "/components/schemas/Unused",
     "/components/schemas/UnusedSelfRecursive",
+    "/paths/~1items~1{itemId}/get/responses/200/content/application~1json/schema",
     // сгенерированные через $ref с перекрытым полем
     // т.е. инлайн схемы продублированы, указывает поинтер в объект которого в ямле нет
     "/components/schemas/Order/properties/item/properties/id",
@@ -143,7 +145,7 @@ std::unordered_set<std::string> b_jsonptrs_optimized{
 
 TEST("json pointers are correct (optimized)") {
   ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
-  ir = ir::pass_rm_trivial_schemas(std::move(ir));
+  ir = ir::pass_rm_trivial_schemas(std::move(ir), {}).ir;
   REQUIRE(expect_json_ptrs(ir, a_jsonptrs_optimized, b_jsonptrs_optimized));
 }
 
@@ -155,18 +157,28 @@ std::unordered_set<std::string> a_jsonptrs_optimized2{
      "application~1json/schema"),
     "/components/requestBodies/OrderCreate/content/application~1json/schema",
     "/paths/~1users~1{userId}/get/parameters/0/schema/items",
-    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event",
     "/components/schemas/OrderStatusEvent/properties/status",
+    "/components/schemas/OrderStatusEvent",
+};
+
+std::unordered_set<std::string> a_jsonptrs_optimized_no_exception2{
+    "/components/schemas/User",
+    "/components/schemas/UserPatch",
+    "/paths/~1users~1{userId}/get/parameters/0/schema",
+    ("/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/"
+     "application~1json/schema"),
+    "/components/requestBodies/OrderCreate/content/application~1json/schema",
+    "/paths/~1users~1{userId}/get/parameters/0/schema/items",
 };
 
 std::unordered_set<std::string> b_jsonptrs_optimized2_no_exception{
-    "/components/schemas/Order",
     "/components/schemas/Error",
-    "/components/schemas/Money/properties/currency",
-    "/components/schemas/Order/properties/item/properties/tags",
     "/components/schemas/Money",
+    "/components/schemas/Money/properties/currency",
+    "/components/schemas/Order",
+    "/components/schemas/Order/properties/item/properties/tags",
     "/components/schemas/Order/properties/item",
-    "/components/schemas/Item/properties/tags",
+    "/components/schemas/Unused",  // <- остаётся (marksed_used)
 };
 std::unordered_set<std::string> b_jsonptrs_optimized2_with_exception{
     "/components/schemas/Order",
@@ -176,35 +188,42 @@ std::unordered_set<std::string> b_jsonptrs_optimized2_with_exception{
     "/components/schemas/Money",
     "/components/schemas/Order/properties/item",
     "/components/schemas/Item/properties/tags",
-    "/components/schemas/Unused",  // <- остаётся
+    "/components/schemas/Item",
+    "/components/schemas/Unused",               // <- остаётся (marksed_used)
+    "/components/schemas/UnusedSelfRecursive",  // именованный, поэтому остаётся
 };
 
 TEST("json pointers are correct (optimized + rm unused)") {
   ir::ir_object ir = openapi2ir_raw("./test_api", {"api-a.yaml", "api-b.yaml"});
-  ir = ir::pass_rm_trivial_schemas(std::move(ir));
   ir::ir_options opts;
+  ir = ir::pass_rm_trivial_schemas(std::move(ir), opts).ir;
+
   opts.marked_used.insert(ir::schema_ref{
       .spec = "api-b.yaml",
       .jsonptr = "/components/schemas/Unused"_jp,
   });
-  ir::ir_object ir2 = ir::pass_rm_unused_schemas(ir, opts);
+  ir::ir_object ir2 = ir::pass_rm_unused_schemas(ir, opts).ir;
   REQUIRE(expect_json_ptrs(ir2, a_jsonptrs_optimized2, b_jsonptrs_optimized2_with_exception));
-  ir::ir_object ir3 = ir::pass_rm_unused_schemas(ir, ir::ir_options{});
-  REQUIRE(expect_json_ptrs(ir3, a_jsonptrs_optimized2, b_jsonptrs_optimized2_no_exception));
+  opts.allow_rm_unused = svarg::ir::remove_category_e::any;
+  ir::ir_object ir3 = ir::pass_rm_unused_schemas(ir, opts).ir;
+  REQUIRE(expect_json_ptrs(ir3, a_jsonptrs_optimized_no_exception2, b_jsonptrs_optimized2_no_exception));
 }
 
 TEST("json repr") {
-  // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-a.yaml"}));
+  // openapi_options opts{.ir_opts{.allow_rm_unused = svarg::ir::remove_category_e::noone}};
+  // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-a.yaml"}, opts));
   // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-b.yaml"}));
   // return;
-  ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"}, {.ir_opts = {.allow_rm_unused = false}});
+  ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"},
+                                {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
     REQUIRE(j == to_json(ir));
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
-  ir = openapi2ir("./test_api", {"api-b.yaml"}, {.ir_opts = {.allow_rm_unused = false}});
+  ir = openapi2ir("./test_api", {"api-b.yaml"},
+                  {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
     REQUIRE(j == to_json(ir));

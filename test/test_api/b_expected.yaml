@@ -194,7 +194,7 @@
         "bodies":
           - "contentType": "application/json"
             "schema":
-              "spec": "@any@"
+              "spec": "@never@"
     "defaultResponse":
       "status": "default"
       "bodies":

@@ -332,7 +332,6 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     result_ir.schemas->insert(res);
     return schema_or_ref(std::move(res));
   };
-
   if (name)
     res.name = *name;
   else
@@ -441,7 +440,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     } else {
       ir::schema s;
       s.spec = res.spec;
-      // создаём что-то типа file#abc/anyOf
+      // создаём что-то типа abc/anyOf
       s.jsonptr = res.jsonptr / fieldname;
       s.name = std::nullopt;
       s.type.data = std::move(schema);

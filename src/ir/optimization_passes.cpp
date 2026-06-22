@@ -6,47 +6,77 @@
 
 namespace svarg::ir {
 
+// ограничиваем количество раз на всякий случай
+#define MAYBE_EVER \
+  int i = 0;       \
+  i < 20;          \
+  ++i
+
 ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
   // применяется даже без оптимизаций вообще
-  ir = pass_rm_trivial_schemas(std::move(ir));
+  ir = pass_rm_trivial_schemas(std::move(ir), options).ir;
   if (!options.enable_optimizations)
     return ir;
-  ir = pass_rm_unused_schemas(std::move(ir), options);
-  ir = pass_combinators_flatten(std::move(ir), options);
-  // после объединения oneOf некоторые схемы могут оказаться неиспользованными
-  // а после преобразования anyOf<X> -> X может даже получиться тривиальная схема, которую надо заменить
-  ir = pass_rm_unused_schemas(std::move(ir), options);
-  ir = pass_rm_trivial_schemas(std::move(ir));
+  size_t count = 0;
+  auto do_pass = [&](pass_result r) {
+    ir = std::move(r.ir);
+    count += r.count;
+  };
+  for (MAYBE_EVER) {
+    count = 0;
+
+    do_pass(pass_combinators_flatten(std::move(ir), options));
+    // после объединения oneOf некоторые схемы могут оказаться неиспользованными
+    // а после преобразования anyOf<X> -> X может даже получиться тривиальная схема, которую надо заменить
+    do_pass(pass_rm_trivial_schemas(std::move(ir), options));
+    do_pass(pass_rm_unused_schemas(std::move(ir), options));
+
+    // убирание бесполезных требований может помочь другим оптимизациям
+    do_pass(pass_remove_useless_requirements(std::move(ir), options));
+    do_pass(pass_rm_trivial_schemas(std::move(ir), options));
+    do_pass(pass_rm_unused_schemas(std::move(ir), options));
+
+    if (!count)
+      break;
+  }
+  assert(validate_ir_object(ir));
   return ir;
 }
 
-ir_object pass_rm_trivial_schemas(ir_object obj) {
-  if (!obj.schemas)
-    return obj;
-  auto it = obj.schemas->begin();
-  auto e = obj.schemas->end();
+pass_result pass_rm_trivial_schemas(ir_object ir, const ir_options& options) {
+  if (!ir.schemas)
+    return {std::move(ir), 0};
+  auto it = ir.schemas->begin();
+  auto e = ir.schemas->end();
+  size_t count = 0;
   for (; it != e;) {
     auto& s = *it;
-    if (s.is_trivial()) {
+    if (s.is_trivial() && (!s.name || options.allow_rm_trivial_named)) {
       schema_ref replace = make_fundamental_ref(std::get<fundamental_e>(s.type.data));
       auto foo = [&](schema_ref& r) {
-        if (r.refers_to(s))
+        if (r.refers_to(s)) {
           r = replace;
+          ++count;
+        }
       };
       schema_ref_vtor replacer(foo);
-      replacer.visit(obj);
-      it = obj.schemas->erase(it);
+      replacer.visit(ir);
+      it = ir.schemas->erase(it);
     } else {
       ++it;
     }
   }
-  return obj;
+  if (ir.schemas->empty())
+    ir.schemas.reset();
+  assert(validate_ir_object(ir));
+  return {std::move(ir), count};
 }
 
-ir_object pass_rm_unused_schemas(ir_object ir, const ir_options& options) {
-  if (!ir.schemas || !options.allow_rm_unused)
-    return ir;
+size_t do_pass_rm_unused_schemas(ir_object& ir, const ir_options& options) {
+  if (options.allow_rm_unused == remove_category_e::noone || !ir.schemas)
+    return 0;
   std::unordered_set<schema_ref> used = options.marked_used;
+
   for (const ir::schema& s : *ir.schemas) {
     auto foo = [&](const schema_ref& r) {
       // не складываем ссылки написанные в самом типе, чтобы саморекурсивные типы удалялись корректно
@@ -63,13 +93,42 @@ ir_object pass_rm_unused_schemas(ir_object ir, const ir_options& options) {
 
   auto it = ir.schemas->begin();
   auto e = ir.schemas->end();
+  size_t count = 0;
   for (; it != e;) {
-    if (!used.contains(it->ref()))
+    bool allowed_to_remove = [&] {
+      switch (options.allow_rm_unused) {
+        case remove_category_e::noone:
+          return false;
+        case remove_category_e::only_inline_schemas:
+          return it->name == std::nullopt;
+        case remove_category_e::any:
+          return true;
+      }
+    }();
+
+    if (!used.contains(it->ref()) && allowed_to_remove) {
       it = ir.schemas->erase(it);
-    else
+      ++count;
+    } else
       ++it;
   }
-  return ir;
+  if (ir.schemas->empty())
+    ir.schemas.reset();
+  assert(validate_ir_object(ir));
+  return count;
+}
+
+pass_result pass_rm_unused_schemas(ir_object ir, const ir_options& options) {
+  if (!ir.schemas)
+    return {std::move(ir), 0};
+  size_t count = 0;
+  for (MAYBE_EVER) {
+    size_t c = do_pass_rm_unused_schemas(ir, options);
+    if (c == 0)
+      break;
+    count += c;
+  }
+  return {std::move(ir), count};
 }
 
 struct access_schema {
@@ -81,200 +140,274 @@ struct access_schema {
   }
 };
 
-static void flatten_not(schema& this_schema, not_schema& n, access_schema get, size_t& changes,
-                        std::unordered_map<schema_ref, schema_ref>& replace_list) {
-  // здесь можно теоретически складывать даже с доп требованиями, но для этого нужно инвертировать
-  // требования и создавать типы not<X>
+// на что заменить this_schema
+using maybe_replace = std::optional<schema_ref>;
+
+static maybe_replace flatten_not(schema& this_schema, not_schema& n, access_schema get, size_t& changes) {
+  auto handle_not_fundamental = [&](fundamental_e f) -> maybe_replace {
+    if (f == fundamental_e::never)
+      return make_fundamental_ref(fundamental_e::any);  // not<@never@> -> @any@
+    else if (f == fundamental_e::any)
+      return make_fundamental_ref(fundamental_e::never);  // not<@any@> -> @never@
+    return std::nullopt;
+  };
+
   if (this_schema.has_requirements())
-    return;
-  if (std::optional f = n.type.if_fundamental()) {
-    if (*f == fundamental_e::never)
-      replace_list[this_schema.ref()] = make_fundamental_ref(fundamental_e::any);  // not<@never@> -> @any@
-    else if (*f == fundamental_e::any)
-      replace_list[this_schema.ref()] = make_fundamental_ref(fundamental_e::never);  // not<@any@> -> @never@
-    return;
-  }
+    return std::nullopt;
+  if (std::optional f = n.type.if_fundamental())
+    return handle_not_fundamental(*f);
   auto& ot = get(n.type);
   if (ot.has_requirements())
-    return;
+    return std::nullopt;
   if (auto* f = ot.type.if_not()) {
-    replace_list[this_schema.ref()] = f->type;  // not<not<T>> -> T
-    ++changes;
+    return f->type;  // not<not<T>> -> T
   } else if (ot.type.is_fundamental()) {
+    // пока не превращённый в тривиальную схему фундаментал
+    return handle_not_fundamental(*ot.type.if_fundamental());
   }
+  return std::nullopt;
+}
+
+// anyof/allof/oneof
+// возвращает true если что-то изменилось
+template <typename T>
+static bool inline_into(T& to, access_schema get, schema* add_requirements) {
+  auto condition = [&](const schema_ref& s) {
+    if (s.is_fundamental())
+      return false;
+    const schema& t = get(s);
+    if (!add_requirements && t.has_requirements())
+      return false;
+    return std::holds_alternative<T>(t.type.data);
+  };
+
+  // достаём все T из to.schemas
+
+  array<schema_ref> inlined;
+  for (const schema_ref& r : to.schemas)
+    if (condition(r))
+      inlined.push_back(r);
+
+  // все схемы всех T вставляем в to.schemas и удаляем заинлайненные схемы из to.schemas
+
+  array<schema_ref> inlined_schemas;
+  for (schema_ref& ref : inlined) {
+    auto& t = get(ref);
+    if (add_requirements) {
+      if (t.required)
+        add_requirements->add_requirements(*t.required);
+    } else
+      assert(!t.has_requirements());
+    append_range(inlined_schemas, std::get<T>(t.type.data).schemas);
+  }
+  std::erase_if(to.schemas, condition);
+  append_range(to.schemas, std::move(inlined_schemas));
+
+  remove_duplicates(to.schemas);
+  return inlined.empty();
 }
 
 // `this_schema` - схема в которой лежит оптимизируемый allOf
-static void flatten_allof(schema& this_schema, allof_schema& allof, access_schema get, size_t& changes,
-                          std::unordered_map<schema_ref, schema_ref>& replace_list) {
-  auto isallof = [&](schema_ref& s) {
-    if (s.is_fundamental())
-      return false;
-    return get(s).type.is_allof();
-  };
-  array<schema_ref> inlined(std::from_range, allof.schemas | std::views::filter(isallof));
-  array<schema_ref> inlined_schemas;
-  for (schema_ref& ref : inlined) {
-    // требования складываются для allOf
-    auto& t = get(ref);
-    if (t.required)
-      this_schema.add_requirements(*t.required);
-    inlined_schemas.append_range(t.type.if_allof()->schemas);
-  }
-  if (!inlined.empty())
+static maybe_replace flatten_allof(schema& this_schema, allof_schema& allof, access_schema get,
+                                   size_t& changes) {
+  // для allof требования складываются
+  if (inline_into(allof, get, &this_schema))
     ++changes;
-  std::erase_if(allof.schemas, isallof);
-  allof.schemas.append_range(std::move(inlined_schemas));
-  remove_duplicates(allof.schemas);
-  if (allof.schemas.empty() && !this_schema.has_requirements()) {
+  if (allof.schemas.empty()) {
     // allof<> -> any (также как (A && ...) == true если A пусто)
     this_schema.type.data = fundamental_e::any;
     ++changes;
   } else if (allof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    replace_list[this_schema.ref()] = allof.schemas.front();  // allof<X> -> X
-    ++changes;
+    // здесь заменяем только неименованные на именованные
+    if (!this_schema.name)
+      return allof.schemas.front();  // allof<X> -> X
   }
+  return std::nullopt;
 }
 
-static void flatten_anyof(schema& this_schema, anyof_schema& anyof, access_schema get, size_t& changes,
-                          std::unordered_map<schema_ref, schema_ref>& replace_list) {
-  auto isanyof = [&](schema_ref& s) {
-    if (s.is_fundamental())
-      return false;
-    auto& t = get(s);
-    // anyof с требованиями уже нетривиальный тип, который так просто не заинлайнишь
-    return t.type.is_anyof() && !t.has_requirements();
-  };
-  array<schema_ref> inlined(std::from_range, anyof.schemas | std::views::filter(isanyof));
-  array<schema_ref> inlined_schemas;
-  for (schema_ref& ref : inlined) {
-    auto& t = get(ref);
-    assert(!t.has_requirements());
-    inlined_schemas.append_range(t.type.if_anyof()->schemas);
-  }
-  if (!inlined.empty())
+static maybe_replace flatten_anyof(schema& this_schema, anyof_schema& anyof, access_schema get,
+                                   size_t& changes) {
+  if (inline_into(anyof, get, /*add_requirements=*/nullptr))
     ++changes;
-  std::erase_if(anyof.schemas, isanyof);
-  anyof.schemas.append_range(std::move(inlined_schemas));
-  remove_duplicates(anyof.schemas);
-  if (anyof.schemas.empty() && !this_schema.has_requirements()) {
+  if (anyof.schemas.empty()) {
     // anyof<> -> never (также как (A || ...) == false если A пусто)
     this_schema.type.data = fundamental_e::never;
     ++changes;
   } else if (anyof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    replace_list[this_schema.ref()] = anyof.schemas.front();  // anyof<X> -> X
-    ++changes;
+    // здесь заменяем только неименованные на именованные
+    if (!this_schema.name)
+      return anyof.schemas.front();  // anyof<X> -> X
   }
+  return std::nullopt;
 }
 
-static void flatten_oneof(schema& this_schema, oneof_schema& oneof, access_schema get, size_t& changes,
-                          std::unordered_map<schema_ref, schema_ref>& replace_list) {
-  auto isoneof = [&](schema_ref& s) {
-    if (s.is_fundamental())
-      return false;
-    auto& t = get(s);
-    // oneof с требованиями уже нетривиальный тип, который так просто не заинлайнишь
-    return t.type.is_oneof() && !t.has_requirements();
-  };
-  array<schema_ref> inlined(std::from_range, oneof.schemas | std::views::filter(isoneof));
-  array<schema_ref> inlined_schemas;
-  for (schema_ref& ref : inlined) {
-    auto& t = get(ref);
-    assert(!t.has_requirements());
-    inlined_schemas.append_range(t.type.if_oneof()->schemas);
-  }
-  if (!inlined.empty())
+static maybe_replace flatten_oneof(schema& this_schema, oneof_schema& oneof, access_schema get,
+                                   size_t& changes) {
+  if (inline_into(oneof, get, /*add_requirements=*/nullptr))
     ++changes;
-  std::erase_if(oneof.schemas, isoneof);
-  oneof.schemas.append_range(std::move(inlined_schemas));
-  remove_duplicates(oneof.schemas);
-  if (oneof.schemas.empty() && !this_schema.has_requirements()) {
+  if (oneof.schemas.empty()) {
     // oneof<> -> never (также как (A || ...) == false если A пусто)
     this_schema.type.data = fundamental_e::never;
     ++changes;
   } else if (oneof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    replace_list[this_schema.ref()] = oneof.schemas.front();  // oneof<X> -> X
-    ++changes;
+    // здесь заменяем только неименованные на именованные
+    if (!this_schema.name)
+      return oneof.schemas.front();  // oneof<X> -> X
   }
+  return std::nullopt;
 }
 
-// TODO тест кейс когда в результате получется фундаментальная ссылка - в таком случае её нужно убрать
-// либо поставить этот пасс до, либо наоборот в этом пасе переиспользовать убирание фундаментальной ссылки
-// лучше наверное пасс поставить ещё раз после этого. И на убирание более неиспользуемых тоже
-// TODO optimization вынести в отдельную функцию, там должны быть все пасы с учётом опций (типа включены
-// оптимизации или нет, включены ли конкретные убирающие неиспользуемые и тд
-//
-// TODO тест кейс на not<not<T>> -> T
-// и not<not<not<T>>> -> not<T> и тд
-static void flatten_combinator(const schema& s, const schemas_t& all_schemas, size_t& changes,
-                               std::unordered_map<schema_ref, schema_ref>& replace_list) {
+static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_schemas, size_t& changes) {
   // тип не влияет на хеш и сравнение
   auto& this_schema = const_cast<schema&>(s);
   access_schema accessor(all_schemas);
   matcher vtor{
-      [&](not_schema& n) { flatten_not(this_schema, n, accessor, changes, replace_list); },
-      [](array_schema& arr) {},
-      [](object_schema&) {},
-      [](enum_schema&) {},
-      [](fundamental_e&) {},
-      [&](allof_schema& af) { flatten_allof(this_schema, af, accessor, changes, replace_list); },
-      [&](anyof_schema& anf) { flatten_anyof(this_schema, anf, accessor, changes, replace_list); },
-      [&](oneof_schema& oof) { flatten_oneof(this_schema, oof, accessor, changes, replace_list); },
+      [&](not_schema& n) -> maybe_replace { return flatten_not(this_schema, n, accessor, changes); },
+      [](array_schema& arr) -> maybe_replace { return std::nullopt; },
+      [](object_schema&) -> maybe_replace { return std::nullopt; },
+      [](enum_schema&) -> maybe_replace { return std::nullopt; },
+      [](fundamental_e&) -> maybe_replace { return std::nullopt; },
+      [&](allof_schema& af) -> maybe_replace { return flatten_allof(this_schema, af, accessor, changes); },
+      [&](anyof_schema& anf) -> maybe_replace { return flatten_anyof(this_schema, anf, accessor, changes); },
+      [&](oneof_schema& oof) -> maybe_replace { return flatten_oneof(this_schema, oof, accessor, changes); },
   };
-  std::visit(vtor, this_schema.type.data);
+  return std::visit(vtor, this_schema.type.data);
 }
 
-ir_object pass_combinators_flatten(ir_object ir, const ir_options& options) {
+pass_result pass_combinators_flatten(ir_object ir, const ir_options& options) {
   if (!ir.schemas)
-    return ir;
-  std::unordered_map<schema_ref, schema_ref> replace_list;
-  for (;;) {
+    return {std::move(ir), 0};
+  size_t count = 0;
+  for (MAYBE_EVER) {
     size_t changes = 0;
-    for (const schema& s : *ir.schemas)
-      flatten_combinator(s, *ir.schemas, changes, replace_list);
-    if (changes == 0 && replace_list.empty())
+    auto it = ir.schemas->begin();
+    auto e = ir.schemas->end();
+    while (it != e) {
+      std::optional replace = flatten_combinator(*it, *ir.schemas, changes);
+      if (replace) {
+        ++changes;
+        assert(!replace->refers_to(*it));
+        auto vtor = [&](schema_ref& r) {
+          if (r.refers_to(*it))
+            r = *replace;
+        };
+        schema_ref_vtor replacer(vtor);
+        replacer.visit(ir);
+        it = ir.schemas->erase(it);
+      } else {
+        ++it;
+      }
+    }
+    if (!changes)
       break;
-    // заменяем все использования типов в replace_list и удаляем их
-    auto vtor = [&](schema_ref& r) {
-      auto it = replace_list.find(r);
-      if (it != replace_list.end())
-        r = it->second;
-    };
-    schema_ref_vtor replacer(vtor);
-    replacer.visit(ir);
-    for (auto&& [from, to] : replace_list)
-      ir.schemas->erase(from);
-    replace_list.clear();
   }
-  return ir;
+  if (ir.schemas->empty())
+    ir.schemas.reset();
+  assert(validate_ir_object(ir));
+  return {std::move(ir), count};
 }
-// TODO
-#if 0
-ir_object pass_remove_useless_requirements(ir_object ir, const ir_options& options) {
-  if (!ir.schemas)
-    return ir;
-  access_schema get(*ir.schemas);
-  // TODO if never то все остальные бесполезны
-  // TODO для каждого в пачке удалить всех кого он перекрыл
-  // never покрывает всех, allof покрывает все allof подмножества (так то здесь allof можно тоже объединять)
-  // anyof с меньшим числом аргументов перекрывает другой anyof, перекрывающиеся oneof образуют oneof
-  // пересечение
+
+// a subset b ?
+static bool is_subset(const array<schema_ref>& a, const array<schema_ref>& b) {
+  return std::ranges::all_of(a, [&](const schema_ref& need) { return std::ranges::contains(b, need); });
+}
+
+static std::optional<size_t> find_weak(const array<schema_ref>& reqs, access_schema get) {
+  // never покрывает всех,
+  // allof<A, B> покрывает все allof<B, C, D> подмножества
+  // anyof с меньшим числом аргументов перекрывает другой anyof
   // all проигрывает всем и вылетает
-  auto is_useless = [&](schema_ref& req) {
-    if (std::optional f = req.if_fundamental())
-      return *f == fundamental_e::any;
+
+  // TODO? здесь потенциально очень много случаев типа oneof + anyof, allof + oneof и так далее
+  // но их обработка не стоит того
+
+  auto is_never = [](const schema_ref& r) {
+    auto f = r.if_fundamental();
+    return f && *f == fundamental_e::never;
   };
+  auto never_it = std::ranges::find_if(reqs, is_never);
+  if (never_it != reqs.end()) {
+    auto it = std::ranges::find_if_not(reqs, is_never);
+    if (it != reqs.end())
+      return std::distance(reqs.begin(), it);
+    else
+      return std::nullopt;
+  }
+
+  for (size_t i = 0; i < reqs.size(); ++i) {
+    const schema_ref& ri = reqs[i];
+
+    if (auto f = ri.if_fundamental()) {
+      if (*f == fundamental_e::any)
+        return i;
+      continue;
+    }
+    const schema& si = get(ri);
+
+    if (const allof_schema* ai = si.type.if_allof()) {
+      for (size_t j = 0; j < reqs.size(); ++j) {
+        if (j == i || reqs[j].is_fundamental())
+          continue;
+        const schema& sj = get(reqs[j]);
+        const allof_schema* aj = sj.type.if_allof();
+        if (!aj)
+          continue;
+        // i = allOf<A, B, C>, j = allOf<A, B> => allOf<A, B, C>
+        if (is_subset(aj->schemas, ai->schemas))
+          return j;
+      }
+    }
+    if (const anyof_schema* ai = si.type.if_anyof()) {
+      for (size_t j = 0; j < reqs.size(); ++j) {
+        if (j == i || reqs[j].is_fundamental())
+          continue;
+        const schema& sj = get(reqs[j]);
+        const anyof_schema* aj = sj.type.if_anyof();
+        if (!aj)
+          continue;
+        // i = anyOf<A, B>, j = anyOf<A, B, C> => anyof<A, B>
+        if (is_subset(ai->schemas, aj->schemas))
+          return j;
+      }
+    }
+    if (const oneof_schema* ai = si.type.if_oneof()) {
+      for (size_t j = 0; j < reqs.size(); ++j) {
+        if (j == i || reqs[j].is_fundamental())
+          continue;
+        const schema& sj = get(reqs[j]);
+        const oneof_schema* aj = sj.type.if_oneof();
+        if (!aj)
+          continue;
+        // i = oneOf<A, B>, j = oneOf<A, B, C> => oneof<A, B>
+        if (is_subset(ai->schemas, aj->schemas))
+          return j;
+      }
+    }
+  }
+
+  return std::nullopt;
+}
+
+pass_result pass_remove_useless_requirements(ir_object ir, const ir_options& options) {
+  if (!ir.schemas)
+    return {std::move(ir), 0};
+  access_schema get(*ir.schemas);
+  size_t count = 0;
   for (const schema& _s : *ir.schemas) {
     // требования не влияют на кеширование
     schema& s = const_cast<schema&>(_s);
+
     if (s.required) {
-      auto removed = std::ranges::remove_if(*s.required, is_useless);
+      while (std::optional i = find_weak(*s.required, get)) {
+        s.required->erase(s.required->begin() + *i);
+        ++count;
+      }
+      if (s.required->empty())
+        s.required.reset();
     }
   }
-  // TODO проходим по всем типам в IR, если требования с @any@/not<@never@> и тд (которые могли получиться
-  // ранее)
-  return ir;
+  assert(validate_ir_object(ir));
+  return {std::move(ir), count};
 }
-#endif
 
 }  // namespace svarg::ir

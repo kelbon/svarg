@@ -72,7 +72,7 @@
             "name": "name"
             "required": false
         "additional_fields":
-          "spec": "@any@"
+          "spec": "@never@"
   - "spec": "api-a.yaml"
     "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
     "type":
