@@ -3,19 +3,26 @@
 
 namespace svarg::ir {
 
-bool validate_ir_object(ir_object& ir) {
-  if (ir.schemas) {
+void ir_object::validate() const {
+  if (schemas) {
     bool ok = true;
     auto foo = [&](const schema_ref& r) {
-      if (!r.is_fundamental() && !ir.schemas->contains(r))
-        ok = false;
+      if (!r.is_fundamental() && !schemas->contains(r))
+        throw validate_error("ir references to {}#{} not found in ir", r.spec, r.jsonptr->escaped());
     };
     schema_ref_vtor checker(foo);
-    checker.visit(ir);
-    if (!ok)
-      return ok;
+    checker.visit(*this);
   }
-  return true;
+}
+
+// для удобных ассёртов
+bool validate_ir_object(const ir_object& ir) {
+  try {
+    ir.validate();
+    return true;
+  } catch (...) {
+    return false;
+  }
 }
 
 void ir_object::merge(ir_object other) {

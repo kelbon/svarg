@@ -689,10 +689,12 @@ struct ir_object {
   // объединяет 2 ir в один
   void merge(ir_object obj);
 
+  void validate() const;
+
   bool operator==(const ir_object&) const = default;
 };
 
-[[nodiscard]] bool validate_ir_object(ir_object& ir);
+[[nodiscard]] bool validate_ir_object(const ir_object& ir);
 
 }  // namespace svarg::ir
 

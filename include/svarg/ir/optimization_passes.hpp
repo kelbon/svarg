@@ -29,6 +29,6 @@ struct pass_result {
 
 // удаляет требования, которые ничего не добавляют (не удаляет сами схемы требований, если они стали
 // неиспользуемымми)
-[[nodiscard]] pass_result pass_remove_useless_requirements(ir_object, const ir_options&);
+[[nodiscard]] pass_result pass_rm_useless_requirements(ir_object, const ir_options&);
 
 }  // namespace svarg::ir

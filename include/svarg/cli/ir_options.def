@@ -1,0 +1,20 @@
+
+TAG(optimize, "enable optimizations")
+STRING(passes, "list of additional optimization passes separated by whitespace. Allowed names: "
+"rts - remove trivial schemas, rus - remove unused schemas, cf - combinators flatten, rur - remove useless requirements",
+ default(""))
+
+ALIAS(O2, optimize)
+
+// если имя не указано и дефолтное "a" уже занято, берётся другое
+STRING(out, "name of output file", default(""))
+ALIAS(o, out)
+
+STRING(out_format, "yaml or json", default("yaml"))
+RENAME(out_format, "out-format")
+ALIAS(f, out-format)
+
+// берёт на вход файлы, делает из них IR
+ALLOW_ADDITIONAL_ARGS
+
+ALIAS(h, help)

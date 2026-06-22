@@ -32,7 +32,7 @@ ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
     do_pass(pass_rm_unused_schemas(std::move(ir), options));
 
     // убирание бесполезных требований может помочь другим оптимизациям
-    do_pass(pass_remove_useless_requirements(std::move(ir), options));
+    do_pass(pass_rm_useless_requirements(std::move(ir), options));
     do_pass(pass_rm_trivial_schemas(std::move(ir), options));
     do_pass(pass_rm_unused_schemas(std::move(ir), options));
 
@@ -46,6 +46,7 @@ ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
 pass_result pass_rm_trivial_schemas(ir_object ir, const ir_options& options) {
   if (!ir.schemas)
     return {std::move(ir), 0};
+  ir.validate();
   auto it = ir.schemas->begin();
   auto e = ir.schemas->end();
   size_t count = 0;
@@ -121,6 +122,7 @@ size_t do_pass_rm_unused_schemas(ir_object& ir, const ir_options& options) {
 pass_result pass_rm_unused_schemas(ir_object ir, const ir_options& options) {
   if (!ir.schemas)
     return {std::move(ir), 0};
+  ir.validate();
   size_t count = 0;
   for (MAYBE_EVER) {
     size_t c = do_pass_rm_unused_schemas(ir, options);
@@ -204,12 +206,12 @@ static bool inline_into(T& to, access_schema get, schema* add_requirements) {
   append_range(to.schemas, std::move(inlined_schemas));
 
   remove_duplicates(to.schemas);
-  return inlined.empty();
+  return !inlined.empty();
 }
 
 // `this_schema` - схема в которой лежит оптимизируемый allOf
 static maybe_replace flatten_allof(schema& this_schema, allof_schema& allof, access_schema get,
-                                   size_t& changes) {
+                                   size_t& changes, const ir_options& options) {
   // для allof требования складываются
   if (inline_into(allof, get, &this_schema))
     ++changes;
@@ -218,15 +220,15 @@ static maybe_replace flatten_allof(schema& this_schema, allof_schema& allof, acc
     this_schema.type.data = fundamental_e::any;
     ++changes;
   } else if (allof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    // здесь заменяем только неименованные на именованные
-    if (!this_schema.name)
+    if (!this_schema.name || options.allow_rm_trivial_named ||
+        options.allow_rm_unused == remove_category_e::any)
       return allof.schemas.front();  // allof<X> -> X
   }
   return std::nullopt;
 }
 
 static maybe_replace flatten_anyof(schema& this_schema, anyof_schema& anyof, access_schema get,
-                                   size_t& changes) {
+                                   size_t& changes, const ir_options& options) {
   if (inline_into(anyof, get, /*add_requirements=*/nullptr))
     ++changes;
   if (anyof.schemas.empty()) {
@@ -234,15 +236,15 @@ static maybe_replace flatten_anyof(schema& this_schema, anyof_schema& anyof, acc
     this_schema.type.data = fundamental_e::never;
     ++changes;
   } else if (anyof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    // здесь заменяем только неименованные на именованные
-    if (!this_schema.name)
+    if (!this_schema.name || options.allow_rm_trivial_named ||
+        options.allow_rm_unused == remove_category_e::any)
       return anyof.schemas.front();  // anyof<X> -> X
   }
   return std::nullopt;
 }
 
 static maybe_replace flatten_oneof(schema& this_schema, oneof_schema& oneof, access_schema get,
-                                   size_t& changes) {
+                                   size_t& changes, const ir_options& options) {
   if (inline_into(oneof, get, /*add_requirements=*/nullptr))
     ++changes;
   if (oneof.schemas.empty()) {
@@ -250,14 +252,15 @@ static maybe_replace flatten_oneof(schema& this_schema, oneof_schema& oneof, acc
     this_schema.type.data = fundamental_e::never;
     ++changes;
   } else if (oneof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    // здесь заменяем только неименованные на именованные
-    if (!this_schema.name)
+    if (!this_schema.name || options.allow_rm_trivial_named ||
+        options.allow_rm_unused == remove_category_e::any)
       return oneof.schemas.front();  // oneof<X> -> X
   }
   return std::nullopt;
 }
 
-static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_schemas, size_t& changes) {
+static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_schemas, size_t& changes,
+                                        const ir_options& options) {
   // тип не влияет на хеш и сравнение
   auto& this_schema = const_cast<schema&>(s);
   access_schema accessor(all_schemas);
@@ -267,9 +270,15 @@ static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_sc
       [](object_schema&) -> maybe_replace { return std::nullopt; },
       [](enum_schema&) -> maybe_replace { return std::nullopt; },
       [](fundamental_e&) -> maybe_replace { return std::nullopt; },
-      [&](allof_schema& af) -> maybe_replace { return flatten_allof(this_schema, af, accessor, changes); },
-      [&](anyof_schema& anf) -> maybe_replace { return flatten_anyof(this_schema, anf, accessor, changes); },
-      [&](oneof_schema& oof) -> maybe_replace { return flatten_oneof(this_schema, oof, accessor, changes); },
+      [&](allof_schema& af) -> maybe_replace {
+        return flatten_allof(this_schema, af, accessor, changes, options);
+      },
+      [&](anyof_schema& anf) -> maybe_replace {
+        return flatten_anyof(this_schema, anf, accessor, changes, options);
+      },
+      [&](oneof_schema& oof) -> maybe_replace {
+        return flatten_oneof(this_schema, oof, accessor, changes, options);
+      },
   };
   return std::visit(vtor, this_schema.type.data);
 }
@@ -277,13 +286,14 @@ static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_sc
 pass_result pass_combinators_flatten(ir_object ir, const ir_options& options) {
   if (!ir.schemas)
     return {std::move(ir), 0};
+  ir.validate();
   size_t count = 0;
   for (MAYBE_EVER) {
     size_t changes = 0;
     auto it = ir.schemas->begin();
     auto e = ir.schemas->end();
     while (it != e) {
-      std::optional replace = flatten_combinator(*it, *ir.schemas, changes);
+      std::optional replace = flatten_combinator(*it, *ir.schemas, changes, options);
       if (replace) {
         ++changes;
         assert(!replace->refers_to(*it));
@@ -388,9 +398,10 @@ static std::optional<size_t> find_weak(const array<schema_ref>& reqs, access_sch
   return std::nullopt;
 }
 
-pass_result pass_remove_useless_requirements(ir_object ir, const ir_options& options) {
+pass_result pass_rm_useless_requirements(ir_object ir, const ir_options& options) {
   if (!ir.schemas)
     return {std::move(ir), 0};
+  ir.validate();
   access_schema get(*ir.schemas);
   size_t count = 0;
   for (const schema& _s : *ir.schemas) {
