@@ -267,7 +267,7 @@ static std::string render_struct_content(const ir::schema& s, const ir::schemas_
         result += std::format("static std::array<{}, {}> values = {{", type, e.values.size());
         for (auto&& v : e.values) {
           if (e.type.is_fundamental(ir::fundamental_e::string))
-            result += std::format("\"{}\",", v.value.as_string());
+            result += std::format("\"{}\",", std::string_view(v.value.as_string()));
           else
             result += std::format("from_json(\"{}\"),", boost::json::serialize(v.value));
         }
