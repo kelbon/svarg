@@ -7,9 +7,12 @@ namespace svarg::cxx {
 // превращает jp в неймспейс валидный в С++
 std::string jsonptr2namespace(const json_pointer& jp);
 
+// то же самое что jsonptr2namespace, но использует to_cxx_ident_simple для сегментов
+std::string jsonptr2namespace_simple(const json_pointer& jp);
+
 // инпуты должны быть вида a::b::c, неймспейсами начиная с корневого
 //
-// возвращает строку максимально короткого неймспейса для обращения из namespace a в namespace b
+// возвращает строку максимально короткого неймспейса для обращения из namespace A в namespace B
 // при этом исключая любые возможные конфликты имён
 // A="a::b::c", B="b::c",    => "b::c"
 // A="b::c",    B="d::e",    => "::d::e"
@@ -19,5 +22,7 @@ std::string jsonptr2namespace(const json_pointer& jp);
 std::string namespace_relative(std::string_view A, std::string_view B);
 
 std::string namespace_relative(const json_pointer& A, const json_pointer& B);
+
+std::string namespace_relative_simple(const json_pointer& A, const json_pointer& B);
 
 }  // namespace svarg::cxx

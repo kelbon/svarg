@@ -18,7 +18,7 @@ matcher(Foos...) -> matcher<Foos...>;
 template <typename Ret, typename... Foos>
 constexpr auto matcher_r(Foos&&... foos) noexcept(
     (... && std::is_nothrow_constructible_v<std::remove_cvref_t<Foos>, Foos&&>)) {
-  return [m = matcher{std::forward<Foos>(foos)...}](auto&&... args) -> Ret {
+  return [m = matcher{std::forward<Foos>(foos)...}](auto&&... args) mutable -> Ret {
     // - uses RVO, no move
     // - do not uses std::invoke for better compilation speed/errors
     // and no one literaly needed to pass member pointers here

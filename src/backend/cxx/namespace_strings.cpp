@@ -18,6 +18,20 @@ std::string jsonptr2namespace(const json_pointer& jp) {
   return result;
 }
 
+std::string jsonptr2namespace_simple(const json_pointer& jp) {
+  std::string result;
+  for (std::string_view s : jp.segments()) {
+    result += to_cxx_ident_simple(jp_unescape_segment(s));
+    result += "::";
+  }
+  if (!result.empty()) {
+    // rm last "::"
+    result.pop_back();
+    result.pop_back();
+  }
+  return result;
+}
+
 std::string namespace_relative(std::string_view a, std::string_view b) {
   if (b.starts_with("::"))
     b.remove_prefix(2);
@@ -35,6 +49,10 @@ std::string namespace_relative(std::string_view a, std::string_view b) {
 
 std::string namespace_relative(const json_pointer& a, const json_pointer& b) {
   return namespace_relative(jsonptr2namespace(a), jsonptr2namespace(b));
+}
+
+std::string namespace_relative_simple(const json_pointer& a, const json_pointer& b) {
+  return namespace_relative(jsonptr2namespace_simple(a), jsonptr2namespace_simple(b));
 }
 
 }  // namespace svarg::cxx

@@ -271,7 +271,7 @@
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Error"
 "webhooks":
-  - "id": "postorderStatus"
+  - "id": "postOrderStatus"
     "spec": "api-a.yaml"
     "path": ""
     "method": "post"

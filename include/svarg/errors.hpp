@@ -4,27 +4,33 @@
 
 namespace svarg {
 
-struct parse_error : std::runtime_error {
+struct svarg_exception : std::runtime_error {
   template <typename... Args>
-  explicit parse_error(std::format_string<Args...> fmt, Args&&... args)
+  explicit svarg_exception(std::format_string<Args...> fmt, Args&&... args)
       : std::runtime_error(std::format(fmt, std::forward<Args>(args)...)) {
   }
-  explicit parse_error(const char* p) : std::runtime_error(p) {
+  explicit svarg_exception(const char* p) : std::runtime_error(p) {
   }
 };
 
-struct validate_error : parse_error {
-  using parse_error::parse_error;
-  using parse_error::operator=;
+struct parse_error : svarg_exception {
+  using svarg_exception::svarg_exception;
+  using svarg_exception::operator=;
 };
 
-struct semantic_error : std::runtime_error {
-  template <typename... Args>
-  explicit semantic_error(std::format_string<Args...> fmt, Args&&... args)
-      : std::runtime_error(std::format(fmt, std::forward<Args>(args)...)) {
-  }
-  explicit semantic_error(const char* p) : std::runtime_error(p) {
-  }
+struct validate_error : svarg_exception {
+  using svarg_exception::svarg_exception;
+  using svarg_exception::operator=;
+};
+
+struct semantic_error : svarg_exception {
+  using svarg_exception::svarg_exception;
+  using svarg_exception::operator=;
+};
+
+struct render_error : svarg_exception {
+  using svarg_exception::svarg_exception;
+  using svarg_exception::operator=;
 };
 
 }  // namespace svarg

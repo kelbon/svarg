@@ -816,8 +816,11 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
       op.id = *o.operationId;
     else {
       op.id = std::string(methodstr);
-      // TODO с большой буквы чтоб не было postabc => postAbc
-      *op.id += name;
+      if (name.empty())
+        throw validate_error("path item name cannot be empty");
+      // postAbc вместо postabc
+      *op.id += to_upper(name[0]);
+      *op.id += name.substr(1);
     }
     op.method = methodstr;
     op.path = path;
@@ -898,6 +901,7 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
         auto [ritem, file, item_jp] = resolve_ref_and_ret(item, obj_file, "/paths"_jp / path, *this);
         string_map<std::string> name2path;
         string_map<std::string> path2name;
+        // TODO? заменить на экранирующую версию
         std::string generatedname = path_to_name(path, name2path, path2name);
         auto ops = path_item_object_lowering(path, obj_file, file, std::move(item_jp), generatedname,
                                              std::move(ritem));

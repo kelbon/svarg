@@ -90,6 +90,9 @@ struct schema_ref {
   [[nodiscard]] bool is_fundamental() const noexcept {
     return if_fundamental() != std::nullopt;
   }
+  [[nodiscard]] bool is_fundamental(fundamental_e f) const noexcept {
+    return if_fundamental() == f;
+  }
 
   bool operator==(const schema_ref& r) const noexcept {
     return operator<=>(r) == std::strong_ordering::equal;
@@ -132,7 +135,7 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
 }
 
 struct enum_schema {
-  std::optional<schema_ref> type;
+  schema_ref type;
   array<Any> values;
 };
 
@@ -344,7 +347,7 @@ struct schema {
   }
 
   bool is_trivial() const noexcept {
-    return (!required || required->empty()) && std::holds_alternative<fundamental_e>(type.data);
+    return !has_requirements() && std::holds_alternative<fundamental_e>(type.data);
   }
 
   bool operator==(const schema& x) const noexcept {
@@ -678,6 +681,7 @@ struct hash<::svarg::ir::operation> {
 namespace svarg::ir {
 
 using schemas_t = std::set<schema, schema::schema_cmp>;
+using schema_refs_t = std::set<schema_ref, schema::schema_cmp>;
 
 struct ir_object {
   std::optional<schemas_t> schemas;
