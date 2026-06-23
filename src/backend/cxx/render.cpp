@@ -275,7 +275,7 @@ static std::string render_struct_content(const ir::schema& s, const ir::schemas_
         if (e.type.is_fundamental(ir::fundamental_e::string)) {
           result += "enum struct values_e {";
           for (auto&& v : e.values)
-            result += std::format("{},", v.value.as_string());
+            result += std::format("{},", std::string_view(v.value.as_string()));
           result += "};\nusing enum values_e;\n\n";
         }
         return result;
