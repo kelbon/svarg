@@ -185,12 +185,12 @@ object_and_path<T> resolve_ref_and_ret(reference_or<T> x, fs::path file, json_po
   }
 }
 
-ir::object_schema lowering_context::make_object_type(schema_object const& schema, const fs::path& file,
+ir::object_schema lowering_context::make_object_type(const schema_object& schema, const fs::path& file,
                                                      json_pointer jp) {
   ir::object_schema ot;
   if (schema.properties) {
     if (schema.required) {
-      for (string const& x : *schema.required) {
+      for (const string& x : *schema.required) {
         if (!std::ranges::contains(*schema.properties | std::views::keys, x))
           emit_warn(file, jp.escaped(), "required property `{}` does not appear in `properties`, ignored", x);
       }
@@ -213,7 +213,7 @@ ir::object_schema lowering_context::make_object_type(schema_object const& schema
           emit_warn(file, jp.unescaped(), "property {} marked as {}, `required` ignored", prop_name,
                     field_schema.is_write_only() ? "writeOnly" : "readOnly");
         } else {
-          for (string const& x : *schema.required) {
+          for (const string& x : *schema.required) {
             if (prop_name == x)
               fi.required = true;
           }
@@ -325,7 +325,7 @@ static ir::fundamental_e detect_enum_type(const array<Any>& values) noexcept {
 schema_or_ref lowering_context::schema_lowering(const schema_object& schema, const fs::path& file,
                                                 json_pointer jp, std::optional<std::string_view> name) {
   ir::schema res;
-  res.spec = file.filename().generic_string();
+  res.spec = file.filename().replace_extension().generic_string();
   res.jsonptr = jp;
   auto ret_schema = [&] {
     assert(parsable_as<schema_object>(jp.access(load_as_json(file))) && "invalidly generated scheme");
@@ -811,7 +811,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
 
   for (auto [methodstr, o] : item.all_operations_with_method()) {
     ir::operation op;
-    op.spec = spec.filename().generic_string();
+    op.spec = spec.filename().replace_extension().generic_string();
     if (o.operationId)
       op.id = *o.operationId;
     else {

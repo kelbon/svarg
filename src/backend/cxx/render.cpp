@@ -2,6 +2,8 @@
 #include "svarg/backend/cxx/namespace_strings.hpp"
 #include "svarg/backend/cxx/render.hpp"
 
+#include <fstream>
+
 namespace svarg::cxx {
 
 static std::string make_cxx_ident(std::string_view str, const render_options& options) {
@@ -24,7 +26,7 @@ static std::string make_file_path(const ir::schema_ref& ref, const render_option
     path += '/';
     path += make_cxx_ident(seg, options);
   }
-  return path;
+  return path + ".hpp";
 }
 
 static std::string render_schemas_array(const array<ir::schema_ref>& arr, const ir::schemas_t& schemas,
@@ -218,11 +220,12 @@ std::string render_object_field(const ir::schema& s, const ir::object_field_info
   }
   if (field.required) {
     assert(!recursive);
-    return std::format("{} {}", render_schema_ref(s.ref(), schemas, relative, options).typeref, field.name);
+    return std::format("{} {}", render_schema_ref(field.type, schemas, relative, options).typeref,
+                       field.name);
   }
   // optional
   std::string_view tempstr = recursive ? options.box_str : options.optional_str;
-  return std::format("{}<{}> {}", tempstr, render_schema_ref(s.ref(), schemas, relative, options).typeref,
+  return std::format("{}<{}> {}", tempstr, render_schema_ref(field.type, schemas, relative, options).typeref,
                      field.name);
 }
 
@@ -275,29 +278,37 @@ static std::string render_struct_content(const ir::schema& s, const ir::schemas_
         if (e.type.is_fundamental(ir::fundamental_e::string)) {
           result += "enum struct values_e {";
           for (auto&& v : e.values)
-            result += std::format("{},", std::string_view(v.value.as_string()));
+            result += std::format("{},", make_cxx_ident(std::string_view(v.value.as_string()), options));
           result += "};\nusing enum values_e;\n\n";
         }
         return result;
       },
       [&](const ir::object_schema& a) -> std::string {
         std::string result;
-        for (auto&& f : a.fields) {
-          result += render_object_field(s, f, schemas, s.jsonptr, options);
-          result += ";\n";
-        }
-        if (!a.additional_fields) {
-          result += "using additional_fields = void;\n\n";
-        } else {
-          result += std::format("using additional_fields = {};\n\n",
-                                render_schema_ref(s.ref(), schemas, s.jsonptr, options).typeref);
-        }
-        result += "[[nodiscard]] static bool is_required_field(std::string_view str) noexcept {\n";
+        // сначала требуемые поля
         for (auto&& f : a.fields) {
           if (f.required) {
-            result += std::format("if (str == \"{}\") return true;\n", f.name);
+            result += render_object_field(s, f, schemas, s.jsonptr, options);
             result += ";\n";
           }
+        }
+        // затем опциональные
+        for (auto&& f : a.fields) {
+          if (!f.required) {
+            result += render_object_field(s, f, schemas, s.jsonptr, options);
+            result += ";\n";
+          }
+        }
+        if (!a.additional_fields) {
+          result += "\nusing additional_fields = void;\n\n";
+        } else {
+          result += std::format("\nusing additional_fields = {};\n\n",
+                                render_schema_ref(s.ref(), schemas, s.jsonptr, options).typeref);
+        }
+        result += "[[nodiscard]] static constexpr bool is_required_field(std::string_view str) noexcept {\n";
+        for (auto&& f : a.fields) {
+          if (f.required)
+            result += std::format("if (str == \"{}\") return true;\n", f.name);
         }
         result += "return false;\n";
         result += "}\n\n";
@@ -324,7 +335,7 @@ render_schema_result render_schema(const ir::schema& s, const ir::schemas_t& sch
     collect_mentioned_first_layer(sref, schemas, options, deps);
     for (auto& ref : deps)
       file_begin += std::format("#include \"{}\"\n", make_file_path(sref, options));
-    file_begin += std::format("\nnamespace {} {{\n", make_namespace(s.jsonptr, options));
+    file_begin += std::format("\nnamespace {} {{\n\n", make_namespace(s.jsonptr, options));
   }
   std::string schema_render;
 
@@ -338,12 +349,38 @@ render_schema_result render_schema(const ir::schema& s, const ir::schemas_t& sch
   }
 
   file_begin += schema_render;
-  file_begin += '}';  // конец неймспейса
+  file_begin += "\n}";  // конец неймспейса
   file_begin += options.schema_file_end;
   return {
       .filename = make_file_path(sref, options),
       .rendered_schema = std::move(file_begin),
   };
+}
+
+void render_all_schemas(const ir::schemas_t& schemas, fs::path output_dir, const render_options& options) {
+  std::error_code ec;
+  std::unordered_set<fs::path> written;
+  for (const ir::schema& s : schemas) {
+    auto [filepath, rendered] = render_schema(s, schemas, options);
+    fs::path path = output_dir / filepath;
+    auto [_, is_emplaced] = written.insert(path);
+    if (!is_emplaced)
+      throw render_error("two schemas rendered into same file `{}`", path.generic_string());
+    fs::create_directories(path.parent_path(), ec);
+    if (ec)
+      throw render_error("filesystem error, message: {}, path: {}", ec.message(), path.generic_string());
+    // заменяет файл если он уже есть
+    std::ofstream out(path);
+    out << rendered;
+    if (!out.is_open())
+      throw render_error("cannot open file for writing, path: `{}`", path.generic_string());
+  }
+}
+
+void render2cxx(const ir::ir_object& ir, fs::path output_dir, const render_options& options) {
+  if (ir.schemas)
+    render_all_schemas(*ir.schemas, output_dir, options);
+  // TODO operations etc
 }
 
 }  // namespace svarg::cxx

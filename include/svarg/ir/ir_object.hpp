@@ -65,7 +65,7 @@ inline std::string_view e2str(fundamental_e e) noexcept {
 
 struct schema_ref {
   std::optional<string> name;
-  // .filename() спеки где объявлена схема ИЛИ ссылка на фундаментал (типа @string@)
+  // .filename() спеки где объявлена схема без расширения ИЛИ ссылка на фундаментал (типа @string@)
   string spec;
   // путь в спеке (не обязательно он существует, в случае $ref + перекрытое поле может сгенерироваться)
   // не указано, если ссылка на фундаментальный тип
@@ -302,7 +302,7 @@ struct schema_type {
 
 // fundamental | enum | object_type | oneof | anyof | allof
 struct schema {
-  // .filename() спеки где написана схема
+  // .filename() спеки где написана схема без расширения
   string spec;
   json_pointer jsonptr;
 
@@ -614,7 +614,7 @@ struct operation {
   // operationId, если нет, используется method + путь (каким-то образом)
   // лучше бы было
   std::optional<string> id;
-  // .filename() спеки где объявлена операция
+  // .filename() спеки где объявлена операция без расширения
   string spec;
   // путь относительно url сервера. Должен начинаться с / (если не пустой)
   // path + method + spec должны быть уникальны. Шаблонизированность не учитывается
@@ -706,14 +706,14 @@ namespace svarg {
 
 template <>
 struct parse<ir::response_status> {
-  void operator()(boost::json::value const& v, ir::response_status& out) {
+  void operator()(const boost::json::value& v, ir::response_status& out) {
     out = ir::response_status::from_string(v.as_string());
   }
 };
 
 template <>
 struct parse<ir::schema_type> {
-  void operator()(boost::json::value const& v, ir::schema_type& out) {
+  void operator()(const boost::json::value& v, ir::schema_type& out) {
     if (!v.is_object())
       throw parse_error(" object expected, got `{}`", e2str(v.kind()));
     const boost::json::object& obj = v.as_object();

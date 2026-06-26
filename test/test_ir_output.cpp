@@ -8,6 +8,8 @@
 
 #include "svarg/ir/ir_object.hpp"
 
+#include "svarg/backend/cxx/render.hpp"
+
 // для некоторых схем не генерируется, так как они простые и это ожидаемо
 // (тривиальные схемы превращаются сразу в фундаментальную ссылку)
 std::unordered_set<std::string> a_jsonptrs{
@@ -76,9 +78,9 @@ static bool expect_json_ptrs(const ir::ir_object& ir, const std::unordered_set<s
   std::unordered_set<std::string> gotb;
 
   for (auto&& s : ir.schemas.value()) {
-    if (s.spec == "api-a.yaml")
+    if (s.spec == "api-a")
       gota.insert(std::string(s.jsonptr.escaped()));
-    else if (s.spec == "api-b.yaml")
+    else if (s.spec == "api-b")
       gotb.insert(std::string(s.jsonptr.escaped()));
     else
       return false;
@@ -199,7 +201,7 @@ TEST("json pointers are correct (optimized + rm unused)") {
   ir = ir::pass_rm_trivial_schemas(std::move(ir), opts).ir;
 
   opts.marked_used.insert(ir::schema_ref{
-      .spec = "api-b.yaml",
+      .spec = "api-b",
       .jsonptr = "/components/schemas/Unused"_jp,
   });
   ir::ir_object ir2 = ir::pass_rm_unused_schemas(ir, opts).ir;
@@ -222,6 +224,7 @@ TEST("json repr") {
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
+  cxx::render2cxx(ir, "C:/projects/svarg/build/render_test_result", {});
   ir = openapi2ir("./test_api", {"api-b.yaml"},
                   {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {

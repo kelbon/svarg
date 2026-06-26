@@ -1,5 +1,5 @@
 "schemas":
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
     "type":
       "object":
@@ -16,18 +16,18 @@
               "spec": "@integer@"
             "name": "quantity"
             "required": true
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/components/schemas/OrderStatusEvent"
     "name": "OrderStatusEvent"
     "type":
       "object":
         "fields":
           - "type":
-              "spec": "api-a.yaml"
+              "spec": "api-a"
               "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
             "name": "status"
             "required": false
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
     "type":
       "enum":
@@ -37,7 +37,7 @@
           - "delivered"
           - "pending"
           - "shipped"
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/components/schemas/User"
     "name": "User"
     "type":
@@ -57,11 +57,11 @@
             "required": true
           - "type":
               "name": "Order"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Order"
             "name": "address"
             "required": false
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/components/schemas/UserPatch"
     "name": "UserPatch"
     "type":
@@ -73,21 +73,21 @@
             "required": false
         "additional_fields":
           "spec": "@never@"
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
     "type":
       "anyOf":
         "schemas":
           - "spec": "@integer@"
           - "spec": "@string@"
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema"
     "type":
       "array":
         "element":
-          "spec": "api-a.yaml"
+          "spec": "api-a"
           "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema/items"
     "type":
       "enum":
@@ -96,13 +96,13 @@
         "values":
           - "profile"
           - "settings"
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema"
     "type":
       "object":
         "fields":
           - "type":
-              "spec": "api-a.yaml"
+              "spec": "api-a"
               "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
             "name": "event"
             "required": false
@@ -110,7 +110,7 @@
               "spec": "@string@"
             "name": "orderId"
             "required": false
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
     "type":
       "enum":
@@ -118,7 +118,7 @@
           "spec": "@string@"
         "values":
           - "order.created"
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Error"
     "name": "Error"
     "type":
@@ -132,7 +132,7 @@
               "spec": "@string@"
             "name": "message"
             "required": false
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Money"
     "name": "Money"
     "type":
@@ -143,11 +143,11 @@
             "name": "amount"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Money/properties/currency"
             "name": "currency"
             "required": false
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
       "enum":
@@ -157,7 +157,7 @@
           - "EUR"
           - "RUB"
           - "USD"
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
     "type":
@@ -165,7 +165,7 @@
         "fields":
           - "type":
               "name": "User"
-              "spec": "api-a.yaml"
+              "spec": "api-a"
               "jsonptr": "/components/schemas/User"
             "name": "buyer"
             "required": false
@@ -174,7 +174,7 @@
             "name": "id"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Order/properties/item"
             "name": "item"
             "required": false
@@ -182,14 +182,14 @@
               "spec": "@string@"
             "name": "status"
             "required": false
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item"
     "type":
       "object":
         "fields":
           - "type":
               "name": "Money"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Money"
             "name": "price"
             "required": true
@@ -198,7 +198,7 @@
             "name": "id"
             "required": true
           - "type":
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
             "name": "tags"
             "required": false
@@ -206,7 +206,7 @@
               "spec": "@string@"
             "name": "title"
             "required": true
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
     "type":
       "array":
@@ -214,20 +214,20 @@
           "spec": "@string@"
 "operations":
   - "id": "getUser"
-    "spec": "api-a.yaml"
+    "spec": "api-a"
     "path": "/users/{userId}"
     "method": "get"
     "parameters":
       - "location": "query"
         "name": "expand"
         "schema":
-          "spec": "api-a.yaml"
+          "spec": "api-a"
           "jsonptr": "/paths/~1users~1{userId}/get/parameters/0/schema"
     "bodies":
       - "contentType": "application/json"
         "schema":
           "name": "UserPatch"
-          "spec": "api-a.yaml"
+          "spec": "api-a"
           "jsonptr": "/components/schemas/UserPatch"
     "responses":
       - "status": "200"
@@ -239,7 +239,7 @@
           - "contentType": "application/json"
             "schema":
               "name": "User"
-              "spec": "api-a.yaml"
+              "spec": "api-a"
               "jsonptr": "/components/schemas/User"
       - "status": "404"
         "bodies":
@@ -247,13 +247,13 @@
             "schema":
               "spec": "@number@"
   - "id": "createOrder"
-    "spec": "api-a.yaml"
+    "spec": "api-a"
     "path": "/orders"
     "method": "post"
     "bodies":
       - "contentType": "application/json"
         "schema":
-          "spec": "api-a.yaml"
+          "spec": "api-a"
           "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
     "responses":
       - "status": "201"
@@ -261,24 +261,24 @@
           - "contentType": "application/json"
             "schema":
               "name": "Order"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Order"
       - "status": "400"
         "bodies":
           - "contentType": "application/json"
             "schema":
               "name": "Error"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Error"
 "webhooks":
   - "id": "postOrderStatus"
-    "spec": "api-a.yaml"
+    "spec": "api-a"
     "path": ""
     "method": "post"
     "bodies":
       - "contentType": "application/json"
         "schema":
-          "spec": "api-a.yaml"
+          "spec": "api-a"
           "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
     "responses":
       - "status": "200"

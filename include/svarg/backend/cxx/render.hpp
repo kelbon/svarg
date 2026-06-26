@@ -25,11 +25,11 @@ struct render_options {
   std::string inline_schema_name = "schema";
   // добавляется в начале каждой схемы
   std::string schema_type_begin = R"(
-  #pragma once
+#pragma once
 
-  #include "common_types.hpp"
+#include "common_types.hpp"
 
-  )";
+)";
   // добавляется в конце каждой схемы
   std::string schema_file_end = "";
   // используется как имя когда есть полутривиальные объекты с одним полем, которые не алиасы только потому
@@ -87,10 +87,15 @@ struct render_schema_result {
 };
 render_schema_result render_schema(const ir::schema&, const ir::schemas_t& schemas, const render_options&);
 
+void render_all_schemas(const ir::schemas_t& schemas, fs::path output_dir, const render_options&);
+
 // TODO вызов этих операций чтобы рендерить все схемы + инструмент для превращения IR в С++.
 // может быть функцию которая напрямую делает всё в одном процессе дополнительно
 // но уже сейчас почти можно сделать IR -> CXX + driver openapi2cxx (хотя там можно общий интерфейс
 // использовать бекенда и фронтенда и только дефолт сделать openapi/c++)
 // TODO операции
+// TODO написать ридми IR с полным его описанием
+
+void render2cxx(const ir::ir_object& ir, fs::path output_dir, const render_options&);
 
 }  // namespace svarg::cxx

@@ -1,5 +1,5 @@
 "schemas":
-  - "spec": "api-a.yaml"
+  - "spec": "api-a"
     "jsonptr": "/components/schemas/User"
     "name": "User"
     "type":
@@ -19,11 +19,11 @@
             "required": true
           - "type":
               "name": "Order"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Order"
             "name": "address"
             "required": false
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Error"
     "name": "Error"
     "type":
@@ -37,7 +37,7 @@
               "spec": "@string@"
             "name": "message"
             "required": false
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Item"
     "name": "Item"
     "type":
@@ -48,7 +48,7 @@
             "name": "id"
             "required": true
           - "type":
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Item/properties/tags"
             "name": "tags"
             "required": false
@@ -58,17 +58,17 @@
             "required": true
           - "type":
               "name": "Money"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Money"
             "name": "price"
             "required": true
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Item/properties/tags"
     "type":
       "array":
         "element":
           "spec": "@string@"
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Money"
     "name": "Money"
     "type":
@@ -79,11 +79,11 @@
             "name": "amount"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Money/properties/currency"
             "name": "currency"
             "required": false
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
       "enum":
@@ -93,7 +93,7 @@
           - "EUR"
           - "RUB"
           - "USD"
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Order"
     "name": "Order"
     "type":
@@ -101,7 +101,7 @@
         "fields":
           - "type":
               "name": "User"
-              "spec": "api-a.yaml"
+              "spec": "api-a"
               "jsonptr": "/components/schemas/User"
             "name": "buyer"
             "required": false
@@ -110,7 +110,7 @@
             "name": "id"
             "required": false
           - "type":
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Order/properties/item"
             "name": "item"
             "required": false
@@ -118,14 +118,14 @@
               "spec": "@string@"
             "name": "status"
             "required": false
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item"
     "type":
       "object":
         "fields":
           - "type":
               "name": "Money"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Money"
             "name": "price"
             "required": true
@@ -134,7 +134,7 @@
             "name": "id"
             "required": true
           - "type":
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
             "name": "tags"
             "required": false
@@ -142,13 +142,13 @@
               "spec": "@string@"
             "name": "title"
             "required": true
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
     "type":
       "array":
         "element":
           "spec": "@string@"
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Unused"
     "name": "Unused"
     "type":
@@ -162,7 +162,7 @@
               "spec": "@string@"
             "name": "f1"
             "required": true
-  - "spec": "api-b.yaml"
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/UnusedSelfRecursive"
     "name": "UnusedSelfRecursive"
     "type":
@@ -170,13 +170,13 @@
         "fields":
           - "type":
               "name": "UnusedSelfRecursive"
-              "spec": "api-b.yaml"
+              "spec": "api-b"
               "jsonptr": "/components/schemas/UnusedSelfRecursive"
             "name": "f1"
             "required": false
 "operations":
   - "id": "getItem"
-    "spec": "api-b.yaml"
+    "spec": "api-b"
     "path": "/items/{itemId}"
     "method": "get"
     "parameters":
@@ -202,7 +202,7 @@
           "schema":
             "spec": "@any@"
   - "id": "getOrder"
-    "spec": "api-b.yaml"
+    "spec": "api-b"
     "path": "/orders/{orderId}"
     "method": "get"
     "parameters":
