@@ -103,13 +103,13 @@ struct lowering_context {
 
   // file - относительно specs dir, jp должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
-  ir::object_schema make_object_type(schema_object const& schema, const fs::path& file, json_pointer jp);
+  ir::object_schema make_object_type(const schema_object& schema, const fs::path& file, json_pointer jp);
 
   template <typename... Args>
   void emit_warn(const fs::path& where, std::string_view jp, std::format_string<Args...> fmt,
                  Args&&... args) {
-    std::print("in {}#{}. warning: {}\n", where.generic_string(), jp,
-               std::format(fmt, std::forward<Args>(args)...));
+    std::println("in {}#{}. warning: {}", where.generic_string(), jp,
+                 std::format(fmt, std::forward<Args>(args)...));
   }
 
   schema_or_ref schema_lowering(const schema_object& schema, const fs::path& file, json_pointer,
@@ -140,7 +140,7 @@ struct lowering_context {
   ir::body media_type_object_lowering(const media_type_object&, fs::path file, json_pointer,
                                       std::string_view content_type);
 
-  void replace_in_cache(fs::path const& p, const json_pointer& jp, boost::json::value newvalue) {
+  void replace_in_cache(const fs::path& p, const json_pointer& jp, boost::json::value newvalue) {
     boost::json::value& v = jcache.load_mutable(specs_dir / p);
     boost::json::value* refered = jp.access(v);
     if (!refered) {
@@ -150,7 +150,7 @@ struct lowering_context {
     }
     *refered = std::move(newvalue);
   }
-  const boost::json::value& load_as_json(fs::path const& p) {
+  const boost::json::value& load_as_json(const fs::path& p) {
     // spec_dir != cwd
     // не включен ассёрт, так как файловую систему могут поменять
     // assert(fs::is_directory(specs_dir));

@@ -224,7 +224,6 @@ TEST("json repr") {
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
-  cxx::render2cxx(ir, "C:/projects/svarg/build/render_test_result", {});
   ir = openapi2ir("./test_api", {"api-b.yaml"},
                   {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {

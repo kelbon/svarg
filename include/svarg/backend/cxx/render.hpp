@@ -2,7 +2,7 @@
 
 #include "svarg/ir/ir_object.hpp"
 
-#include "svarg/errors.hpp"
+#include <print>
 
 namespace svarg::cxx {
 
@@ -48,54 +48,71 @@ struct schema_ref_result {
   bool is_alias = false;
 };
 
-schema_ref_result render_fundamental_type(const ir::fundamental_e, const render_options&);
-
-std::string render_object_field(const ir::schema& s, const ir::object_field_info&,
-                                const ir::schemas_t& schemas, const json_pointer& relative,
-                                const render_options& options);
-
-std::string render_discriminator(const ir::discriminator_desc& d, const ir::schemas_t& schemas,
-                                 const json_pointer& relative, const render_options& options);
-
-// корректно обрабатывает рекурсию (A требует A или A требует B C D и B требует A и тд)
-// собирает только первый уровень зависимостей
-// никогда не собирает фундаментальные ссылки
-// set используется для сохранения порядка на всех реализациях
-void collect_mentioned_first_layer(const ir::schema_ref& in_what, const ir::schemas_t& schemas,
-                                   const render_options&, ir::schema_refs_t& out);
-
-// собирает список имён спек от которых зависит s
-std::vector<std::string> collect_mentioned_first_layer_specs(const ir::schema_ref& s,
-                                                             const ir::schemas_t& schemas,
-                                                             const render_options&);
-
-// не возвращает никогда `in_what` в `out`
-// но если рекурсивно тип зависит сам от себя возвращается true
-bool collect_all_mentioned(const ir::schema_ref& in_what, const ir::schemas_t& schemas, const render_options&,
-                           ir::schema_refs_t& out);
-
-// генерирует обращение к имени типа обозначаемого схемой. Если это алиас, то он будет повторён
-// т.е. возможно это a::b::mytype, а может и arrayof<arrayof<a::b::X>>
-// `relative` - в каком неймспейсе сейчас находимся
-schema_ref_result render_schema_ref(const ir::schema_ref&, const ir::schemas_t& schemas,
-                                    const json_pointer& relative, const render_options&);
-
 // рендерит весь файл со схемой
 struct render_schema_result {
   std::string filename;         // куда складывать
   std::string rendered_schema;  // что складывать
 };
-render_schema_result render_schema(const ir::schema&, const ir::schemas_t& schemas, const render_options&);
-
-void render_all_schemas(const ir::schemas_t& schemas, fs::path output_dir, const render_options&);
 
 // TODO вызов этих операций чтобы рендерить все схемы + инструмент для превращения IR в С++.
 // может быть функцию которая напрямую делает всё в одном процессе дополнительно
 // но уже сейчас почти можно сделать IR -> CXX + driver openapi2cxx (хотя там можно общий интерфейс
 // использовать бекенда и фронтенда и только дефолт сделать openapi/c++)
-// TODO операции
+// TODO операции!
 // TODO написать ридми IR с полным его описанием
 
-void render2cxx(const ir::ir_object& ir, fs::path output_dir, const render_options&);
+struct renderer {
+  explicit renderer([[clang::lifetimebound]] const ir::ir_object& ir, render_options opts)
+      : options(std::move(opts)), ir(ir) {
+  }
+
+  void render2cxx(fs::path output_dir) const;
+
+ private:
+  render_options options;
+  const ir::ir_object& ir;
+
+  const ir::schemas_t& schemas() const {
+    return *ir.schemas;
+  }
+
+  template <typename... Args>
+  void emit_warn(std::format_string<Args...> fmt, Args&&... args) const {
+    std::println("warning: {}", std::format(fmt, std::forward<Args>(args)...));
+  }
+
+  bool is_recursive_field(const ir::schema& s, const ir::schema_ref& field_type) const;
+  std::string render_schemas_array(const array<ir::schema_ref>& arr, const json_pointer& relative) const;
+  std::string render_struct_content(const ir::schema& s, std::string typeref) const;
+
+  schema_ref_result render_fundamental_type(const ir::fundamental_e) const;
+
+  std::string render_object_field(const ir::schema& s, const ir::object_field_info&,
+                                  const json_pointer& relative) const;
+
+  std::string render_discriminator(const ir::discriminator_desc& d, const json_pointer& relative) const;
+
+  // корректно обрабатывает рекурсию (A требует A или A требует B C D и B требует A и тд)
+  // собирает только первый уровень зависимостей
+  // никогда не собирает фундаментальные ссылки
+  // set используется для сохранения порядка на всех реализациях
+  void collect_mentioned_first_layer(const ir::schema_ref& in_what, ir::schema_refs_t& out) const;
+
+  // собирает список имён спек от которых зависит s
+  std::vector<std::string> collect_mentioned_first_layer_specs(const ir::schema_ref& s) const;
+
+  // не возвращает никогда `in_what` в `out`
+  // но если рекурсивно тип зависит сам от себя возвращается true
+  bool collect_all_mentioned(const ir::schema_ref& in_what, ir::schema_refs_t& out) const;
+
+  // генерирует обращение к имени типа обозначаемого схемой. Если это алиас, то он будет повторён
+  // т.е. возможно это a::b::mytype, а может и arrayof<arrayof<a::b::X>>
+  // `relative` - в каком неймспейсе сейчас находимся
+  schema_ref_result render_schema_ref(const ir::schema_ref&, const json_pointer& relative) const;
+
+  render_schema_result render_schema(const ir::schema&) const;
+
+  void render_all_schemas(fs::path output_dir) const;
+};
 
 }  // namespace svarg::cxx
