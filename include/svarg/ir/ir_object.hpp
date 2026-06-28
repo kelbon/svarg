@@ -611,9 +611,8 @@ struct hash<::svarg::ir::response_desc> {
 namespace svarg::ir {
 
 struct operation {
-  // operationId, если нет, используется method + путь (каким-то образом)
-  // лучше бы было
-  std::optional<string> id;
+  // operationId, а если нет, используется method + путь с большой буквы
+  string id;
   // .filename() спеки где объявлена операция без расширения
   string spec;
   // путь относительно url сервера. Должен начинаться с / (если не пустой)
