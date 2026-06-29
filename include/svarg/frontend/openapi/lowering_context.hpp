@@ -106,9 +106,9 @@ struct lowering_context {
   ir::object_schema make_object_type(const schema_object& schema, const fs::path& file, json_pointer jp);
 
   template <typename... Args>
-  void emit_warn(const fs::path& where, std::string_view jp, std::format_string<Args...> fmt,
+  void emit_warn(const fs::path& where, const json_pointer& jp, std::format_string<Args...> fmt,
                  Args&&... args) {
-    std::println("in {}#{}. warning: {}", where.generic_string(), jp,
+    std::println("in {}#{}. warning: {}", where.generic_string(), jp.escaped(),
                  std::format(fmt, std::forward<Args>(args)...));
   }
 

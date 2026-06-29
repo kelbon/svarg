@@ -89,7 +89,7 @@ struct xml_object {
 };
 
 struct schema_object {
-  static schema_object parse_if_not_object(boost::json::value const& j) {
+  static schema_object parse_if_not_object(const boost::json::value& j) {
     assert(!j.is_object());
     auto* b = j.if_bool();
     if (!b)
@@ -273,8 +273,6 @@ struct header_object {
   optional<string_map<media_type_object>> content;
 };
 
-// TODO string switch add or_nullopt
-
 struct encoding_object {
   optional<string> contentType;
   // должно быть проигнорировано, если у запроса тело не multipart
@@ -295,6 +293,10 @@ struct media_type_object {
   // каждый ключ должен присутствовать в schema как property (а значит если есть encoding должна быть и
   // schema)
   optional<string_map<encoding_object>> encoding;
+  // openapi 3.2
+  // поддержано только это, просто как тег о том что это стриминг
+  // если itemSchema есть, то schema и encoding игнорируется
+  optional<schema_object> itemSchema;
 };
 
 // описывает параметр операции, уникальный параметр определяется по ключу
@@ -374,7 +376,7 @@ struct responses_object {
 
 template <>
 struct parse<responses_object> {
-  void operator()(boost::json::value const& v, responses_object& out) {
+  void operator()(const boost::json::value& v, responses_object& out) {
     // responses это по сути стринг мапа с ключами 200/201 и тд + возможный default
     responses_object res;
     from_json(v, res._responses);
@@ -389,12 +391,12 @@ struct parse<responses_object> {
 
 template <>
 struct serialize<responses_object> {
-  boost::json::value operator()(responses_object const& in) {
+  boost::json::value operator()(const responses_object& in) {
     // собираем всё обратно в плоскую string_map
     boost::json::object out;
     if (in.default_.has_value())
       out.emplace("default", serialize<reference_or<response_object>>{}(*in.default_));
-    for (auto const& [code, resp] : in._responses)
+    for (const auto& [code, resp] : in._responses)
       out.emplace(code, serialize<reference_or<response_object>>{}(resp));
     return out;
   }
@@ -461,6 +463,7 @@ struct operation_object {
   optional<string> operationId;
   optional<array<reference_or<parameter_object>>> parameters;
   optional<reference_or<request_body_object>> requestBody;
+  // формально опционально, но по сути можно не указать разве что для вебхука
   optional<responses_object> responses;
   // map name -> callback
   optional<string_map<reference_or<callback_object>>> callbacks;

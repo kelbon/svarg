@@ -384,6 +384,35 @@ struct schema {
 // н-р deprecated или формат query и тд
 using meta_t = ordered_string_map<Any>;
 
+struct content_type_t {
+ private:
+  std::string data;
+
+ public:
+  content_type_t() = default;
+
+  // может быть типом контента или ренжом
+  content_type_t(std::convertible_to<std::string_view> auto&& in)
+      : data(monomorph_media_type(without_media_type_parameters(std::string_view(in)))) {
+  }
+
+  content_type_t& operator=(std::convertible_to<std::string_view> auto&& str) {
+    std::destroy_at(this);
+    return *std::construct_at(this, std::string_view(str));
+  }
+
+  std::string_view str() const noexcept {
+    return data;
+  }
+  operator std::string_view() const noexcept {
+    return str();
+  }
+
+  std::strong_ordering operator<=>(const content_type_t& r) const {
+    return compare_media_types(str(), r.str());
+  }
+};
+
 struct operation_parameter {
   parameter_location location = parameter_location::path;
   string name;
@@ -393,7 +422,7 @@ struct operation_parameter {
   // аналогично упрощённому encoding из openapi
   // говорит как отправлять этот параметр, н-р application/json
   // по умолчанию такой же как у тела запроса
-  std::optional<string> encoding;
+  std::optional<content_type_t> encoding;
   std::optional<meta_t> meta;
 
   bool operator==(const operation_parameter& r) const noexcept {
@@ -430,7 +459,7 @@ struct hash<::svarg::ir::header> {
     svarg::combined_hash hash;
     // без учёта регистра
     for (char c : h.name)
-      hash.add(std::toupper(c));
+      hash.add(svarg::to_lower_ascii(c));
     return hash;
   }
 };
@@ -447,14 +476,13 @@ struct hash<::svarg::ir::operation_parameter> {
 namespace svarg::ir {
 
 struct body {
-  // TODO support media type ranges
   // может быть также media type range */* - любой, image/* (image/x* уже невалидно)
   // выигрывает более специализированный
-  string contentType;
+  content_type_t contentType;
   schema_ref schema;
   // мапа имя property из schema => как его кодировать конкретно в этом теле
   // application/json и тд контент типы
-  std::optional<ordered_string_map<string>> membersEncoding;
+  std::optional<ordered_string_map<content_type_t>> membersEncoding;
   // означает, что schema применяется не ко всему телу, а к единице стрима
   // (например openapi 3.2 itemsSchema)
   // по умолчанию false
@@ -475,7 +503,7 @@ namespace std {
 template <>
 struct hash<::svarg::ir::body> {
   size_t operator()(const ::svarg::ir::body& b) const noexcept {
-    return ::svarg::hash_combined(b.contentType);
+    return ::svarg::hash_combined(b.contentType.str());
   }
 };
 
@@ -489,44 +517,6 @@ struct hash<::svarg::ir::schema_ref> {
 }  // namespace std
 
 namespace svarg::ir {
-
-enum struct status_range_e {
-  _1XX = 1,
-  _2XX,
-  _3XX,
-  _4XX,
-  _5XX,
-};
-
-inline constexpr std::string_view e2str(status_range_e e) {
-  switch (e) {
-    case status_range_e::_1XX:
-      return "1XX";
-    case status_range_e::_2XX:
-      return "2XX";
-    case status_range_e::_3XX:
-      return "3XX";
-    case status_range_e::_4XX:
-      return "4XX";
-    case status_range_e::_5XX:
-      return "5XX";
-  }
-  std::unreachable();
-}
-
-inline constexpr void efromstr(std::string_view str, status_range_e& out) {
-  using enum status_range_e;
-  std::optional e = ss::string_switch<status_range_e>(str)
-                        .case_("1XX", _1XX)
-                        .case_("2XX", _2XX)
-                        .case_("3XX", _3XX)
-                        .case_("4XX", _4XX)
-                        .case_("5XX", _5XX)
-                        .or_nullopt();
-  if (!e)
-    throw parse_error("invalid status range type `{}`", str);
-  out = *e;
-}
 
 struct default_response_t {
   auto operator<=>(const default_response_t&) const = default;
@@ -580,6 +570,10 @@ struct response_desc {
   [[nodiscard]] bool is_default() const noexcept {
     return std::holds_alternative<default_response_t>(status.status);
   }
+  [[nodiscard]] bool is_range() const noexcept {
+    return std::holds_alternative<status_range_e>(status.status);
+  }
+
   void make_default() noexcept {
     status.status.emplace<default_response_t>();
   }
@@ -704,6 +698,13 @@ struct ir_object {
 namespace svarg {
 
 template <>
+struct parse<ir::content_type_t> {
+  void operator()(const boost::json::value& v, ir::content_type_t& out) {
+    out = std::string_view(v.as_string());
+  }
+};
+
+template <>
 struct parse<ir::response_status> {
   void operator()(const boost::json::value& v, ir::response_status& out) {
     out = ir::response_status::from_string(v.as_string());
@@ -721,6 +722,13 @@ struct parse<ir::schema_type> {
     std::string_view discriminator = obj.begin()->key();
     out.set_type_from_discriminator(discriminator);
     std::visit([&](auto& x) { from_json(obj.begin()->value(), x); }, out.data);
+  }
+};
+
+template <>
+struct serialize<ir::content_type_t> {
+  boost::json::value operator()(const ir::content_type_t& r) {
+    return boost::json::string(r.str());
   }
 };
 

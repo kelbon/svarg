@@ -67,6 +67,44 @@ struct one_or_array {
   }
 };
 
+enum struct status_range_e {
+  _1XX = 1,
+  _2XX,
+  _3XX,
+  _4XX,
+  _5XX,
+};
+
+inline constexpr std::string_view e2str(status_range_e e) {
+  switch (e) {
+    case status_range_e::_1XX:
+      return "1XX";
+    case status_range_e::_2XX:
+      return "2XX";
+    case status_range_e::_3XX:
+      return "3XX";
+    case status_range_e::_4XX:
+      return "4XX";
+    case status_range_e::_5XX:
+      return "5XX";
+  }
+  std::unreachable();
+}
+
+inline constexpr void efromstr(std::string_view str, status_range_e& out) {
+  using enum status_range_e;
+  std::optional e = ss::string_switch<status_range_e>(str)
+                        .case_("1XX", _1XX)
+                        .case_("2XX", _2XX)
+                        .case_("3XX", _3XX)
+                        .case_("4XX", _4XX)
+                        .case_("5XX", _5XX)
+                        .or_nullopt();
+  if (!e)
+    throw parse_error("invalid status range type `{}`", str);
+  out = *e;
+}
+
 }  // namespace svarg
 
 #include "svarg/utils/parse_json.hh"

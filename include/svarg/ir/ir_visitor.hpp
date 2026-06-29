@@ -47,6 +47,9 @@ struct ir_visitor_base {
   }
   void operator()(this auto&& self, const string&) {
   }
+  void operator()(this auto&& self, const content_type_t& c) {
+    self(string(c.str()));
+  }
   void operator()(this auto&& self, const bool&) {
   }
   void operator()(this auto&& self, const Any&) {

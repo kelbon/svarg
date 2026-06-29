@@ -218,6 +218,8 @@ TEST("json repr") {
   // return;
   ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"},
                                 {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
+  // cxx::renderer r(ir, {});
+  // r.render2cxx("svarg/build/render_test_result");
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
     REQUIRE(j == to_json(ir));

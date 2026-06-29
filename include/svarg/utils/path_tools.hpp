@@ -116,12 +116,6 @@ inline void path_as_cxx_identifier(std::string& path) {
   }
 }
 
-inline constexpr char to_upper(char c) {
-  if (c >= 'a' && c <= 'z')
-    return c - ('a' - 'A');
-  return c;
-}
-
 std::string path_to_name(std::string_view path);
 
 std::string path_to_name(std::string_view path, string_map<std::string>& name2path,
@@ -175,5 +169,30 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   }
   return out;
 }
+// TODO ещё же С++ экранирование для строк, которые пишутся в кавычки в С++...
+// TODO и везде где пишу расставить это НАДО РАССТАВИТЬ РАВ СТРОКИ ВЕЗДЕ, ЧТОБЫ НЕ НАДО БЫЛО ЭКРАНИРОВАТЬ
+
+// убирает различия в представлении для разных медиа типов и ренжей
+// например application/JSoN; ChaRset: "UtF-8" -> application/json; charset=utf-8
+std::string monomorph_media_type(std::string_view);
+
+[[nodiscard]] std::string_view without_media_type_parameters(std::string_view s);
+
+// создаёт порядок медиа типов, в том числе ренжей
+// application/json vs application/xml или */* vs application/json
+// image/* vs image/png и тд, таким образом что более специализированный выигрывает
+// https://www.rfc-editor.org/rfc/rfc9110.html#section-8.3.1
+//
+// precondition: `a` и `b` прошли `monomorph_media_type`
+// возвращает greater если 'a' более специализировано чем 'b' (или иногда просто для правильного порядка, если
+// они одинаковые)
+std::strong_ordering compare_media_types(std::string_view a, std::string_view b);
+
+// `content_type` может быть и медиа ренжом
+// precondition: monomorph_media_type(content_type) == content_type
+//            && without_media_type_parameters(content_type) == content_type
+[[nodiscard]] bool match_content_type(std::string_view candidate, std::string_view content_type);
+
+[[nodiscard]] bool match_status_range(int status, status_range_e r) noexcept;
 
 }  // namespace svarg

@@ -120,7 +120,7 @@ struct SVARG_TRIVIAL_ABI box {
     }
   }
 
-  [[nodiscard]] bool has_value() const noexcept {
+  [[nodiscard]] constexpr bool has_value() const noexcept {
     return ptr != nullptr;
   }
 
@@ -184,22 +184,36 @@ struct SVARG_TRIVIAL_ABI box {
     return b;
   }
 
-  [[nodiscard]] T* release() noexcept {
+  [[nodiscard]] constexpr T* release() noexcept {
     return std::exchange(ptr, nullptr);
   }
 
-  bool operator==(std::nullptr_t) const noexcept {
+  constexpr bool operator==(std::nullptr_t) const noexcept {
     return !has_value();
   }
-  bool operator==(std::nullopt_t) const noexcept {
+  constexpr bool operator==(std::nullopt_t) const noexcept {
     return *this == nullptr;
   }
-  friend std::strong_ordering operator<=>(const box& l, const box& r) noexcept {
+  friend constexpr std::strong_ordering operator<=>(const box& l, const box& r) noexcept {
     return l && r ? *l <=> *r : bool(l) <=> bool(r);
   }
 
-  friend bool operator==(const box& l, const box& r) noexcept {
+  friend constexpr bool operator==(const box& l, const box& r) noexcept {
     return l && r ? *l == *r : !l && !r;
+  }
+
+  // для удобного join на ренжах из box
+  constexpr T* begin() noexcept {
+    return has_value() ? ptr : nullptr;
+  }
+  constexpr const T* begin() const noexcept {
+    return has_value() ? ptr : nullptr;
+  }
+  constexpr T* end() noexcept {
+    return has_value() ? ptr + 1 : nullptr;
+  }
+  constexpr const T* end() const noexcept {
+    return has_value() ? ptr + 1 : nullptr;
   }
 };
 

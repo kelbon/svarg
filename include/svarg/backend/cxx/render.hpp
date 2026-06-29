@@ -12,7 +12,8 @@ struct render_options {
   // будет гарантировать несовпадение имён, но имена будут иногда более сложные
   bool simple_cxx_identifiers = true;
   // используется для опциональных полей
-  std::string optional_str = "optional";
+  std::string optional_str = "std::optional";
+  std::string variant_str = "std::variant";
   // используется также как optional, но когда поля рекурсивные (т.е. нельзя сделать optional)
   std::string box_str = "box";
   // название шаблона куда подставлять аргументы allOf
@@ -52,6 +53,11 @@ struct schema_ref_result {
 struct render_result {
   std::string filename;  // куда складывать
   std::string rendered;  // что складывать
+};
+
+struct rendered_with_name {
+  std::string struct_name;
+  std::string render;
 };
 
 // TODO вызов этих операций чтобы рендерить все схемы + инструмент для превращения IR в С++.
@@ -121,6 +127,16 @@ struct renderer {
   std::vector<fs::path> render_all(fs::path output_dir, dd::generator<render_result>) const;
   std::vector<fs::path> render_all_schemas(fs::path output_dir) const;
   std::vector<fs::path> render_all_operations(fs::path output_dir) const;
+
+  std::string render_bodies(const std::set<ir::body>&, std::string_view spec, const json_pointer& jp) const;
+
+  rendered_with_name render_response(const ir::response_desc&, std::string_view spec,
+                                     const json_pointer& jp) const;
+
+  rendered_with_name render_body(const ir::body& body, std::string_view spec, const json_pointer& jp) const;
+
+  friend std::string render_parameters(const auto& params, std::string_view spec, const json_pointer& jp,
+                                       const renderer&);
 };
 
 }  // namespace svarg::cxx

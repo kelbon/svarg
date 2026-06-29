@@ -33,7 +33,16 @@ static std::string make_file_path(const ir::schema_ref& ref, const render_option
     path += '/';
     path += make_cxx_ident(seg, options);
   }
-  return path + ".hpp";
+  path += ".hpp";
+  return path;
+}
+
+static std::string make_file_path(const ir::operation& ref, const render_options& options) {
+  std::string path = ref.spec;
+  path += '/';
+  path += ref.id;
+  path += ".hpp";
+  return path;
 }
 
 static std::string_view get_schema_name(const ir::schema& s, const render_options& options) {
@@ -131,11 +140,11 @@ std::string renderer::render_discriminator(const ir::discriminator_desc& d, std:
   result += "// `vtor` must accept type, e.g. []<typename X>() { ... }";
   result += "decltype(auto) discriminate(std::string_view str, auto&& vtor) {\n";
   for (auto&& [str, type] : d.mapping) {
-    result += std::format("if (str == {}) {{ return vtor.template operator()<{}>(); }}", str,
+    result += std::format("if (str == {}) {{ return vtor.template operator()<{}>(); }}\n", str,
                           render_schema_ref(type, relspec, relative).typeref);
   }
-  result += "else { vtor.template operator()<void>(); }";
-  result += '}';
+  result += "return vtor.template operator()<void>();\n";
+  result += "}\n";
   return result;
 }
 
@@ -169,7 +178,6 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
           return std::format("{}<{}>", options.anyof_str, render_schemas_array(a.schemas, relspec, relative));
         },
         [&](const ir::oneof_schema& a) {
-          // TODO какую-то функцию каждому типа to_alias или хз. Чтобы не потерять такие мелочи хз где
           if (a.discriminator)
             return std::string{};  // нетривиальный
           return std::format("{}<{}>", options.oneof_str, render_schemas_array(a.schemas, relspec, relative));
@@ -220,6 +228,11 @@ std::string renderer::render_object_field(const ir::schema& s, const ir::object_
                      field.name);
 }
 
+static std::string render_string(std::string_view s) {
+  // всегда raw строки с двойной кавычкой, чтобы избежать экранирования и тд
+  return std::format("R\"\"({})\"\"", s);
+}
+
 // `typeref` - тип поля, если s полутривиальный объект
 std::string renderer::render_struct_content(const ir::schema& s, std::string typeref) const {
   std::string field_str = std::format("{} {};", typeref, options.special_field_name);
@@ -265,9 +278,9 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           result += std::format("static const inline std::array<{}, {}> values = {{", type, e.values.size());
         for (auto&& v : e.values) {
           if (is_string_enum)
-            result += std::format("\"{}\",", std::string_view(v.value.as_string()));
+            result += render_string(std::string_view(v.value.as_string()));
           else
-            result += std::format("from_json(\"{}\"),", boost::json::serialize(v.value));
+            result += std::format("from_json({}),", render_string(boost::json::serialize(v.value)));
         }
         result += "};\n";
         if (is_string_enum) {
@@ -303,7 +316,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
         for (auto&& f : a.fields) {
           if (f.required)
-            result += std::format("if (str == \"{}\") return true;\n", f.name);
+            result += std::format("if (str == {}) return true;\n", render_string(f.name));
         }
         result += "return false;\n";
         result += "}\n\n";
@@ -386,7 +399,7 @@ std::vector<fs::path> renderer::render_all(fs::path output_dir, dd::generator<re
 }
 
 std::vector<fs::path> renderer::render_all_schemas(fs::path output_dir) const {
-  auto foo = [&](this auto) -> dd::generator<render_result> {
+  auto foo = [&]() -> dd::generator<render_result> {
     for (auto&& s : schemas())
       co_yield render_schema(s);
   };
@@ -396,7 +409,7 @@ std::vector<fs::path> renderer::render_all_schemas(fs::path output_dir) const {
 std::vector<fs::path> renderer::render_all_operations(fs::path output_dir) const {
   auto foo = [&](this auto) -> dd::generator<render_result> {
     for (auto&& op : *ir.operations)
-      ;  // co_yield render_operation(op);
+      co_yield render_operation(op);
   };
   return render_all(std::move(output_dir), foo());
 }
@@ -415,6 +428,140 @@ void renderer::render2cxx(fs::path output_dir) const {
 
 // ОПЕРАЦИИ
 
+rendered_with_name renderer::render_body(const ir::body& body, std::string_view spec,
+                                         const json_pointer& jp) const {
+  std::string name = std::format("{}_body", make_cxx_ident(body.contentType, options));
+  std::string result;
+  result += std::format("struct {} {{\n", name);
+
+  if (body.streaming && *body.streaming)
+    result += "using is_streaming = int;\n";
+  result += "using inline_parse = int;\n\n";
+  result +=
+      std::format("static constexpr std::string_view content_type = {}\n\n", render_string(body.contentType));
+  result += std::format("{} data;\n", render_schema_ref(body.schema, spec, jp).typeref);
+  if (body.membersEncoding && !body.membersEncoding->empty()) {
+    std::string encoding;
+    for (auto& [prop_name, content_type] : *body.membersEncoding) {
+      encoding +=
+          std::format("if (str == {}) return {};\n", render_string(prop_name), render_string(content_type));
+    }
+    result += std::format(
+        "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
+        "{{ {} return \"\";\n}}\n\n",
+        encoding);
+  }
+
+  result += "};\n";
+
+  return {std::move(name), std::move(result)};
+}
+
+static std::string render_parameters(const auto& params, std::string_view spec, const json_pointer& jp,
+                                     const renderer& ren) {
+  string s;
+  auto type_of = [&](const ir::schema_ref& ref) -> std::string {
+    return ren.render_schema_ref(ref, spec, jp).typeref;
+  };
+  // требуемые
+  for (const ir::operation_parameter& p : params) {
+    if (p.required.value_or(false))
+      s += std::format("{} {};\n", type_of(p.schema), p.name);
+  }
+  // опциональные
+  for (const ir::operation_parameter& p : params) {
+    if (!p.required.value_or(false))
+      s += std::format("{} {};\n", type_of(p.schema), p.name);
+  }
+  s += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
+  for (const ir::operation_parameter p : params) {
+    if (p.required.value_or(false))
+      s += std::format("if (str == {}) return true;\n", render_string(p.name));
+  }
+
+  s += "return false;\n";
+  s += "}\n\n";
+
+  std::string encoding;
+  for (const ir::operation_parameter& p : params) {
+    if (p.encoding)
+      s += std::format("if (str == {}) return {};\n", render_string(p.name), render_string(*p.encoding));
+  }
+  if (!encoding.empty()) {
+    s += std::format(
+        "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
+        "{{ {} return \"\";\n}}\n\n",
+        encoding);
+  }
+
+  return s;
+}
+
+std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::string_view spec,
+                                    const json_pointer& jp) const {
+  std::string result;
+  if (bodies.empty())
+    return result;
+  if (bodies.size() > 1) {
+    std::vector<std::string> struct_names;
+    for (auto& b : bodies) {
+      auto [struct_name, str] = render_body(b, spec, jp);
+      struct_names.push_back(std::move(struct_name));
+      result += str;
+      result += '\n';
+    }
+    std::string types = std::format("{}", struct_names | std::ranges::views::join_with(','));
+    result += std::format("{}<{}> body;\n\n", options.variant_str, types);
+    // боди уже сортированы по типу контента так, что сначала провериться более специализированный
+    result +=
+        "static constexpr decltype(auto) select_body_type(std::string_view content_type, auto&& vtor) {";
+    for (auto&& [b, struct_name] : std::views::zip(bodies, struct_names))
+      result +=
+          std::format("if (match_content_type({}, content_type)) return vtor.template operator()<{}>();\n",
+                      render_string(b.contentType), struct_name);
+    result += std::format("return vtor.template operator()<void>();\n");
+    result += "}\n\n";
+  } else {
+    // одно тело
+    auto [struct_name, str] = render_body(*bodies.begin(), spec, jp);
+    result += str;
+    result += std::format("\n{} body;\n", struct_name);
+  }
+
+  return result;
+}
+
+// если респонс не дефолтный генерирует
+// static constexpr int status = ...;
+// название структуры "response_{}" ("default_response" для дефолтного)
+// генерирует все структуры боди и само боди (если одно - просто, если много - options.variant_str)
+// при наличии хедеров структуру headers_t и поле headers
+rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::string_view spec,
+                                             const json_pointer& jp) const {
+  std::string result;
+  std::string struct_name =
+      rsp.is_default() ? "default_response" : std::format("response_{}", rsp.status.to_string());
+  result += std::format("struct {} {{\n\n", struct_name);
+  if (!rsp.is_default())
+    result += std::format("static constexpr int status = {};\n\n", rsp.status.to_string());
+  if (rsp.headers) {
+    std::vector<ir::operation_parameter> params;
+    for (auto& h : *rsp.headers) {
+      params.push_back(ir::operation_parameter{
+          .location = parameter_location::header,
+          .name = h.name,
+          .schema = h.schema ? *h.schema : ir::make_fundamental_ref(ir::fundamental_e::string),
+          .required = h.required,
+      });
+    }
+    result += render_parameters(params, spec, jp, *this);
+    result += '\n';
+  }
+  if (rsp.bodies)
+    result += render_bodies(*rsp.bodies, spec, jp);
+  result += "};\n\n";
+  return {std::move(struct_name), std::move(result)};
+}
 /*
 TODO пока использую воображаемый енам
 enum struct parse_type_e {
@@ -431,64 +578,132 @@ using inline_parse = int
 
 */
 render_result renderer::render_operation(const ir::operation& op) const {
-  std::string query_struct;
-  std::string headers_struct;
-  std::string cookies_struct;
-  // TODO if has query params ...
+  auto ident = [&](std::string_view s) -> std::string { return make_cxx_ident(s, options); };
 
-  // TODO reuse object generation
+  // обращения все из root, так как обращаемся из /paths в /components/schemas
+  json_pointer paths("/paths");
+  auto type_of = [&](const ir::schema_ref& ref) -> std::string {
+    return render_schema_ref(ref, op.spec, paths).typeref;
+  };
 
-  op.bodies;  // если одно - просто body, если много - вариант (точнее вариант бокс видимо? TODO забыл про
-              // anyof/oneof возможно рекурсивные. Хотя можно всегда вариант бокс вставить)
-              // Также тут надо доставать дефолт контент тайп видимо (на случай если он не пришёл. Это либо
-              // единственный если одно тело, либо.. Ошибка?)
-  op.defaultResponse;  // using default_response = X (или void если нет)
-  op.responses;        // респонсы также как вложенные типы должны сгенерироваться.
-  // в целом то же самое внутри - headers могут быть и боди разные
-  // + надо функцию которая определяет какой респонс парсить. Типа visit_status(int status, auto&& vtor)
-  // и там обрабатываются статус ренжи и прочее (последовательно идёт сначала по НЕ ренжам, затем по ренжам,
-  // затем дефолт если есть, если нет - void) и вызывает визитор если сматчилось. Чтобы более
-  // специализированное побеждало
-  op.id;          // используется как имя структуры
-  op.method;      // строкой сложить (на случай кастомных)
-  op.parameters;  // query - в структуру query, также для path/cookies/headers/боди параметров (для боди мб
-                  // сложнее, типа разные типы боди?)
-                  // + для параметров нужно куда-то ещё пихнуть encoding... Вероятно это constexpr функция
-                  // вида имя параметра->optional<string_view> encoding, либо такой функции вовсе нет, если
-                  // не переопределено
+  std::vector<const ir::operation_parameter*> path_params;
+  std::vector<const ir::operation_parameter*> query_params;
+  std::vector<const ir::operation_parameter*> header_params;
+  std::vector<const ir::operation_parameter*> cookie_params;
 
-  op.path;  // нужно рантайм аргументы достать если они есть, проверить что эти аргументы есть в параметрах и
-            // просто положить рантайм выражение пути в path дальше парсер должен справиться
+  if (op.parameters) {
+    for (auto& p : *op.parameters) {
+      switch (p.location) {
+        case parameter_location::path:
+          path_params.push_back(&p);
+          break;
+        case parameter_location::query:
+          query_params.push_back(&p);
+          break;
+        case parameter_location::header:
+          header_params.push_back(&p);
+          break;
+        case parameter_location::cookie:
+          cookie_params.push_back(&p);
+          break;
+      }
+    }
+  }
+  std::string result;
+  result += std::format("namespace {}\n\n", make_namespace(op.spec, paths, options));
+  on_scope_exit {
+    result += "}\n";
+  };
+  // id
+  result += std::format("struct {} {{\n", op.id);
+  on_scope_exit {
+    result += "}\n";
+  };
+  // spec
+  result += std::format("static constexpr inline std::string_view spec = {}\n\n", render_string(op.spec));
 
-  op.spec;  // просто где лежит спека
+  // method
+  result += std::format("static constexpr inline std::stirng_view method = {}", render_string(op.method));
 
-  // TODO op.meta;
-  /*
-  TODO внутри самой операции делать cookie/headers/application_json_body и так далее структурки для всего что
-  есть
+  // parameters
 
-  Внутри каждой структурки надо писать что это (для парсинга) типа using cookie = int; или parse_type =
-  cookie;
+  auto deref = std::views::transform([](auto* p) -> auto& { return *p; });
+  if (!path_params.empty()) {
+    result += "struct path_t {\n";
+    result += std::format("static constexpr std::string_view path_expr = {};\n\n", render_string(op.path));
+    result += render_parameters(path_params | deref, op.spec, paths, *this);
+    result += "}\n";
+  }
+  if (!query_params.empty()) {
+    result += "struct query_t {\n";
+    result += render_parameters(query_params | deref, op.spec, paths, *this);
+    result += "}\n";
+  }
+  if (!header_params.empty()) {
+    result += "struct headers_t {\n";
+    result += render_parameters(header_params | deref, op.spec, paths, *this);
+    result += "}\n";
+  }
+  if (!cookie_params.empty()) {
+    result += "struct cookies_t {\n";
+    result += render_parameters(cookie_params | deref, op.spec, paths, *this);
+    result += "}\n";
+  }
+  result += '\n';
+  if (!path_params.empty())
+    result += "path_t path;\n";
+  if (!query_params.empty())
+    result += "query_t query;\n";
+  if (!header_params.empty())
+    result += "headers_t headers;\n";
+  if (!cookie_params.empty())
+    result += "cookies_t cookies;\n";
 
-  и положить их просто полями всё что есть (если возможных боди много, то надо вариант немного обёрнутый для
-  нормального написания op.application_json_body().x
+  // bodies
 
-  Внутри них потенциально можно сделать всякое - геттеры сеттеры и тд
+  if (op.bodies)
+    result += render_bodies(*op.bodies, op.spec, paths);
 
-  Для респонсов +- также, может быть боди, хедера и тд
+  // TODO responses/ defaultResponse
 
-  Заменить is_required_field на просто is_required, парсинг для респонсов и операций внезапно должен принимать
-  на вход response, а не просто json
+  // респонсов может быть не указано вообще - например в вебхуке для парсинга приходящих операций, а не
+  // отправки
+  if (op.defaultResponse)
+    result += render_response(*op.defaultResponse, op.spec, paths).render;
 
-  так ещё и при приёме нужно определить тип боди по хедеру/из дефолта для операции если его нет + иметь
-  парсинг из xml и прочих кривых типов боди
+  if (op.responses) {
+    std::vector<std::string> struct_names;
+    for (auto& r : *op.responses) {
+      auto [struct_name, rendered] = render_response(r, op.spec, paths);
+      result += rendered;
+      struct_names.push_back(std::move(struct_name));
+    }
+    result += "constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {\n";
+    // сначала не ренжи (2ХХ)
+    for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
+      assert(!r.is_default());
+      if (!r.is_range()) {
+        result += std::format("if ({} == status) return vtor.template operator()<{}>();\n",
+                              r.status.to_string(), struct_name);
+      }
+    }
+    // затам ренжи, чтобы более специализированный был проверен раньше
+    for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
+      assert(!r.is_default());
+      if (r.is_range()) {
+        result += std::format(
+            "if (match_status_range(status, status_range_e::{})) return vtor.template operator()<{}>();\n",
+            r.status.to_string(), struct_name);
+      }
+    }
+    if (op.defaultResponse)
+      result += "return vtor.template operator()<default_response>();\n";
+    else
+      result += "return vtor.template operator()<void>();\n";
+    result += "}\n\n";
+  }
 
-  + надо парсинг query и обрабатывать нормально cookie (которые надо складывать..)
-
-
-Логику парсинга вносить в сами структуры не нужно, только информацию чтобы использовать позже при парсинге
-  */
-  return {};
+  return {make_file_path(op, options), std::move(result)};
 }
 
 }  // namespace svarg::cxx

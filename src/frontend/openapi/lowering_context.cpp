@@ -144,7 +144,7 @@ object_and_path<T> resolve_ref_to(reference_object ref, fs::path file, json_poin
 
   for (size_t recursion_depth = 0; recursion_depth <= ctx.opts.ref_max_depth; ++recursion_depth) {
     if (!ref.ref_.contains("#/components/")) [[unlikely]] {
-      ctx.emit_warn(file, chain.jp.empty() ? parse_ref(ref.ref_).json_ptr.escaped() : chain.jp.escaped(),
+      ctx.emit_warn(file, chain.jp.empty() ? parse_ref(ref.ref_).json_ptr : chain.jp,
                     "$ref should be into /components/*, but $ref = {}", ref.ref_);
     }
     boost::json::value json = chain.follow(std::move(ref));
@@ -192,7 +192,7 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
     if (schema.required) {
       for (const string& x : *schema.required) {
         if (!std::ranges::contains(*schema.properties | std::views::keys, x))
-          emit_warn(file, jp.escaped(), "required property `{}` does not appear in `properties`, ignored", x);
+          emit_warn(file, jp, "required property `{}` does not appear in `properties`, ignored", x);
       }
     }
     for (auto& [prop_name, prop_sor] : *schema.properties) {
@@ -204,13 +204,13 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
         fi.required = false;
       else if (schema.required) {
         if (field_schema.nullable || field_schema.default_) {
-          emit_warn(file, jp.unescaped(), "property {}` marked as required, but {}. `required` ignored",
-                    prop_name, field_schema.nullable ? "has nullable type" : "has default");
+          emit_warn(file, jp, "property {}` marked as required, but {}. `required` ignored", prop_name,
+                    field_schema.nullable ? "has nullable type" : "has default");
         } else if (field_schema.is_write_only() || field_schema.is_read_only()) {
           // readOnly/writeOnly означает, что по сути есть два типа - для запроса и ответа и required зависит
           // от этого здесь генерируется только один тип, поэтому оба readOnly/writeOnly означают по факту
           // опциональность поля
-          emit_warn(file, jp.unescaped(), "property {} marked as {}, `required` ignored", prop_name,
+          emit_warn(file, jp, "property {} marked as {}, `required` ignored", prop_name,
                     field_schema.is_write_only() ? "writeOnly" : "readOnly");
         } else {
           for (const string& x : *schema.required) {
@@ -713,7 +713,16 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
   ir::body result;
   // возможно media type range
   result.contentType = content_type;
-  if (obj.schema) {
+  if (obj.itemSchema) {
+    auto [ref, rschema] = resolve_schema(*obj.schema, file, jp / "itemSchema", *this);
+    result.schema = ref;
+    result.streaming = true;
+    if (obj.schema)
+      emit_warn(file, jp, "'schema' setted but ignored, because itemSchema present");
+    if (obj.encoding)
+      emit_warn(file, jp, "'encoding' setted but ignored, because itemSchema present");
+  }  // игнорируем schema/encoding если была itemSchema
+  else if (obj.schema) {
     auto [ref, rschema] = resolve_schema(*obj.schema, file, jp / "schema", *this);
     result.schema = ref;
     if (obj.encoding) {
@@ -756,9 +765,11 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
   }
   if (rsp.content) {
     auto _ = guard_array(result.bodies);
-    for (auto& [contenttype, bodydesc] : *rsp.content)
-      result.bodies->insert(
-          media_type_object_lowering(bodydesc, file, jp / "content" / contenttype, contenttype));
+    for (auto& [content_type_, bodydesc] : *rsp.content) {
+      ir::content_type_t content_type = content_type_;
+      result.bodies->insert(media_type_object_lowering(bodydesc, file, jp / "content" / content_type.str(),
+                                                       content_type.str()));
+    }
   }
 
   return result;
@@ -775,12 +786,13 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
     // валидация была
     assert(param.content && param.content->size() == 1);
     // content type
-    auto& [content_type, mediaobj] = *param.content->begin();
-    result.encoding = content_type;
+    auto& [content_type_, mediaobj] = *param.content->begin();
+    result.encoding = content_type_;
     if (!mediaobj.schema)
       throw validate_error("parameter schema not setted. Both `schema` and `content/schema` not setted");
     result.schema =
-        resolve_schema(*mediaobj.schema, file, jp / "content" / content_type / "schema", *this).ir_schema;
+        resolve_schema(*mediaobj.schema, file, jp / "content" / result.encoding->str() / "schema", *this)
+            .ir_schema;
   }
   if (param.in == parameter_location::path) {
     // валидация уже была
@@ -797,8 +809,11 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
 std::set<ir::body> lowering_context::request_body_lowering(request_body_object obj, fs::path file,
                                                            json_pointer jp) {
   std::set<ir::body> result;
-  for (auto& [content_type, mediaobj] : obj.content)
-    result.insert(media_type_object_lowering(mediaobj, file, jp / "content" / content_type, content_type));
+  for (auto& [content_type_, mediaobj] : obj.content) {
+    ir::content_type_t content_type = content_type_;
+    result.insert(
+        media_type_object_lowering(mediaobj, file, jp / "content" / content_type.str(), content_type.str()));
+  }
   return result;
 }
 
@@ -817,7 +832,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(std::strin
     else {
       if (name.empty())
         throw validate_error("path item name cannot be empty");
-      op.id = std::format("{}{}{}", methodstr, to_upper(name[0]), name.substr(1));
+      op.id = std::format("{}{}{}", methodstr, to_upper_ascii(name[0]), name.substr(1));
     }
     op.method = methodstr;
     op.path = path;
