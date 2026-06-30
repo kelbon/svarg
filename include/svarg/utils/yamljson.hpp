@@ -18,4 +18,7 @@ std::string load_yaml_as_json(fs::path yaml);
 // передаёт в `fn` содержимое файла как json, даже если это yaml
 void pass_as_json(fs::path path, fn_cref<void(std::string_view) const> fn);
 
+// пишет в файл. Если его нет - создаёт (не включая директории), если он есть - перезаписывает
+void write_into(const fs::path&, std::string_view);
+
 }  // namespace svarg

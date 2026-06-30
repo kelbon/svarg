@@ -6,19 +6,6 @@ using namespace svarg;
 using ir::ir_object;
 using ir::ir_options;
 
-// TODO тесты отдельно на то какой IR выдаст конкретный фрагмент и отдельно на преобразование IR -> IR
-/*
-
-  fs::path dir = std::filesystem::temp_directory_path();
-  std::ofstream out(dir / "input.yaml");
-  on_scope_exit {
-    std::filesystem::remove(dir / "input.yaml");
-  };
-  out << input_yaml;
-  out.close();
-  ir::ir_object ir = openapi2ir(dir, {"input.yaml"}, {.ir_opts = options});
-*/
-
 auto pass_all = [](ir_object ir, ir_options opts) -> ir::pass_result {
   return {ir::optimization_pipeline(std::move(ir), opts), 0};
 };

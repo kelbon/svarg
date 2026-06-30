@@ -2,9 +2,10 @@
 
 #include <iostream>
 #include <boost/json.hpp>
+#include <sstream>
 
 namespace svarg {
-
+// TODO переписать
 inline void pretty_print(std::ostream& os, const boost::json::value& jv, std::string* indent = nullptr) {
   namespace json = boost::json;
   std::string indent_;
@@ -14,7 +15,7 @@ inline void pretty_print(std::ostream& os, const boost::json::value& jv, std::st
     case json::kind::object: {
       os << "{\n";
       indent->append(4, ' ');
-      auto const& obj = jv.get_object();
+      const auto& obj = jv.get_object();
       if (!obj.empty()) {
         auto it = obj.begin();
         for (;;) {
@@ -34,7 +35,7 @@ inline void pretty_print(std::ostream& os, const boost::json::value& jv, std::st
     case json::kind::array: {
       os << "[\n";
       indent->append(4, ' ');
-      auto const& arr = jv.get_array();
+      const auto& arr = jv.get_array();
       if (!arr.empty()) {
         auto it = arr.begin();
         for (;;) {
@@ -76,6 +77,12 @@ inline void pretty_print(std::ostream& os, const boost::json::value& jv, std::st
 
   if (indent->empty())
     os << "\n";
+}
+
+[[nodiscard]] inline std::string pretty_print(const boost::json::value& j) {
+  std::stringstream ss;
+  pretty_print(ss, j);
+  return std::move(ss).str();
 }
 
 }  // namespace svarg

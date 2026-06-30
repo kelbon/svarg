@@ -2,8 +2,7 @@
 #include "svarg/backend/cxx/namespace_strings.hpp"
 #include "svarg/backend/cxx/render.hpp"
 #include "svarg/errors.hpp"
-
-#include <fstream>
+#include "svarg/ir/ir_visitor.hpp"
 
 namespace svarg::cxx {
 
@@ -28,7 +27,10 @@ static std::string make_namespace(std::string_view spec, const json_pointer& jp,
 }
 
 static std::string make_file_path(const ir::schema_ref& ref, const render_options& options) {
-  std::string path = ref.spec;
+  // добавляем "/schemas" чтобы всё связанное с типами складывалось отдельно и не засоряло
+  // папки operations/webhooks/директорию где это всё лежит. Все типы локализованы в schemas
+  // при этом публичные в schemas/components/schemas
+  std::string path = ref.spec + "/schemas";
   for (std::string_view seg : ref.jsonptr->segments()) {
     path += '/';
     path += make_cxx_ident(seg, options);
@@ -37,8 +39,8 @@ static std::string make_file_path(const ir::schema_ref& ref, const render_option
   return path;
 }
 
-static std::string make_file_path(const ir::operation& ref, const render_options& options) {
-  std::string path = ref.spec;
+static std::string make_file_path(const ir::operation& ref, const render_options& options, bool is_webhook) {
+  std::string path = ref.spec + (is_webhook ? "/webhooks" : "/operations");
   path += '/';
   path += ref.id;
   path += ".hpp";
@@ -156,8 +158,10 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   if (it == schemas().end())
     throw render_error("schema {}#{} do not refer to any schema in IR", s.spec, s.jsonptr->escaped());
   auto& t = *it;
-  // если простой - генерируем алиас
-  if (!t.has_requirements()) {
+  // если простой - пытаемся сгенерировать алиас
+  // именованные даже простые алиасы оставляем, например чтобы oneof<A, B, C,...> не дублировать во многих
+  // местах. Если пользователь в спеке дал ему имя - значит так и хотел
+  if (!t.name && !t.has_requirements()) {
     if (auto* f = t.type.if_fundamental()) {
       // t.is_trivial() == true
       return render_fundamental_type(*f);
@@ -333,20 +337,23 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
 }
 
 render_result renderer::render_schema(const ir::schema& s) const {
-  std::string file_begin = options.schema_type_begin;
+  std::string file_begin = options.schema_file_begin;
   const auto sref = s.ref();
+  auto [typeref, is_alias] = render_schema_ref(sref, s.spec, s.jsonptr);
+  if (is_alias)
+    return {.filename = {}, .rendered = {}};
   {
     // include всех упомянутых в реализации зависимостей (рекурсия обрабатывается pragma once)
     ir::schema_refs_t deps;
 
     collect_mentioned_first_layer(sref, deps);
+    deps = dealias(std::move(deps));
     for (auto& ref : deps)
       file_begin += std::format("#include \"{}\"\n", make_file_path(sref, options));
     file_begin += std::format("\nnamespace {} {{\n\n", make_namespace(s.spec, s.jsonptr, options));
   }
   std::string schema_render;
 
-  auto [typeref, is_alias] = render_schema_ref(sref, s.spec, s.jsonptr);
   if (is_alias) {
     schema_render = std::format("using {} = {};\n", get_schema_name(s, options), typeref);
   } else {
@@ -389,10 +396,7 @@ std::vector<fs::path> renderer::render_all(fs::path output_dir, dd::generator<re
     if (ec)
       throw render_error("filesystem error, message: {}, path: {}", ec.message(), path.generic_string());
     // заменяет файл если он уже есть
-    std::ofstream out(path);
-    out << rendered;
-    if (!out.is_open())
-      throw render_error("cannot open file for writing, path: `{}`", path.generic_string());
+    write_into(path, rendered);
   }
   rm_written.no_longer_needed();
   return std::vector(written.begin(), written.end());
@@ -400,16 +404,20 @@ std::vector<fs::path> renderer::render_all(fs::path output_dir, dd::generator<re
 
 std::vector<fs::path> renderer::render_all_schemas(fs::path output_dir) const {
   auto foo = [&]() -> dd::generator<render_result> {
-    for (auto&& s : schemas())
-      co_yield render_schema(s);
+    for (auto&& s : schemas()) {
+      auto rr = render_schema(s);
+      if (!rr.filename.empty())  // алиас, файл не нужен
+        co_yield std::move(rr);
+    }
   };
   return render_all(std::move(output_dir), foo());
 }
 
-std::vector<fs::path> renderer::render_all_operations(fs::path output_dir) const {
+std::vector<fs::path> renderer::render_all_operations(fs::path output_dir, const std::set<ir::operation>& ops,
+                                                      bool is_webhooks) const {
   auto foo = [&](this auto) -> dd::generator<render_result> {
-    for (auto&& op : *ir.operations)
-      co_yield render_operation(op);
+    for (auto&& op : ops)
+      co_yield render_operation(op, is_webhooks);
   };
   return render_all(std::move(output_dir), foo());
 }
@@ -418,12 +426,50 @@ std::vector<fs::path> renderer::render_all_operations(fs::path output_dir) const
 // видимо собрать из written просто все пути Outputdir/components/schemas
 
 void renderer::render2cxx(fs::path output_dir) const {
-  if (ir.schemas)
-    render_all_schemas(output_dir / "schemas");
-  if (ir.operations)
-    render_all_operations(output_dir / "operations");
-  if (ir.webhooks)
-    render_all_operations(output_dir / "webhooks");
+  if (ir.schemas && !ir.schemas->empty())
+    render_all_schemas(output_dir);
+  if (ir.operations && !ir.operations->empty())
+    render_all_operations(output_dir, *ir.operations, /*is_webhooks=*/false);
+  if (ir.webhooks && !ir.webhooks->empty())
+    render_all_operations(output_dir, *ir.webhooks, /*is_webhooks=*/true);
+
+  // all_schemas.hpp / all_operations.hpp / all_webhooks.hpp для каждой спеки (даже если схем нет,
+  // генерируется пустой файл)
+  // #pragma once нет, так как это файлы состоящие из #include со своими pragma once
+
+  // имя спеки -> содержимое файла со всеми схемами
+  struct all_files_content {
+    std::string all_schemas;
+    std::string all_operations;
+    std::string all_webhooks;
+  };
+  std::map<std::string, all_files_content> spec2rendered;
+  if (ir.schemas) {
+    for (auto& s : *ir.schemas) {
+      // include только именованные, так как все неименованные (инлайн схемы) через них тоже подключатся, т.к.
+      // их кто-то использует. Именованные схемы никогда не алиасы, то есть имеют свой файл
+      if (s.name)
+        spec2rendered[s.spec].all_schemas +=
+            std::format("#include \"{}\"\n", make_file_path(s.ref(), options));
+    }
+  }
+  if (ir.operations) {
+    for (auto& op : *ir.operations) {
+      spec2rendered[op.spec].all_operations +=
+          std::format("#include \"{}\"\n", make_file_path(op, options, /*is_webhook=*/false));
+    }
+  }
+  if (ir.webhooks) {
+    for (auto& op : *ir.webhooks) {
+      spec2rendered[op.spec].all_webhooks +=
+          std::format("#include \"{}\"\n", make_file_path(op, options, /*is_webhook=*/true));
+    }
+  }
+  for (auto& [spec, all] : spec2rendered) {
+    write_into(output_dir / spec / "all_schemas.hpp", all.all_schemas);
+    write_into(output_dir / spec / "all_operations.hpp", all.all_operations);
+    write_into(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
+  }
 }
 
 // ОПЕРАЦИИ
@@ -437,8 +483,8 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   if (body.streaming && *body.streaming)
     result += "using is_streaming = int;\n";
   result += "using inline_parse = int;\n\n";
-  result +=
-      std::format("static constexpr std::string_view content_type = {}\n\n", render_string(body.contentType));
+  result += std::format("static constexpr std::string_view content_type = {};\n\n",
+                        render_string(body.contentType));
   result += std::format("{} data;\n", render_schema_ref(body.schema, spec, jp).typeref);
   if (body.membersEncoding && !body.membersEncoding->empty()) {
     std::string encoding;
@@ -466,12 +512,12 @@ static std::string render_parameters(const auto& params, std::string_view spec, 
   // требуемые
   for (const ir::operation_parameter& p : params) {
     if (p.required.value_or(false))
-      s += std::format("{} {};\n", type_of(p.schema), p.name);
+      s += std::format("{} {};\n", type_of(p.schema), make_cxx_ident(p.name, ren.options));
   }
   // опциональные
   for (const ir::operation_parameter& p : params) {
     if (!p.required.value_or(false))
-      s += std::format("{} {};\n", type_of(p.schema), p.name);
+      s += std::format("{} {};\n", type_of(p.schema), make_cxx_ident(p.name, ren.options));
   }
   s += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
   for (const ir::operation_parameter p : params) {
@@ -510,7 +556,8 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
       result += str;
       result += '\n';
     }
-    std::string types = std::format("{}", struct_names | std::ranges::views::join_with(','));
+    auto names_rng = struct_names | std::views::join_with(',');
+    std::string types = std::format("{}", std::string(names_rng.begin(), names_rng.end()));
     result += std::format("{}<{}> body;\n\n", options.variant_str, types);
     // боди уже сортированы по типу контента так, что сначала провериться более специализированный
     result +=
@@ -542,8 +589,13 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
   std::string struct_name =
       rsp.is_default() ? "default_response" : std::format("response_{}", rsp.status.to_string());
   result += std::format("struct {} {{\n\n", struct_name);
-  if (!rsp.is_default())
-    result += std::format("static constexpr int status = {};\n\n", rsp.status.to_string());
+  if (!rsp.is_default()) {
+    if (!rsp.is_range())
+      result += std::format("static constexpr int status = {};\n\n", rsp.status.to_string());
+    else
+      result += std::format("static constexpr status_range_e status_range = status_range_e::{};\n\n",
+                            rsp.status.to_string());
+  }
   if (rsp.headers) {
     std::vector<ir::operation_parameter> params;
     for (auto& h : *rsp.headers) {
@@ -577,15 +629,30 @@ cookie, header, query,
 using inline_parse = int
 
 */
-render_result renderer::render_operation(const ir::operation& op) const {
-  auto ident = [&](std::string_view s) -> std::string { return make_cxx_ident(s, options); };
+
+static ir::schema_refs_t all_schemas_from(const auto& x, bool allow_fundamental = false) {
+  ir::schema_refs_t schemas;
+  auto foo = [&](const ir::schema_ref& s) {
+    if (allow_fundamental || !s.is_fundamental())
+      schemas.insert(s);
+  };
+  ir::schema_ref_vtor collector(foo);
+  collector.visit(x);
+  return schemas;
+}
+
+render_result renderer::render_operation(const ir::operation& op, bool is_webhook) const {
+  std::string result = options.operation_file_begin;
 
   // обращения все из root, так как обращаемся из /paths в /components/schemas
   json_pointer paths("/paths");
-  auto type_of = [&](const ir::schema_ref& ref) -> std::string {
-    return render_schema_ref(ref, op.spec, paths).typeref;
-  };
 
+  {  // includes
+    auto used_schemas = dealias(all_schemas_from(op));
+    for (auto& s : used_schemas)
+      result += std::format("#include \"{}\"\n", make_file_path(s, options));
+    result += '\n';
+  }
   std::vector<const ir::operation_parameter*> path_params;
   std::vector<const ir::operation_parameter*> query_params;
   std::vector<const ir::operation_parameter*> header_params;
@@ -609,21 +676,17 @@ render_result renderer::render_operation(const ir::operation& op) const {
       }
     }
   }
-  std::string result;
-  result += std::format("namespace {}\n\n", make_namespace(op.spec, paths, options));
-  on_scope_exit {
-    result += "}\n";
-  };
+
+  result += std::format("namespace {} {{\n\n", make_namespace(op.spec, paths, options));
+
   // id
   result += std::format("struct {} {{\n", op.id);
-  on_scope_exit {
-    result += "}\n";
-  };
+
   // spec
-  result += std::format("static constexpr inline std::string_view spec = {}\n\n", render_string(op.spec));
+  result += std::format("static constexpr inline std::string_view spec = {};\n\n", render_string(op.spec));
 
   // method
-  result += std::format("static constexpr inline std::stirng_view method = {}", render_string(op.method));
+  result += std::format("static constexpr inline std::stirng_view method = {};\n", render_string(op.method));
 
   // parameters
 
@@ -664,7 +727,7 @@ render_result renderer::render_operation(const ir::operation& op) const {
   if (op.bodies)
     result += render_bodies(*op.bodies, op.spec, paths);
 
-  // TODO responses/ defaultResponse
+  // responses/ defaultResponse
 
   // респонсов может быть не указано вообще - например в вебхуке для парсинга приходящих операций, а не
   // отправки
@@ -683,7 +746,7 @@ render_result renderer::render_operation(const ir::operation& op) const {
     for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
       assert(!r.is_default());
       if (!r.is_range()) {
-        result += std::format("if ({} == status) return vtor.template operator()<{}>();\n",
+        result += std::format("if (status == {}) return vtor.template operator()<{}>();\n",
                               r.status.to_string(), struct_name);
       }
     }
@@ -701,9 +764,42 @@ render_result renderer::render_operation(const ir::operation& op) const {
     else
       result += "return vtor.template operator()<void>();\n";
     result += "}\n\n";
+
+    auto names_rng = struct_names | std::views::join_with(',');
+    result += std::format("\nusing all_responses = {}<{}>;\n\n", options.typelist_str,
+                          std::string(names_rng.begin(), names_rng.end()));
   }
 
-  return {make_file_path(op, options), std::move(result)};
+  result += "};\n\n}\n";  // struct / namespace
+  result += options.operation_file_end;
+  return {make_file_path(op, options, is_webhook), std::move(result)};
+}
+
+ir::schema_refs_t renderer::dealias(ir::schema_refs_t schemas) const {
+  auto is_alias = [this](const ir::schema_ref& s) { return render_schema_ref(s, {}, {}).is_alias; };
+  ir::schema_refs_t removed_aliases;  // для обработки рекурсии в алиасах
+  for (;;) {
+    ir::schema_refs_t schemas2;
+    bool has_aliases = false;
+    for (auto& s : schemas) {
+      if (removed_aliases.contains(s))
+        continue;
+      if (is_alias(s)) {
+        has_aliases = true;
+        removed_aliases.insert(s);
+        ir::schema_refs_t deps;
+        collect_mentioned_first_layer(s, deps);
+        for (auto&& dep : deps)
+          if (!removed_aliases.contains(dep))
+            schemas2.insert(std::move(dep));
+      } else {
+        schemas2.insert(s);
+      }
+    }
+    schemas = std::move(schemas2);
+    if (!has_aliases)
+      return schemas;
+  }
 }
 
 }  // namespace svarg::cxx

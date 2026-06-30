@@ -39,11 +39,9 @@ TEST("raw_refs") {
   boost::json::value v;
   svarg::pass_as_json(p, [&](std::string_view str) { v = boost::json::parse(str); });
   v = svarg::resolve_raw_references(std::move(v), p, options);
-  std::ofstream f("mdamda.json");
-  svarg::pretty_print(f, v);
+  svarg::write_into("mdamda.json", svarg::to_json_string(v));
   svarg::openapi_object o = svarg::parse_spec(std::move(v), options);
-  std::ofstream f2("mdamdaout.json");
-  f2 << svarg::to_json_string(o);
+  svarg::write_into("mdamdaout.json", svarg::to_json_string(o));
 }
 
 // часто отваливается всилу то гитхаба то ещё чего

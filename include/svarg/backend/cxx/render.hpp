@@ -26,7 +26,7 @@ struct render_options {
   // для схемы без имени. Она будет в отдельном уникальном неймспейсе с этим именем
   std::string inline_schema_name = "schema";
   // добавляется в начале каждой схемы
-  std::string schema_type_begin = R"(
+  std::string schema_file_begin = R"(
 #pragma once
 
 #include "common_types.hpp"
@@ -34,6 +34,14 @@ struct render_options {
 )";
   // добавляется в конце каждой схемы
   std::string schema_file_end = "";
+  std::string operation_file_begin = R"(
+#pragma once
+
+#include "common_types.hpp"
+
+)";
+  // добавляется в конце каждой схемы
+  std::string operation_file_end = "";
   // используется как имя когда есть полутривиальные объекты с одним полем, которые не алиасы только потому
   // что у них есть дополнительные требования или дискриминатор и тд
   // например итоговая структура будет
@@ -120,13 +128,15 @@ struct renderer {
                                       const json_pointer& relative) const;
 
   // рендерит весь файл со схемой
+  // если схема алиас - то возвращается пустой путь, генерировать файл не нужно
   render_result render_schema(const ir::schema&) const;
-  render_result render_operation(const ir::operation&) const;
+  render_result render_operation(const ir::operation&, bool is_webhook) const;
 
   // возвращает вектор неповторяющихся путей файлов которые были записаны
   std::vector<fs::path> render_all(fs::path output_dir, dd::generator<render_result>) const;
   std::vector<fs::path> render_all_schemas(fs::path output_dir) const;
-  std::vector<fs::path> render_all_operations(fs::path output_dir) const;
+  std::vector<fs::path> render_all_operations(fs::path output_dir, const std::set<ir::operation>& ops,
+                                              bool is_webhooks) const;
 
   std::string render_bodies(const std::set<ir::body>&, std::string_view spec, const json_pointer& jp) const;
 
@@ -137,6 +147,9 @@ struct renderer {
 
   friend std::string render_parameters(const auto& params, std::string_view spec, const json_pointer& jp,
                                        const renderer&);
+
+  // убирает из схем все ссылки на алиасы или фундаменталы, заменяя их их зависимостями
+  [[nodiscard]] ir::schema_refs_t dealias(ir::schema_refs_t) const;
 };
 
 }  // namespace svarg::cxx

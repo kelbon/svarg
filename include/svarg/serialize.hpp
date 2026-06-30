@@ -30,11 +30,8 @@ template <typename T>
 }
 
 [[nodiscard]] inline std::string to_json_string(const boost::json::value& v, bool pretty = true) {
-  if (pretty) {
-    std::stringstream ss;
-    pretty_print(ss, v);
-    return std::move(ss).str();
-  }
+  if (pretty)
+    return pretty_print(v);
   return boost::json::serialize(v);
 }
 [[nodiscard]] inline std::string to_yaml_string(const boost::json::value& v) {
@@ -42,11 +39,8 @@ template <typename T>
 }
 
 [[nodiscard]] std::string to_json_string(const auto& x, bool pretty = true) {
-  if (pretty) {
-    std::stringstream ss;
-    pretty_print(ss, to_json(x));
-    return std::move(ss).str();
-  }
+  if (pretty)
+    return pretty_print(to_json(x));
   return boost::json::serialize(to_json(x));
 }
 
@@ -77,31 +71,31 @@ struct serialize<int64_t> {
 
 template <>
 struct serialize<string> {
-  boost::json::value operator()(string const& v) {
+  boost::json::value operator()(const string& v) {
     return boost::json::string(v);
   }
 };
 
 template <>
 struct serialize<number> {
-  boost::json::value operator()(number const& v) {
+  boost::json::value operator()(const number& v) {
     return std::visit([](auto x) -> boost::json::value { return x; }, v.data);
   }
 };
 
 template <>
 struct serialize<Any> {
-  boost::json::value operator()(Any const& v) {
+  boost::json::value operator()(const Any& v) {
     return v.value;
   }
 };
 
 template <typename T>
 struct serialize<array<T>> {
-  boost::json::value operator()(array<T> const& arr) {
+  boost::json::value operator()(const array<T>& arr) {
     boost::json::array out;
     out.reserve(arr.size());
-    for (auto const& elem : arr)
+    for (const auto& elem : arr)
       out.push_back(to_json(elem));
     return out;
   }
@@ -109,9 +103,9 @@ struct serialize<array<T>> {
 
 template <typename... Types>
 struct serialize<std::unordered_map<Types...>> {
-  boost::json::value operator()(std::unordered_map<Types...> const& map) {
+  boost::json::value operator()(const std::unordered_map<Types...>& map) {
     boost::json::object out;
-    for (auto const& [key, val] : map)
+    for (const auto& [key, val] : map)
       out.emplace(key, to_json(val));
     return out;
   }
@@ -119,9 +113,9 @@ struct serialize<std::unordered_map<Types...>> {
 
 template <typename... Types>
 struct serialize<std::map<Types...>> {
-  boost::json::value operator()(std::map<Types...> const& map) {
+  boost::json::value operator()(const std::map<Types...>& map) {
     boost::json::object out;
-    for (auto const& [key, val] : map)
+    for (const auto& [key, val] : map)
       out.emplace(key, to_json(val));
     return out;
   }
@@ -130,7 +124,7 @@ struct serialize<std::map<Types...>> {
 template <typename T>
 struct serialize<optional<T>> {
   // возвращает null если пусто, иначе сериализует значение
-  boost::json::value operator()(optional<T> const& opt) {
+  boost::json::value operator()(const optional<T>& opt) {
     if (!opt)
       return nullptr;
     return to_json(*opt);
@@ -140,7 +134,7 @@ struct serialize<optional<T>> {
 template <typename T>
 struct serialize<std::optional<T>> {
   // возвращает null если пусто, иначе сериализует значение
-  boost::json::value operator()(std::optional<T> const& opt) {
+  boost::json::value operator()(const std::optional<T>& opt) {
     if (!opt)
       return nullptr;
     return to_json(*opt);
@@ -149,7 +143,7 @@ struct serialize<std::optional<T>> {
 
 template <typename T>
 struct serialize<one_or_array<T>> {
-  boost::json::value operator()(one_or_array<T> const& v) {
+  boost::json::value operator()(const one_or_array<T>& v) {
     if (v.values.size() == 1)
       return to_json(v.values[0]);
     return to_json(v.values);
@@ -161,7 +155,7 @@ struct serialize<std::unordered_set<Types...>> {
   boost::json::value operator()(const std::unordered_set<Types...>& r) {
     boost::json::array out;
     out.reserve(r.size());
-    for (auto const& elem : r)
+    for (const auto& elem : r)
       out.push_back(to_json(elem));
     return out;
   }
@@ -172,7 +166,7 @@ struct serialize<std::set<Types...>> {
   boost::json::value operator()(const std::set<Types...>& r) {
     boost::json::array out;
     out.reserve(r.size());
-    for (auto const& elem : r)
+    for (const auto& elem : r)
       out.push_back(to_json(elem));
     return out;
   }
@@ -181,7 +175,7 @@ struct serialize<std::set<Types...>> {
 namespace noexport {
 
 template <aggregate T, size_t I>
-void serialize_field(T const& in, boost::json::object& out) {
+void serialize_field(const T& in, boost::json::object& out) {
   constexpr std::string_view raw_name = boost::pfr::get_name<I, T>();
   constexpr std::string_view name = unescape_field_name(raw_name);
 
@@ -189,7 +183,7 @@ void serialize_field(T const& in, boost::json::object& out) {
   if constexpr (is_keyfield(raw_name))
     return;
 
-  auto const& field = boost::pfr::get<I>(in);
+  const auto& field = boost::pfr::get<I>(in);
 
   if constexpr (requires { field.has_value(); }) {
     if (!field.has_value())
@@ -201,7 +195,7 @@ void serialize_field(T const& in, boost::json::object& out) {
 }
 
 template <aggregate T, size_t... Is>
-void serialize_all_fields(T const& in, boost::json::object& out, std::index_sequence<Is...>) {
+void serialize_all_fields(const T& in, boost::json::object& out, std::index_sequence<Is...>) {
   (serialize_field<T, Is>(in, out), ...);
 }
 
@@ -211,7 +205,7 @@ template <aggregate T>
 struct serialize<T> {
   static_assert(std::is_same_v<T, std::decay_t<T>>);
 
-  boost::json::value operator()(T const& in) {
+  boost::json::value operator()(const T& in) {
     // костыль для schema_object
     if constexpr (requires { in._keyfield_boolean_schema; }) {
       if (in._keyfield_boolean_schema.has_value())

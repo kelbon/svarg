@@ -71,7 +71,6 @@ int main(int argc, char* argv[]) try {
     inputs.push_back(std::move(p));
   }
   ir::ir_object ir = openapi2ir(std::filesystem::current_path(), std::move(inputs), options);
-  std::ofstream outfile(out);
   if (!cliopts.passes.empty()) {
     for (auto v : cliopts.passes | std::views::split(' ')) {
       if (v.empty())
@@ -103,9 +102,9 @@ int main(int argc, char* argv[]) try {
     }
   }
   if (*f == format_e::yaml)
-    outfile << to_yaml_string(ir);
+    write_into(out, to_yaml_string(ir));
   else
-    outfile << to_json_string(ir);
+    write_into(out, to_json_string(ir));
   std::println("output written to {}", fs::absolute(out).generic_string());
   return 0;
 } catch (std::exception& e) {

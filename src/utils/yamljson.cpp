@@ -5,6 +5,8 @@
 // не спрашивайте... ryml гениален. ПОРЯДОК ХЕДЕРОВ ВАЖЕН
 #include <ryml_std.hpp>
 
+#include <fstream>
+
 namespace svarg {
 
 void pass_as_json(fs::path path, fn_cref<void(std::string_view) const> fn) {
@@ -42,6 +44,15 @@ std::string json2yaml(std::string_view json) {
 std::string load_yaml_as_json(fs::path yaml) {
   boost::iostreams::mapped_file_source file(yaml.string());
   return yaml2json(std::string_view(file.data(), file.size()));
+}
+
+void write_into(const fs::path& path, std::string_view content) {
+  std::ofstream file(path, std::ios::out | std::ios::trunc | std::ios::binary);
+  if (!file)
+    throw std::runtime_error("write_into: failed to open file: " + path.generic_string());
+  file.write(content.data(), static_cast<std::streamsize>(content.size()));
+  if (!file)
+    throw std::runtime_error("write_into: failed to write to file: " + path.generic_string());
 }
 
 }  // namespace svarg
