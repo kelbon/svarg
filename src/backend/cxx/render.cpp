@@ -8,6 +8,48 @@
 
 namespace svarg::cxx {
 
+// используется для опциональных полей
+static constexpr std::string_view optional_str = "std::optional";
+static constexpr std::string_view variant_str = "std::variant";
+// используется также как optional, но когда поля рекурсивные (т.е. нельзя сделать optional)
+static constexpr std::string_view box_str = "metel::box";
+// название шаблона куда подставлять аргументы allOf
+static constexpr std::string_view allof_str = "allof";
+static constexpr std::string_view anyof_str = "anyof";
+static constexpr std::string_view oneof_str = "oneof";
+static constexpr std::string_view array_str = "arrayof";
+// куда вставлять аргумент 'not' из openapi
+static constexpr std::string_view not_str = "not_a";
+// для схемы без имени. Она будет в отдельном уникальном неймспейсе с этим именем
+static constexpr std::string_view inline_schema_name = "schema";
+// добавляется в начале каждой схемы
+static constexpr std::string_view schema_file_begin = R"(
+#pragma once
+
+#include "common_types.hpp"
+
+)";
+// добавляется в конце каждой схемы
+static constexpr std::string_view schema_file_end = "";
+static constexpr std::string_view operation_file_begin = R"(
+#pragma once
+
+#include "common_types.hpp"
+
+)";
+// добавляется в конце каждой схемы
+static constexpr std::string_view operation_file_end = "";
+static constexpr std::string_view typelist_str = "typelist";
+
+// используется как имя когда есть полутривиальные объекты с одним полем, которые не алиасы только потому
+// что у них есть дополнительные требования или дискриминатор и тд
+// например итоговая структура будет
+// struct Name {
+//    anyof<A, B, C> <special_field_name>; using
+//    required_schemas = <typelist_str><...>:
+// };
+static constexpr std::string_view special_field_name = "data";
+
 static std::string make_cxx_ident(std::string_view str, const render_options& options) {
   return options.simple_cxx_identifiers ? to_cxx_ident_simple(str) : to_cxx_ident(str);
 }
@@ -50,10 +92,10 @@ static std::string make_file_path(const ir::operation& ref, const render_options
 }
 
 static std::string_view get_schema_name(const ir::schema& s, const render_options& options) {
-  return s.name ? *s.name : options.inline_schema_name;
+  return s.name ? *s.name : inline_schema_name;
 }
 static std::string_view get_schema_name(const ir::schema_ref& s, const render_options& options) {
-  return s.name ? *s.name : options.inline_schema_name;
+  return s.name ? *s.name : inline_schema_name;
 }
 
 static std::string render_string(std::string_view s) {
@@ -66,14 +108,13 @@ static std::string render_parse_tag(cxx_support::parse_tag_e tag) {
       "\nstatic constexpr cxx_support::parse_tag_e parse_tag = cxx_support::parse_tag_e::{};\n\n",
       e2str(tag));
 }
-// используется как имя когда есть полутривиальные объекты с одним полем, которые не алиасы только потому
-// что у них есть дополнительные требования или дискриминатор и тд
-// например итоговая структура будет
-// struct Name {
-//    anyof<A, B, C> <special_field_name>; using
-//    required_schemas = <typelist_str><...>:
-// };
-static constexpr std::string_view special_field_name = "data";
+
+static array<ir::object_field_info> as_object_fields(auto&& params) {
+  array<ir::object_field_info> result;
+  for (const ir::operation_parameter& p : params)
+    result.push_back({.type = p.schema, .name = p.name, .required = p.required.value_or(false)});
+  return result;
+}
 
 std::string renderer::render_schemas_array(const array<ir::schema_ref>& arr, std::string_view relspec,
                                            const json_pointer& relative) const {
@@ -93,10 +134,7 @@ std::string renderer::render_schemas_array(const array<ir::schema_ref>& arr, std
 void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema_refs_t& out) const {
   if (s.is_fundamental())  // ссылка на фундаментал напрямую
     return;
-  auto it = schemas().find(s);
-  if (it == schemas().end())
-    throw render_error("schema {}#{} do not refer to any schema in IR", s.spec, s.jsonptr->escaped());
-  auto& t = *it;
+  auto& t = schemaof(s);
 
   if (t.type.is_fundamental())
     return;
@@ -177,10 +215,7 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
                                               const json_pointer& relative) const {
   if (s.is_fundamental())  // ссылка на фундаментал напрямую
     return render_fundamental_type(*s.if_fundamental());
-  auto it = schemas().find(s);
-  if (it == schemas().end())
-    throw render_error("schema {}#{} do not refer to any schema in IR", s.spec, s.jsonptr->escaped());
-  auto& t = *it;
+  auto& t = schemaof(s);
   // если простой - пытаемся сгенерировать алиас
   // именованные даже простые алиасы оставляем, например чтобы oneof<A, B, C,...> не дублировать во многих
   // местах. Если пользователь в спеке дал ему имя - значит так и хотел
@@ -193,24 +228,23 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
     matcher vtor{
         [](const ir::fundamental_e&) -> std::string { std::unreachable(); },
         [&](const ir::array_schema& a) {
-          return std::format("{}<{}>", options.array_str,
-                             render_schema_ref(a.element, relspec, relative).typeref);
+          return std::format("{}<{}>", array_str, render_schema_ref(a.element, relspec, relative).typeref);
         },
         [&](const ir::allof_schema& a) {
-          return std::format("{}<{}>", options.allof_str, render_schemas_array(a.schemas, relspec, relative));
+          return std::format("{}<{}>", allof_str, render_schemas_array(a.schemas, relspec, relative));
         },
         [&](const ir::anyof_schema& a) {
           if (a.discriminator)
             return std::string{};  // нетривиальный
-          return std::format("{}<{}>", options.anyof_str, render_schemas_array(a.schemas, relspec, relative));
+          return std::format("{}<{}>", anyof_str, render_schemas_array(a.schemas, relspec, relative));
         },
         [&](const ir::oneof_schema& a) {
           if (a.discriminator)
             return std::string{};  // нетривиальный
-          return std::format("{}<{}>", options.oneof_str, render_schemas_array(a.schemas, relspec, relative));
+          return std::format("{}<{}>", oneof_str, render_schemas_array(a.schemas, relspec, relative));
         },
         [&](const ir::not_schema& a) {
-          return std::format("{}<{}>", options.not_str, render_schema_ref(a.type, relspec, relative).typeref);
+          return std::format("{}<{}>", not_str, render_schema_ref(a.type, relspec, relative).typeref);
         },
         [&](const ir::enum_schema&) -> std::string {
           // enum всегда преобразуется в структуру, внутри которой values и (для строк) enum + using enum
@@ -238,21 +272,70 @@ bool renderer::is_recursive_field(const ir::schema& s, const ir::schema_ref& fie
   return collect_all_mentioned(field_type, deps);
 }
 
-std::string renderer::render_object_field(const ir::schema& s, const ir::object_field_info& field,
-                                          std::string_view relspec, const json_pointer& relative) const {
-  bool recursive = is_recursive_field(s, field.type);
-  if (recursive && field.required) {
-    throw render_error("field `{}` in type `{}#{}` recursive and required", field.name, s.spec,
-                       s.jsonptr.escaped());
+std::string renderer::render_optional_field(const ir::schema_ref& field, std::string_view name,
+                                            std::string_view relspec, const json_pointer& relative,
+                                            bool recursive) const {
+  // oneof раскрывается в box_union, который в себе уже скрывает
+  // опциональность требуемость поля узнаётся из is_required
+  if (schemaof(field).type.is_oneof())
+    return std::format("{} {}", render_schema_ref(field, relspec, relative).typeref,
+                       make_cxx_ident(name, options));
+  std::string_view tempstr = recursive ? box_str : optional_str;
+  return std::format("{}<{}> {}", tempstr, render_schema_ref(field, relspec, relative).typeref,
+                     make_cxx_ident(name, options));
+}
+
+std::string renderer::render_required_field(const ir::schema_ref& field, std::string_view name,
+                                            std::string_view relspec, const json_pointer& relative) const {
+  return std::format("{} {}", render_schema_ref(field, relspec, relative).typeref,
+                     make_cxx_ident(name, options));
+}
+
+std::string renderer::render_object_field(const ir::object_field_info& field, std::string_view relspec,
+                                          const json_pointer& relative, bool recursive_field) const {
+  if (recursive_field && field.required) {
+    throw render_error("field `{}` in type `{}#{}` recursive and required", field.name, relspec,
+                       relative.escaped());
   }
-  if (field.required) {
-    assert(!recursive);
-    return std::format("{} {}", render_schema_ref(field.type, relspec, relative).typeref, field.name);
+  if (field.required)
+    return render_required_field(field.type, field.name, relspec, relative);
+  return render_optional_field(field.type, field.name, relspec, relative, recursive_field);
+}
+
+std::string renderer::render_object_fields(const array<ir::object_field_info>& fields,
+                                           std::string_view relspec, const json_pointer& relative,
+                                           std::optional<ir::schema_ref> fields_owner,
+                                           std::optional<ir::schema_ref> additional_fields) const {
+  std::string result;
+  for (auto&& f : fields) {
+    if (f.required) {
+      result += render_object_field(
+          f, relspec, relative, fields_owner ? is_recursive_field(schemaof(*fields_owner), f.type) : false);
+      result += ";\n";
+    }
   }
-  // optional
-  std::string_view tempstr = recursive ? options.box_str : options.optional_str;
-  return std::format("{}<{}> {}", tempstr, render_schema_ref(field.type, relspec, relative).typeref,
-                     field.name);
+  // затем опциональные
+  for (auto&& f : fields) {
+    if (!f.required) {
+      result += render_object_field(
+          f, relspec, relative, fields_owner ? is_recursive_field(schemaof(*fields_owner), f.type) : false);
+      result += ";\n";
+    }
+  }
+  if (!additional_fields) {
+    result += "\nusing additional_fields = void;\n\n";
+  } else {
+    result += std::format("\nusing additional_fields = {};\n\n",
+                          render_schema_ref(*additional_fields, relspec, relative).typeref);
+  }
+  result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
+  for (auto&& f : fields) {
+    if (f.required)
+      result += std::format("if (str == {}) return true;\n", render_string(f.name));
+  }
+  result += "return false;\n";
+  result += "}\n\n";
+  return result;
 }
 
 // `typeref` - тип поля, если s полутривиальный объект
@@ -311,47 +394,21 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
       },
       [&](const ir::object_schema& a) -> std::string {
         std::string result = render_parse_tag(cxx_support::parse_tag_e::object);
-        // сначала требуемые поля
-        for (auto&& f : a.fields) {
-          if (f.required) {
-            result += render_object_field(s, f, s.spec, s.jsonptr);
-            result += ";\n";
-          }
-        }
-        // затем опциональные
-        for (auto&& f : a.fields) {
-          if (!f.required) {
-            result += render_object_field(s, f, s.spec, s.jsonptr);
-            result += ";\n";
-          }
-        }
-        if (!a.additional_fields) {
-          result += "\nusing additional_fields = void;\n\n";
-        } else {
-          result += std::format("\nusing additional_fields = {};\n\n",
-                                render_schema_ref(*a.additional_fields, s.spec, s.jsonptr).typeref);
-        }
-        result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
-        for (auto&& f : a.fields) {
-          if (f.required)
-            result += std::format("if (str == {}) return true;\n", render_string(f.name));
-        }
-        result += "return false;\n";
-        result += "}\n\n";
-        // TODO геттеры / сеттеры
+        result +=
+            render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(), a.additional_fields);
         return result;
       },
   };
   std::string res = std::visit(vtor, s.type.data);
   if (s.has_requirements()) {
-    res += std::format("using required_schemas = {}<{}>;\n", options.typelist_str,
+    res += std::format("using required_schemas = {}<{}>;\n", typelist_str,
                        render_schemas_array(*s.required, s.spec, s.jsonptr));
   }
   return res;
 }
 
 render_result renderer::render_schema(const ir::schema& s) const {
-  std::string file_begin = options.schema_file_begin;
+  std::string file_begin(schema_file_begin);
   const auto sref = s.ref();
   auto [typeref, is_alias] = render_schema_ref(sref, s.spec, s.jsonptr);
   if (is_alias)
@@ -378,7 +435,7 @@ render_result renderer::render_schema(const ir::schema& s) const {
 
   file_begin += schema_render;
   file_begin += "\n}";  // конец неймспейса
-  file_begin += options.schema_file_end;
+  file_begin += schema_file_end;
   return {
       .filename = make_file_path(sref, options),
       .rendered = std::move(file_begin),
@@ -517,32 +574,12 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   return {std::move(name), std::move(result)};
 }
 
-static std::string render_parameters(const auto& params, std::string_view spec, const json_pointer& jp,
-                                     const renderer& ren) {
+static std::string render_parameters(const auto& params, std::string_view relspec,
+                                     const json_pointer& relative, const renderer& ren) {
   string s;
-  auto type_of = [&](const ir::schema_ref& ref) -> std::string {
-    return ren.render_schema_ref(ref, spec, jp).typeref;
-  };
-  // требуемые
-  for (const ir::operation_parameter& p : params) {
-    if (p.required.value_or(false))
-      s += std::format("{} {};\n", type_of(p.schema), make_cxx_ident(p.name, ren.options));
-  }
-  // опциональные
-  for (const ir::operation_parameter& p : params) {
-    // TODO render optional
-    if (!p.required.value_or(false))
-      s += std::format("{}<{}> {};\n", ren.options.optional_str, type_of(p.schema),
-                       make_cxx_ident(p.name, ren.options));
-  }
-  s += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
-  for (const ir::operation_parameter p : params) {
-    if (p.required.value_or(false))
-      s += std::format("if (str == {}) return true;\n", render_string(p.name));
-  }
 
-  s += "return false;\n";
-  s += "}\n\n";
+  s += ren.render_object_fields(as_object_fields(params), relspec, relative, /*fields_owner=*/std::nullopt,
+                                /*additional_fields=*/std::nullopt);
 
   std::string encoding;
   for (const ir::operation_parameter& p : params) {
@@ -575,7 +612,7 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     }
     auto names_rng = struct_names | std::views::join_with(',');
     std::string types = std::format("{}", std::string(names_rng.begin(), names_rng.end()));
-    result += std::format("{}<{}> body;\n\n", options.variant_str, types);
+    result += std::format("{}<{}> body;\n\n", variant_str, types);
     // боди уже сортированы по типу контента так, что сначала провериться более специализированный
     result +=
         "static constexpr decltype(auto) select_body_type(std::string_view content_type, auto&& vtor) {";
@@ -669,7 +706,7 @@ static ir::schema_refs_t all_schemas_from(const auto& x, bool allow_fundamental 
 }
 
 render_result renderer::render_operation(const ir::operation& op, bool is_webhook) const {
-  std::string result = options.operation_file_begin;
+  std::string result(operation_file_begin);
 
   // обращения все из root, так как обращаемся из /paths в /components/schemas
   json_pointer paths("/paths");
@@ -793,12 +830,12 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     result += "}\n\n";
 
     auto names_rng = struct_names | std::views::join_with(',');
-    result += std::format("\nusing all_responses = {}<{}>;\n\n", options.typelist_str,
+    result += std::format("\nusing all_responses = {}<{}>;\n\n", typelist_str,
                           std::string(names_rng.begin(), names_rng.end()));
   }
 
   result += "};\n\n}\n";  // struct / namespace
-  result += options.operation_file_end;
+  result += operation_file_end;
   return {make_file_path(op, options, is_webhook), std::move(result)};
 }
 

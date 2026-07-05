@@ -11,38 +11,6 @@ struct render_options {
   // если `false`, то алгоритм преобразования строк в cxx идентификаторы
   // будет гарантировать несовпадение имён, но имена будут иногда более сложные
   bool simple_cxx_identifiers = true;
-  // используется для опциональных полей
-  std::string optional_str = "std::optional";
-  std::string variant_str = "std::variant";
-  // используется также как optional, но когда поля рекурсивные (т.е. нельзя сделать optional)
-  std::string box_str = "metel::box";
-  // название шаблона куда подставлять аргументы allOf
-  std::string allof_str = "allof";
-  std::string anyof_str = "anyof";
-  std::string oneof_str = "oneof";
-  std::string array_str = "arrayof";
-  // куда вставлять аргумент 'not' из openapi
-  std::string not_str = "not_a";
-  // для схемы без имени. Она будет в отдельном уникальном неймспейсе с этим именем
-  std::string inline_schema_name = "schema";
-  // добавляется в начале каждой схемы
-  std::string schema_file_begin = R"(
-#pragma once
-
-#include "common_types.hpp"
-
-)";
-  // добавляется в конце каждой схемы
-  std::string schema_file_end = "";
-  std::string operation_file_begin = R"(
-#pragma once
-
-#include "common_types.hpp"
-
-)";
-  // добавляется в конце каждой схемы
-  std::string operation_file_end = "";
-  std::string typelist_str = "typelist";
 };
 
 struct schema_ref_result {
@@ -82,6 +50,13 @@ struct renderer {
     return *ir.schemas;
   }
 
+  const ir::schema& schemaof(const ir::schema_ref& ref) const {
+    auto it = schemas().find(ref);
+    if (it == schemas().end())
+      throw render_error("schema {}#{} do not refer to any schema in IR", ref.spec, ref.jsonptr->escaped());
+    return *it;
+  }
+
   template <typename... Args>
   void emit_warn(std::format_string<Args...> fmt, Args&&... args) const {
     std::println("warning: {}", std::format(fmt, std::forward<Args>(args)...));
@@ -94,8 +69,19 @@ struct renderer {
 
   schema_ref_result render_fundamental_type(const ir::fundamental_e) const;
 
-  std::string render_object_field(const ir::schema& s, const ir::object_field_info&, std::string_view relspec,
-                                  const json_pointer& relative) const;
+  std::string render_required_field(const ir::schema_ref&, std::string_view name, std::string_view relspec,
+                                    const json_pointer& relative) const;
+  std::string render_optional_field(const ir::schema_ref&, std::string_view name, std::string_view relspec,
+                                    const json_pointer& relative, bool recursive) const;
+
+  // генерирует поля (сначала требуемые, затем опциональные), is_required, using additional_fields = ...
+  // TODO? геттеры и сеттеры
+  std::string render_object_fields(const array<ir::object_field_info>& fields, std::string_view relspec,
+                                   const json_pointer& relative, std::optional<ir::schema_ref> fields_owner,
+                                   std::optional<ir::schema_ref> additional_fields) const;
+
+  std::string render_object_field(const ir::object_field_info&, std::string_view relspec,
+                                  const json_pointer& relative, bool recursive_field) const;
 
   std::string render_discriminator(const ir::discriminator_desc& d, std::string_view relspec,
                                    const json_pointer& relative) const;
