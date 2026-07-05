@@ -4,6 +4,8 @@
 #include "svarg/errors.hpp"
 #include "svarg/ir/ir_visitor.hpp"
 
+#include "svarg/backend/cxx/support/concepts.hpp"
+
 namespace svarg::cxx {
 
 static std::string make_cxx_ident(std::string_view str, const render_options& options) {
@@ -53,6 +55,25 @@ static std::string_view get_schema_name(const ir::schema& s, const render_option
 static std::string_view get_schema_name(const ir::schema_ref& s, const render_options& options) {
   return s.name ? *s.name : options.inline_schema_name;
 }
+
+static std::string render_string(std::string_view s) {
+  // всегда raw строки с двойной кавычкой, чтобы избежать экранирования и тд
+  return std::format("R\"\"({})\"\"", s);
+}
+
+static std::string render_parse_tag(cxx_support::parse_tag_e tag) {
+  return std::format(
+      "\nstatic constexpr cxx_support::parse_tag_e parse_tag = cxx_support::parse_tag_e::{};\n\n",
+      e2str(tag));
+}
+// используется как имя когда есть полутривиальные объекты с одним полем, которые не алиасы только потому
+// что у них есть дополнительные требования или дискриминатор и тд
+// например итоговая структура будет
+// struct Name {
+//    anyof<A, B, C> <special_field_name>; using
+//    required_schemas = <typelist_str><...>:
+// };
+static constexpr std::string_view special_field_name = "data";
 
 std::string renderer::render_schemas_array(const array<ir::schema_ref>& arr, std::string_view relspec,
                                            const json_pointer& relative) const {
@@ -108,6 +129,7 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
 }
 
 bool renderer::collect_all_mentioned(const ir::schema_ref& s, ir::schema_refs_t& out) const {
+  collect_mentioned_first_layer(s, out);
   for (;;) {
     size_t size_before = out.size();
     for (auto& ref : out)
@@ -138,7 +160,8 @@ schema_ref_result renderer::render_fundamental_type(const ir::fundamental_e f) c
 
 std::string renderer::render_discriminator(const ir::discriminator_desc& d, std::string_view relspec,
                                            const json_pointer& relative) const {
-  std::string result = std::format("\nusing discriminator_field = {};\n\n", d.propertyName);
+  std::string result = std::format("\nstatic constexpr inline std::string_view discriminator_field = {};\n\n",
+                                   render_string(d.propertyName));
   result += "// `vtor` must accept type, e.g. []<typename X>() { ... }";
   result += "decltype(auto) discriminate(std::string_view str, auto&& vtor) {\n";
   for (auto&& [str, type] : d.mapping) {
@@ -232,71 +255,62 @@ std::string renderer::render_object_field(const ir::schema& s, const ir::object_
                      field.name);
 }
 
-static std::string render_string(std::string_view s) {
-  // всегда raw строки с двойной кавычкой, чтобы избежать экранирования и тд
-  return std::format("R\"\"({})\"\"", s);
-}
-
 // `typeref` - тип поля, если s полутривиальный объект
 std::string renderer::render_struct_content(const ir::schema& s, std::string typeref) const {
-  std::string field_str = std::format("{} {};", typeref, options.special_field_name);
+  std::string field_str = std::format("{} {};", typeref, special_field_name);
   matcher vtor{
       [](const ir::fundamental_e&) -> std::string { std::unreachable(); },
       [&](const ir::array_schema& a) {
-        assert(s.has_requirements());
-        return std::move(field_str);
+        return render_parse_tag(cxx_support::parse_tag_e::array) + std::move(field_str);
       },
       [&](const ir::allof_schema& a) {
-        assert(s.has_requirements());
-        return std::move(field_str);
+        return render_parse_tag(cxx_support::parse_tag_e::allof) + std::move(field_str);
       },
       [&](const ir::anyof_schema& a) {
-        // TODO? набор опшнлов? Потенциально с рекурсией... А точно, это должно быть внутри anyof...
-        // потенциально можно генерировать специализации anyof для красоты
-        // хотя можно геттеры сеттеры генерировать здесь
         std::string result = std::move(field_str);
-        result += "\n\nusing inline_parse = int;\n";
+        result += render_parse_tag(cxx_support::parse_tag_e::anyof);
         if (a.discriminator)
           result += render_discriminator(*a.discriminator, s.spec, s.jsonptr);
         return result;
       },
       [&](const ir::oneof_schema& a) {
         std::string result = std::move(field_str);
-        result += "\n\nusing inline_parse = int;\n";
+        result += render_parse_tag(cxx_support::parse_tag_e::oneof);
         if (a.discriminator)
           result += render_discriminator(*a.discriminator, s.spec, s.jsonptr);
         return result;
       },
       [&](const ir::not_schema& a) {
-        assert(s.has_requirements());
-        return std::move(field_str);
+        return render_parse_tag(cxx_support::parse_tag_e::not_a) + std::move(field_str);
       },
       [&](const ir::enum_schema& e) -> std::string {
         bool is_string_enum = e.type.is_fundamental(ir::fundamental_e::string);
         std::string type = render_schema_ref(e.type, s.spec, s.jsonptr).typeref;
-        std::string result = std::format("{} {};\n\n", type, options.special_field_name);
-        if (is_string_enum)
+        std::string result;
+        if (is_string_enum) {
+          result += render_parse_tag(cxx_support::parse_tag_e::string_enum);
           result += std::format("static constexpr inline std::array<std::string_view, {}> values = {{",
                                 e.values.size());
-        else
-          result += std::format("static const inline std::array<{}, {}> values = {{", type, e.values.size());
-        for (auto&& v : e.values) {
-          if (is_string_enum)
+          for (auto&& v : e.values)
             result += render_string(std::string_view(v.value.as_string()));
-          else
-            result += std::format("from_json({}),", render_string(boost::json::serialize(v.value)));
-        }
-        result += "};\n";
-        if (is_string_enum) {
+          result += "};\n";  // end values
           result += "enum struct values_e {";
           for (auto&& v : e.values)
             result += std::format("{},", make_cxx_ident(std::string_view(v.value.as_string()), options));
-          result += "};\nusing enum values_e;\n\n";
+          result += "};\nusing enum values_e;\n\n";  // end values_e
+          result += std::format("values_e {};\n\n", special_field_name);
+        } else {
+          result += render_parse_tag(cxx_support::parse_tag_e::enum_);
+          result += std::format("static const inline std::array<{}, {}> values = {{", type, e.values.size());
+          for (auto&& v : e.values)
+            result += std::format("from_json<{}>({}),", type, render_string(boost::json::serialize(v.value)));
+          result += "};\n";  // end values
+          result += std::format("{} {};\n\n", type, special_field_name);
         }
         return result;
       },
       [&](const ir::object_schema& a) -> std::string {
-        std::string result;
+        std::string result = render_parse_tag(cxx_support::parse_tag_e::object);
         // сначала требуемые поля
         for (auto&& f : a.fields) {
           if (f.required) {
@@ -315,7 +329,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           result += "\nusing additional_fields = void;\n\n";
         } else {
           result += std::format("\nusing additional_fields = {};\n\n",
-                                render_schema_ref(s.ref(), s.spec, s.jsonptr).typeref);
+                                render_schema_ref(*a.additional_fields, s.spec, s.jsonptr).typeref);
         }
         result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
         for (auto&& f : a.fields) {
@@ -324,13 +338,13 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         }
         result += "return false;\n";
         result += "}\n\n";
-        // TODO геттеры или сеттеры
+        // TODO геттеры / сеттеры
         return result;
       },
   };
   std::string res = std::visit(vtor, s.type.data);
   if (s.has_requirements()) {
-    res += std::format("using required_schemas = {}<{}>", options.typelist_str,
+    res += std::format("using required_schemas = {}<{}>;\n", options.typelist_str,
                        render_schemas_array(*s.required, s.spec, s.jsonptr));
   }
   return res;
@@ -349,7 +363,7 @@ render_result renderer::render_schema(const ir::schema& s) const {
     collect_mentioned_first_layer(sref, deps);
     deps = dealias(std::move(deps));
     for (auto& ref : deps)
-      file_begin += std::format("#include \"{}\"\n", make_file_path(sref, options));
+      file_begin += std::format("#include \"{}\"\n", make_file_path(ref, options));
     file_begin += std::format("\nnamespace {} {{\n\n", make_namespace(s.spec, s.jsonptr, options));
   }
   std::string schema_render;
@@ -416,14 +430,14 @@ std::vector<fs::path> renderer::render_all_schemas(fs::path output_dir) const {
 std::vector<fs::path> renderer::render_all_operations(fs::path output_dir, const std::set<ir::operation>& ops,
                                                       bool is_webhooks) const {
   auto foo = [&](this auto) -> dd::generator<render_result> {
-    for (auto&& op : ops)
-      co_yield render_operation(op, is_webhooks);
+    for (auto&& op : ops) {
+      // workaround gcc ICE
+      auto rr = render_operation(op, is_webhooks);
+      co_yield std::move(rr);
+    }
   };
   return render_all(std::move(output_dir), foo());
 }
-
-// TODO? all header? (типа для всех components/schemas и для всех операций этой спеки)
-// видимо собрать из written просто все пути Outputdir/components/schemas
 
 void renderer::render2cxx(fs::path output_dir) const {
   if (ir.schemas && !ir.schemas->empty())
@@ -482,7 +496,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
 
   if (body.streaming && *body.streaming)
     result += "using is_streaming = int;\n";
-  result += "using inline_parse = int;\n\n";
+  result += render_parse_tag(cxx_support::parse_tag_e::body);
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
                         render_string(body.contentType));
   result += std::format("{} data;\n", render_schema_ref(body.schema, spec, jp).typeref);
@@ -516,8 +530,10 @@ static std::string render_parameters(const auto& params, std::string_view spec, 
   }
   // опциональные
   for (const ir::operation_parameter& p : params) {
+    // TODO render optional
     if (!p.required.value_or(false))
-      s += std::format("{} {};\n", type_of(p.schema), make_cxx_ident(p.name, ren.options));
+      s += std::format("{}<{}> {};\n", ren.options.optional_str, type_of(p.schema),
+                       make_cxx_ident(p.name, ren.options));
   }
   s += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
   for (const ir::operation_parameter p : params) {
@@ -531,7 +547,8 @@ static std::string render_parameters(const auto& params, std::string_view spec, 
   std::string encoding;
   for (const ir::operation_parameter& p : params) {
     if (p.encoding)
-      s += std::format("if (str == {}) return {};\n", render_string(p.name), render_string(*p.encoding));
+      encoding +=
+          std::format("if (str == {}) return {};\n", render_string(p.name), render_string(*p.encoding));
   }
   if (!encoding.empty()) {
     s += std::format(
@@ -615,6 +632,20 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
   return {std::move(struct_name), std::move(result)};
 }
 /*
+TODO:
+* собрать что генерируется для схемы, операции
+* генерализовать, упростить
+* на основе генерируемого написать концепты, собрать требуемые типы
+* на основе концептов написать вспомогательную библиотеку для подключения через смейк для сгенерированных
+render2cxx таргетов
+* написать смейк функцию генерации, которая генерирует таргеты, линкует вспомогательную библиотеку,
+устанавливает нужные зависимости таргетам. И как-то сделать чтобы генерация была на этапе конфигурации, а не
+на этапе билда
+* написать дравйер запускающий фронтенд и бекенд, это другой способ использования - пользователь запускает
+генерацию, получает необходимое, складывает куда ему нужно и при необходимости подключает вспомогательную
+библиотеку (может быть даже вынесенную отдельно)
+
+
 TODO пока использую воображаемый енам
 enum struct parse_type_e {
 path - именованный аргумент из path, нужно сложить все сегментированные имена тоже куда-то. Типа parse_path
@@ -623,10 +654,6 @@ cookie, header, query,
 // query_string
 // + остальное body но там рантайм значение контент типа...
 }
-
-// обозначает то что объект нужно парсить не как агрегат, а игнорируя имя внутри как единственное поле
-// т.е. struct A { int data; } нужно парсить как будто это просто int
-using inline_parse = int
 
 */
 
@@ -686,7 +713,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   result += std::format("static constexpr inline std::string_view spec = {};\n\n", render_string(op.spec));
 
   // method
-  result += std::format("static constexpr inline std::stirng_view method = {};\n", render_string(op.method));
+  result += std::format("static constexpr inline std::string_view method = {};\n", render_string(op.method));
 
   // parameters
 
@@ -695,22 +722,22 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     result += "struct path_t {\n";
     result += std::format("static constexpr std::string_view path_expr = {};\n\n", render_string(op.path));
     result += render_parameters(path_params | deref, op.spec, paths, *this);
-    result += "}\n";
+    result += "};\n";
   }
   if (!query_params.empty()) {
     result += "struct query_t {\n";
     result += render_parameters(query_params | deref, op.spec, paths, *this);
-    result += "}\n";
+    result += "};\n";
   }
   if (!header_params.empty()) {
     result += "struct headers_t {\n";
     result += render_parameters(header_params | deref, op.spec, paths, *this);
-    result += "}\n";
+    result += "};\n";
   }
   if (!cookie_params.empty()) {
     result += "struct cookies_t {\n";
     result += render_parameters(cookie_params | deref, op.spec, paths, *this);
-    result += "}\n";
+    result += "};\n";
   }
   result += '\n';
   if (!path_params.empty())

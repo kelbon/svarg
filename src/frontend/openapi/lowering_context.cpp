@@ -427,7 +427,8 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   }
 
   if (!as_requirements) {
-    as_requirements = count_true(schema.anyOf, schema.allOf, schema.oneOf, schema.not_) > 1;
+    // не учитывая not, так как not это всегда требование и не может быть представлением
+    as_requirements = count_true(schema.anyOf, schema.allOf, schema.oneOf) > 1;
     // если указано более одного, непонятно что отвечает за представление, а что за требование
     // поэтому тип any, но написанные схемы используются для валидации
     if (as_requirements)
@@ -480,6 +481,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     collect_result("oneOf", std::move(t));
   }
   if (schema.not_) {
+    as_requirements = true;  // not всегда требоавние, никакого представления из него не сделать
     ir::not_schema t;
     t.type = resolve_schema(*schema.not_, file, jp / "not", *this).ir_schema;
     collect_result("not", std::move(t));

@@ -28,6 +28,8 @@ target_link_libraries(svarglib PUBLIC
     Boost::iostreams # mapped file
     strswitchlib
     http2lib
+    omolib
+    metellib
 )
 
 if(svarg_ENABLE_TESTING)
@@ -46,6 +48,8 @@ set_target_properties(svarg svarg-ir svarglib PROPERTIES
 	CXX_STANDARD 23
 	CMAKE_CXX_STANDARD_REQUIRED ON
 )
+
+add_subdirectory(include/svarg/backend/cxx/support)
 
 # generates launch.json, places compile_commands.json correctly for clangd
 ccozy_on_configuration_end_vscode()

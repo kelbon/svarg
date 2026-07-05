@@ -5,7 +5,8 @@
 #include <map>
 
 #include "svarg/utils/number.hpp"
-#include "svarg/utils/box.hpp"
+#include <metel/box.hpp>
+
 #include "svarg/utils/strcmp.hpp"
 #include "svarg/utils/json_compare.hpp"
 
@@ -42,7 +43,7 @@ struct Any {
 };
 
 template <typename T>
-using optional = box<T>;
+using optional = metel::box<T>;
 using std::string;
 template <typename T>
 using array = std::vector<T>;

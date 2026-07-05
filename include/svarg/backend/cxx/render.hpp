@@ -15,7 +15,7 @@ struct render_options {
   std::string optional_str = "std::optional";
   std::string variant_str = "std::variant";
   // используется также как optional, но когда поля рекурсивные (т.е. нельзя сделать optional)
-  std::string box_str = "box";
+  std::string box_str = "metel::box";
   // название шаблона куда подставлять аргументы allOf
   std::string allof_str = "allof";
   std::string anyof_str = "anyof";
@@ -42,14 +42,6 @@ struct render_options {
 )";
   // добавляется в конце каждой схемы
   std::string operation_file_end = "";
-  // используется как имя когда есть полутривиальные объекты с одним полем, которые не алиасы только потому
-  // что у них есть дополнительные требования или дискриминатор и тд
-  // например итоговая структура будет
-  // struct Name {
-  //    anyof<A, B, C> <special_field_name>; using
-  //    required_schemas = <typelist_str><...>:
-  // };
-  std::string special_field_name = "data";
   std::string typelist_str = "typelist";
 };
 

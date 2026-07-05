@@ -66,6 +66,19 @@ CPMAddPackage(
   OPTIONS "KELHTTP2_USE_CPM ON"
 )
 
+CPMAddPackage(
+  NAME OMO
+  GIT_REPOSITORY https://github.com/kelbon/omo
+  GIT_TAG v0.0.2
+  OPTIONS "omo_DOWNLOAD_BOOST OFF"
+)
+
+CPMAddPackage(
+  NAME METEL
+  GIT_REPOSITORY https://github.com/kelbon/metel
+  GIT_TAG v0.0.2
+)
+
 if (svarg_ENABLE_TESTING)
   CPMAddPackage(
     NAME MOKO3
