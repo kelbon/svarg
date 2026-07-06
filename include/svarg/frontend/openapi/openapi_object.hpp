@@ -89,12 +89,13 @@ struct xml_object {
 };
 
 struct schema_object {
-  static schema_object parse_if_not_object(const boost::json::value& j) {
+  static error_code parse_if_not_object(const boost::json::value& j, schema_object& out) {
     assert(!j.is_object());
     auto* b = j.if_bool();
     if (!b)
-      throw parse_error("`{}` is not a valid schema object, not even boolean...", boost::json::serialize(j));
-    return schema_object{._keyfield_boolean_schema = *b};
+      return parse_error("`{}` is not a valid schema object, not even boolean...", boost::json::serialize(j));
+    out = schema_object{._keyfield_boolean_schema = *b};
+    return {};
   }
 
   // схема пускает кого угодно
@@ -375,17 +376,20 @@ struct responses_object {
 };
 
 template <>
-struct parse<responses_object> {
-  void operator()(const boost::json::value& v, responses_object& out) {
+struct from_json_value<responses_object> {
+  error_code operator()(const boost::json::value& v, responses_object& out) {
     // responses это по сути стринг мапа с ключами 200/201 и тд + возможный default
     responses_object res;
-    from_json(v, res._responses);
+    error_code ec = try_from_json(v, res._responses);
+    if (ec)
+      return ec;
     if (auto it = res._responses.find("default"); it != res._responses.end()) {
       res.default_.emplace(std::move(it->second));
       res._responses.erase(it);
     }
     out = std::move(res);
     // имена провалидируются позже (2XX ...)
+    return ec;
   }
 };
 

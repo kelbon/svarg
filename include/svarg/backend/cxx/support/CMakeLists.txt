@@ -1,6 +1,6 @@
 
 
-add_library(svarg_cxx_supportlib STATIC ${CMAKE_CURRENT_SOURCE_DIR}/parse.cpp)
+add_library(svarg_cxx_supportlib STATIC ${CMAKE_CURRENT_SOURCE_DIR}/stream_parsing.cpp)
 
 target_link_libraries(svarg_cxx_supportlib PUBLIC svarglib)
 

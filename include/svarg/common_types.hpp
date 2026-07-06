@@ -29,7 +29,8 @@ inline std::string_view e2str(boost::json::kind k) {
   return boost::json::to_string(k);
 }
 
-void efromstr(std::string_view s, parameter_location& out);
+// возвращает false при ошибке
+[[nodiscard]] bool efromstr(std::string_view s, parameter_location& out);
 
 struct Any {
   boost::json::value value;
@@ -92,7 +93,7 @@ inline constexpr std::string_view e2str(status_range_e e) {
   std::unreachable();
 }
 
-inline constexpr void efromstr(std::string_view str, status_range_e& out) {
+[[nodiscard]] inline constexpr bool efromstr(std::string_view str, status_range_e& out) {
   using enum status_range_e;
   std::optional e = ss::string_switch<status_range_e>(str)
                         .case_("1XX", _1XX)
@@ -102,8 +103,9 @@ inline constexpr void efromstr(std::string_view str, status_range_e& out) {
                         .case_("5XX", _5XX)
                         .or_nullopt();
   if (!e)
-    throw parse_error("invalid status range type `{}`", str);
+    return false;
   out = *e;
+  return true;
 }
 
 }  // namespace svarg

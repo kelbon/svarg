@@ -239,6 +239,9 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
 
 ir::discriminator_desc lowering_context::discriminator_lowering(const discriminator_object& d,
                                                                 const array<ir::schema_ref>& schemas) {
+  // дискриминатор оставляется даже если есть тривиальные схемы
+  // бекенд может это считатЬ, например, дискриминаторов только для объектов в oneof/anyof
+  // а для фундаментальных типов определять содержимое без помощи дискриминатора
   ir::discriminator_desc ird;
   ird.propertyName = d.propertyName;
   auto from_mapping_or_just_name = [&](std::string_view name) -> std::string_view {
@@ -300,7 +303,8 @@ static ir::fundamental_e detect_enum_type(const array<Any>& values) noexcept {
     if (schema.nullable && *schema.nullable)
       return std::nullopt;
     ir::fundamental_e e;
-    efromstr(type, e);
+    if (!efromstr(type, e))
+      throw bad_enum_value<ir::fundamental_e>(type);
     return ir::make_fundamental_ref(e);
   }
   if (schema.nullable && *schema.nullable)
@@ -382,7 +386,8 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       } else {
         ir::fundamental_e e;
         // types никогда не пустое
-        efromstr(types.front(), e);
+        if (!efromstr(types.front(), e))
+          throw bad_enum_value<ir::fundamental_e>(types.front());
         es.type = ir::make_fundamental_ref(e);
       }
     } else {
@@ -410,7 +415,8 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       } else {
         // Всё остальное — фундаментальный тип
         ir::fundamental_e fe;
-        efromstr(t, fe);
+        if (!efromstr(t, fe))
+          throw bad_enum_value<ir::fundamental_e>(t);
         res.type.data = fe;
       }
     } else {
@@ -419,7 +425,8 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       ir::anyof_schema anyof;
       for (auto& t : rtypes) {
         ir::fundamental_e fe;
-        efromstr(t, fe);
+        if (!efromstr(t, fe))
+          throw bad_enum_value<ir::fundamental_e>(t);
         anyof.schemas.push_back(make_fundamental_ref(fe));
       }
       res.type.data = std::move(anyof);

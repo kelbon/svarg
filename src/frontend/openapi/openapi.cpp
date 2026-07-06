@@ -8,7 +8,7 @@ void postprocess_openapi_object(openapi_object& obj);
 
 openapi_object parse_spec(const boost::json::value& v, const openapi_options& options) {
   openapi_object obj;
-  parse<openapi_object>{}(v, obj);
+  from_json(v, obj);
   postprocess_openapi_object(obj);
   return obj;
 }

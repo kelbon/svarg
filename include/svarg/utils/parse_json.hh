@@ -16,56 +16,60 @@
 namespace svarg {
 
 template <>
-struct parse<bool> {
-  void operator()(boost::json::value const& v, bool& out) {
+struct from_json_value<bool> {
+  error_code operator()(const boost::json::value& v, bool& out) {
     if (auto* b = v.if_bool())
       out = *b;
     else
-      throw parse_error(" bool expected, got `{}`", e2str(v.kind()));
+      return parse_error(" bool expected, got `{}`", e2str(v.kind()));
+    return {};
   }
 };
 
 template <>
-struct parse<uint64_t> {
-  void operator()(boost::json::value const& v, uint64_t& out) {
+struct from_json_value<uint64_t> {
+  error_code operator()(const boost::json::value& v, uint64_t& out) {
     if (auto* x = v.if_uint64())
       out = *x;
     else if (auto* x = v.if_int64()) {
       if (*x < 0)
-        throw parse_error(" expected >= 0, got {}", *x);
+        return parse_error(" expected >= 0, got {}", *x);
       out = *x;
     } else
-      throw parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
+      return parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
+    return {};
   }
 };
 
 template <>
-struct parse<int64_t> {
-  void operator()(boost::json::value const& v, int64_t& out) {
+struct from_json_value<int64_t> {
+  error_code operator()(const boost::json::value& v, int64_t& out) {
     if (auto* x = v.if_uint64()) {
       if (!std::in_range<int64_t>(*x))
-        throw parse_error(" value `{}` is not in range int64_t", *x);
+        return parse_error(" value `{}` is not in range int64_t", *x);
       out = *x;
     } else if (auto* x = v.if_int64()) {
       out = *x;
     } else
-      throw parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
+      return parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
+    return {};
   }
 };
 
 template <>
-struct parse<string> {
-  void operator()(boost::json::value const& v, string& out) {
+struct from_json_value<string> {
+  error_code operator()(const boost::json::value& v, string& out) {
     if (auto* s = v.if_string())
       out = s->subview();
     else
-      throw parse_error(" string expected, got `{}`", e2str(v.kind()));
+      return parse_error(" string expected, got `{}`", e2str(v.kind()));
+    return {};
   }
 };
 
 template <>
-struct parse<number> {
-  void operator()(boost::json::value const& v, number& out) {
+struct from_json_value<number> {
+  error_code operator()(const boost::json::value& v, number& out) {
     if (v.is_uint64())
       out = v.get_uint64();
     else if (v.is_int64())
@@ -73,120 +77,143 @@ struct parse<number> {
     else if (v.is_double())
       out = v.get_double();
     else
-      throw parse_error(" expected number, got `{}`", e2str(v.kind()));
+      return parse_error(" expected number, got `{}`", e2str(v.kind()));
+    return {};
+  }
+};
+
+template <>
+struct from_json_value<double> {
+  error_code operator()(const boost::json::value& v, double& out) {
+    number nm;
+    error_code ec = try_from_json(v, nm);
+    if (!ec) [[likely]]
+      out = nm.get_as_double();
+    return ec;
   }
 };
 
 template <typename T>
-struct parse<one_or_array<T>> {
-  void operator()(boost::json::value const& v, one_or_array<T>& out) {
+struct from_json_value<one_or_array<T>> {
+  error_code operator()(const boost::json::value& v, one_or_array<T>& out) {
+    error_code ec;
     if (v.is_array())
-      return from_json(v, out.values);
-    T x;
-    from_json(v, x);
-    out.values.push_back(std::move(x));
+      ec = try_from_json(v, out.values);
+    else {
+      T x;
+      ec = try_from_json(v, x);
+      if (!ec) [[likely]]
+        out.values.push_back(std::move(x));
+    }
+    return ec;
   }
 };
 
 template <typename T>
-struct parse<optional<T>> {
-  void operator()(boost::json::value const& v, optional<T>& out) {
+struct from_json_value<metel::box<T>> {
+  error_code operator()(const boost::json::value& v, metel::box<T>& out) {
     if (v.is_null()) {
       out.reset();
-      return;
+      return {};
     }
-    out = from_json<T>(v);
+    return try_from_json(v, out.emplace());
   }
 };
 
 template <typename T>
-struct parse<std::optional<T>> {
-  void operator()(boost::json::value const& v, std::optional<T>& out) {
+struct from_json_value<std::optional<T>> {
+  error_code operator()(const boost::json::value& v, std::optional<T>& out) {
     if (v.is_null()) {
       out.reset();
-      return;
+      return {};
     }
-    out = from_json<T>(v);
+    return try_from_json(v, out.emplace());
   }
 };
 
 template <typename T>
-struct parse<array<T>> {
-  void operator()(boost::json::value const& v, array<T>& out) {
-    auto const* arr = v.if_array();
+struct from_json_value<array<T>> {
+  error_code operator()(const boost::json::value& v, array<T>& out) {
+    const auto* arr = v.if_array();
     if (!arr)
-      throw parse_error(" array expected, got `{}`", e2str(v.kind()));
+      return parse_error(" array expected, got `{}`", e2str(v.kind()));
     out.clear();
     out.reserve(arr->size());
     for (size_t i = 0; i < arr->size(); ++i) {
       // не вставляем последний лишний элемент, если его не получится распарсить
       T elem{};
-      try {
-        from_json((*arr)[i], elem);
-      } catch (parse_error const& e) {
-        throw parse_error("[{}]{}", i, e.what());
+      error_code ec = try_from_json((*arr)[i], elem);
+      if (ec) {
+        ec.reformat("[{}]{}", i, old_message);
+        return ec;
       }
       out.push_back(std::move(elem));
     }
+    return {};
   }
 };
 
 template <typename K, typename V, typename... Types>
-struct parse<std::unordered_map<K, V, Types...>> {
-  void operator()(boost::json::value const& v, std::unordered_map<K, V, Types...>& out) {
-    auto const* obj = v.if_object();
+struct from_json_value<std::unordered_map<K, V, Types...>> {
+  error_code operator()(const boost::json::value& v, std::unordered_map<K, V, Types...>& out) {
+    const auto* obj = v.if_object();
     if (!obj)
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+      return parse_error(" object expected, got `{}`", e2str(v.kind()));
     out.clear();
-    for (auto const& [key, val] : *obj) {
+    for (const auto& [key, val] : *obj) {
       V elem{};
-      try {
-        from_json(val, elem);
-      } catch (parse_error const& e) {
-        throw parse_error("/`{}`{}", std::string_view(key), e.what());
+      error_code ec = try_from_json(val, elem);
+      if (ec) {
+        ec.reformat("/`{}`{}", std::string_view(key), old_message);
+        return ec;
       }
       if (out.contains(key))
-        throw parse_error(" {} contains duplicated key `{}`", type_name<V>(), std::string_view(key));
+        return parse_error(" {} contains duplicated key `{}`", type_name<V>(), std::string_view(key));
       out.emplace(key, std::move(elem));
     }
+    return {};
   }
 };
 
 template <typename K, typename V, typename... Types>
-struct parse<std::map<K, V, Types...>> {
-  void operator()(boost::json::value const& v, std::map<K, V, Types...>& out) {
-    auto const* obj = v.if_object();
+struct from_json_value<std::map<K, V, Types...>> {
+  error_code operator()(const boost::json::value& v, std::map<K, V, Types...>& out) {
+    const auto* obj = v.if_object();
     if (!obj)
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+      return parse_error(" object expected, got `{}`", e2str(v.kind()));
     out.clear();
-    for (auto const& [key, val] : *obj) {
+    for (const auto& [key, val] : *obj) {
       V elem{};
-      try {
-        from_json(val, elem);
-      } catch (parse_error const& e) {
-        throw parse_error("/`{}`{}", std::string_view(key), e.what());
+      error_code ec = try_from_json(val, elem);
+      if (ec) {
+        ec.reformat("/`{}`{}", std::string_view(key), old_message);
+        return ec;
       }
       if (out.contains(key))
-        throw parse_error(" {} contains duplicated key `{}`", type_name<V>(), std::string_view(key));
+        return parse_error(" {} contains duplicated key `{}`", type_name<V>(), std::string_view(key));
       out.emplace(key, std::move(elem));
     }
+    return {};
   }
 };
 
 template <>
-struct parse<Any> {
-  void operator()(boost::json::value const& v, Any& out) {
+struct from_json_value<Any> {
+  error_code operator()(const boost::json::value& v, Any& out) {
     out.value = v;
+    return {};
   }
 };
 
 template <>
-struct parse<parameter_location> {
-  void operator()(boost::json::value const& v, parameter_location& out) {
-    if (auto const* s = v.if_string())
-      efromstr(s->subview(), out);
-    else
-      throw parse_error(" string expected for parameter_location, got `{}`", e2str(v.kind()));
+struct from_json_value<parameter_location> {
+  error_code operator()(const boost::json::value& v, parameter_location& out) {
+    if (const auto* s = v.if_string()) {
+      if (efromstr(std::string_view(*s), out))
+        return {};
+      return bad_enum_value<parameter_location>(std::string_view(*s));
+    }
+    return parse_error(" string expected for parameter_location, got `{}`", e2str(v.kind()));
   }
 };
 
@@ -210,100 +237,113 @@ constexpr bool has_field(std::string_view name) noexcept {
 }
 
 template <aggregate T, size_t I>
-void parse_field(boost::json::object const& obj, T& out) {
+bool parse_field(const boost::json::object& obj, T& out, error_code& ec) {
   using Field = std::decay_t<decltype(boost::pfr::get<I>(out))>;
   constexpr std::string_view name = unescape_field_name(boost::pfr::get_name<I, T>());
   auto it = obj.find(name);
   if (it == obj.end()) {
     if (is_optional_field<Field>::value)
-      return;
-    else
-      throw parse_error(" field `{}` in type `{}` is REQUIRED but not present", name, type_name<T>());
+      return true;
+    else {
+      ec = parse_error(" field `{}` in type `{}` is REQUIRED but not present", name, type_name<T>());
+      return false;
+    }
   }
-  try {
-    from_json(it->value(), boost::pfr::get<I>(out));
-  } catch (parse_error& e) {
-    throw parse_error("/`{}`{}", name, e.what());
+  ec = try_from_json(it->value(), boost::pfr::get<I>(out));
+  if (ec) {
+    ec.reformat("/`{}`{}", name, old_message);
+    return false;
   }
+  return true;
 }
 
 template <aggregate T, size_t... Is>
-void parse_all_fields(boost::json::object const& obj, T& out, std::index_sequence<Is...>) {
-  (parse_field<T, Is>(obj, out), ...);
+error_code parse_all_fields(const boost::json::object& obj, T& out, std::index_sequence<Is...>) {
+  error_code ec;
+  (parse_field<T, Is>(obj, out, ec) && ...);
+  return ec;
 }
 
 }  // namespace noexport
 
 template <aggregate T>
-struct parse<T> {
+struct from_json_value<T> {
   static_assert(std::is_same_v<T, std::decay_t<T>>);
 
-  void operator()(boost::json::value const& v, T& out) {
-    auto const* obj = v.if_object();
+  error_code operator()(const boost::json::value& v, T& out) {
+    const auto* obj = v.if_object();
     if (!obj) {
-      if constexpr (parsable_even_from_not_object<T>) {
-        out = T::parse_if_not_object(v);
-        return;
-      }
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+      if constexpr (parsable_even_from_not_object<T>)
+        return T::parse_if_not_object(v, out);
+      else
+        return parse_error(" object expected, got `{}`", e2str(v.kind()));
     }
     for (auto&& [key, _] : *obj) {
       std::string_view k(key);
       if (!noexport::has_field<T>(k) && !allow_additional_field<T>{}.allow(k))
-        throw parse_error(" not allowed field `{}` in type `{}`", k, type_name<T>());
+        return parse_error(" not allowed field `{}` in type `{}`", k, type_name<T>());
     }
-    noexport::parse_all_fields(*obj, out, std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
-    postparse<T>{}(out);
-    validate<T>{}(std::as_const(out));
+    error_code ec =
+        noexport::parse_all_fields(*obj, out, std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
+    if (ec)
+      return ec;
+    ec = postparse<T>{}(out);
+    if (ec)
+      return ec;
+    return validate<T>{}(std::as_const(out));
   }
 };
 
 template <typename E>
   requires(std::is_enum_v<E>)
-struct parse<E> {
-  void operator()(const boost::json::value& v, E& out) {
-    efromstr(std::string_view(v.as_string()), out);
+struct from_json_value<E> {
+  error_code operator()(const boost::json::value& v, E& out) {
+    if (efromstr(std::string_view(v.as_string()), out))
+      return {};
+    return bad_enum_value<E>(std::string_view(v.as_string()));
   }
 };
 
 template <typename T, typename... Types>
-struct parse<std::unordered_set<T, Types...>> {
-  void operator()(boost::json::value const& v, std::unordered_set<T, Types...>& out) {
-    auto const* arr = v.if_array();
+struct from_json_value<std::unordered_set<T, Types...>> {
+  error_code operator()(const boost::json::value& v, std::unordered_set<T, Types...>& out) {
+    const auto* arr = v.if_array();
     if (!arr)
-      throw parse_error(" array expected, got `{}`", e2str(v.kind()));
+      return parse_error(" array expected, got `{}`", e2str(v.kind()));
     out.clear();
     out.reserve(arr->size());
     for (size_t i = 0; i < arr->size(); ++i) {
       // не вставляем последний лишний элемент, если его не получится распарсить
       T elem{};
-      try {
-        from_json((*arr)[i], elem);
-      } catch (parse_error const& e) {
-        throw parse_error("[{}]{}", i, e.what());
+      error_code ec = try_from_json((*arr)[i], elem);
+      if (ec) {
+        ec.reformat("[{}]{}", i, old_message);
+        return ec;
       }
       out.insert(std::move(elem));
     }
+    return {};
   }
 };
 
 template <typename T, typename... Types>
-struct parse<std::set<T, Types...>> {
-  void operator()(boost::json::value const& v, std::set<T, Types...>& out) {
-    auto const* arr = v.if_array();
+struct from_json_value<std::set<T, Types...>> {
+  error_code operator()(const boost::json::value& v, std::set<T, Types...>& out) {
+    const auto* arr = v.if_array();
     if (!arr)
-      throw parse_error(" array expected, got `{}`", e2str(v.kind()));
+      return parse_error(" array expected, got `{}`", e2str(v.kind()));
     out.clear();
     for (size_t i = 0; i < arr->size(); ++i) {
       // не вставляем последний лишний элемент, если его не получится распарсить
       T elem{};
-      try {
-        from_json((*arr)[i], elem);
-      } catch (parse_error const& e) {
-        throw parse_error("[{}]{}", i, e.what());
+      error_code ec = try_from_json((*arr)[i], elem);
+      if (ec) {
+        ec.reformat("[{}]{}", i, old_message);
+        return ec;
       }
       out.insert(std::move(elem));
     }
+    return {};
   }
 };
 

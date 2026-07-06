@@ -69,14 +69,14 @@ CPMAddPackage(
 CPMAddPackage(
   NAME OMO
   GIT_REPOSITORY https://github.com/kelbon/omo
-  GIT_TAG v0.0.2
+  GIT_TAG v0.0.5
   OPTIONS "omo_DOWNLOAD_BOOST OFF"
 )
 
 CPMAddPackage(
   NAME METEL
   GIT_REPOSITORY https://github.com/kelbon/metel
-  GIT_TAG v0.0.2
+  GIT_TAG v0.0.3
 )
 
 if (svarg_ENABLE_TESTING)

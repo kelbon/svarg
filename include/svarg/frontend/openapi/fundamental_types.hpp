@@ -41,15 +41,15 @@ template <typename T>
 using reference_or = std::variant<reference_object, T>;
 
 template <>
-struct parse<reference_object> {
-  void operator()(boost::json::value const& v, reference_object& out) {
-    auto const* obj = v.if_object();
+struct from_json_value<reference_object> {
+  error_code operator()(const boost::json::value& v, reference_object& out) {
+    const auto* obj = v.if_object();
 
     if (!obj)
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+      return parse_error(" object expected, got `{}`", e2str(v.kind()));
     auto refit = obj->find("$ref");
     if (refit == obj->end())
-      throw parse_error(" field `$ref` in reference object is REQUIRED but not present");
+      return parse_error(" field `$ref` in reference object is REQUIRED but not present");
     out.ref_ = refit->value().as_string();
 
     if (auto it = obj->find("summary"); it != obj->end())
@@ -58,35 +58,36 @@ struct parse<reference_object> {
     if (auto it = obj->find("description"); it != obj->end())
       out.description = std::string(it->value().as_string());
 
-    for (auto const& [key, val] : *obj) {
+    for (const auto& [key, val] : *obj) {
       if (key != "$ref" && key != "summary" && key != "description")
         out._keyfield_override_fields[std::string(key)] = Any{val};
     }
+    return {};
   }
 };
 
 template <typename T>
-struct parse<reference_or<T>> {
-  void operator()(boost::json::value const& v, reference_or<T>& out) {
-    auto const* obj = v.if_object();
+struct from_json_value<reference_or<T>> {
+  error_code operator()(const boost::json::value& v, reference_or<T>& out) {
+    const auto* obj = v.if_object();
     if (!obj) {
-      if constexpr (parsable_even_from_not_object<T>) {
-        out = T::parse_if_not_object(v);
-        return;
-      }
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+      if constexpr (parsable_even_from_not_object<T>)
+        return T::parse_if_not_object(v, out.template emplace<T>());
+      else
+        return parse_error(" object expected, got `{}`", e2str(v.kind()));
     }
     if (obj->contains("$ref"))
       out = from_json<reference_object>(v);
     else
       out = from_json<T>(v);
+    return {};
   }
 };
 
 template <typename T>
 struct serialize<reference_or<T>> {
-  boost::json::value operator()(reference_or<T> const& v) {
-    return std::visit([](auto const& x) -> boost::json::value { return to_json(x); }, v);
+  boost::json::value operator()(const reference_or<T>& v) {
+    return std::visit([](const auto& x) -> boost::json::value { return to_json(x); }, v);
   }
 };
 

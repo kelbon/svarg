@@ -5,14 +5,17 @@
 #include <boost/json/value.hpp>
 #include <boost/json/parse.hpp>
 
+#include "svarg/errors.hpp"
 #include "svarg/utils/yamljson.hpp"
 
 namespace svarg {
 
-// если внутри типа есть static функция parse_if_not_object(boost::json::value const&)
+// если внутри типа есть static функция error_code parse_if_not_object(boost::json::value const&, T& out)
 // то она вызывается, когда пришёл не объект чтобы распарсить агрегат
 template <typename T>
-struct parse {};
+struct from_json_value {
+  // error_code parse(const boost::json::value&, T& out)
+};
 
 // TODO складывать такие поля в meta
 template <typename>
@@ -24,17 +27,24 @@ struct allow_additional_field {
 };
 
 template <typename T>
-concept parsable_even_from_not_object = requires(boost::json::value const& v) {
-  { T::parse_if_not_object(v) } -> std::same_as<T>;
+concept parsable_even_from_not_object = requires(const boost::json::value& v, T& out) {
+  { T::parse_if_not_object(v, out) } -> std::same_as<error_code>;
 };
 
 template <typename T>
-void from_json(boost::json::value const& j, T& out) {
-  parse<T>{}(j, out);
+[[nodiscard]] error_code try_from_json(const boost::json::value& j, T& out) {
+  return from_json_value<T>{}(j, out);
 }
 
 template <typename T>
-T from_json(boost::json::value const& j) {
+void from_json(const boost::json::value& j, T& out) {
+  error_code ec = try_from_json(j, out);
+  if (ec)
+    ec.rethrow_if_failed();
+}
+
+template <typename T>
+T from_json(const boost::json::value& j) {
   T value;
   from_json(j, value);
   return value;

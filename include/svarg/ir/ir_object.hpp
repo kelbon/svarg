@@ -27,7 +27,7 @@ enum struct fundamental_e {
   never,  // type: never
 };
 
-inline void efromstr(std::string_view s, fundamental_e& out) {
+[[nodiscard]] inline bool efromstr(std::string_view s, fundamental_e& out) {
   using enum fundamental_e;
   std::optional loc = ss::string_switch<fundamental_e>(s)
                           .case_("null", null)
@@ -39,8 +39,9 @@ inline void efromstr(std::string_view s, fundamental_e& out) {
                           .case_("never", never)
                           .or_nullopt();
   if (!loc)
-    throw parse_error("unknown fundamental type `{}`", s);
+    return false;
   out = *loc;
+  return true;
 }
 
 inline std::string_view e2str(fundamental_e e) noexcept {
@@ -698,30 +699,33 @@ struct ir_object {
 namespace svarg {
 
 template <>
-struct parse<ir::content_type_t> {
-  void operator()(const boost::json::value& v, ir::content_type_t& out) {
+struct from_json_value<ir::content_type_t> {
+  error_code operator()(const boost::json::value& v, ir::content_type_t& out) {
     out = std::string_view(v.as_string());
+    return {};
   }
 };
 
 template <>
-struct parse<ir::response_status> {
-  void operator()(const boost::json::value& v, ir::response_status& out) {
+struct from_json_value<ir::response_status> {
+  error_code operator()(const boost::json::value& v, ir::response_status& out) {
+    // может в кривой ситуации бросить исключение, но это игнорируется
     out = ir::response_status::from_string(v.as_string());
+    return {};
   }
 };
 
 template <>
-struct parse<ir::schema_type> {
-  void operator()(const boost::json::value& v, ir::schema_type& out) {
+struct from_json_value<ir::schema_type> {
+  error_code operator()(const boost::json::value& v, ir::schema_type& out) {
     if (!v.is_object())
-      throw parse_error(" object expected, got `{}`", e2str(v.kind()));
+      return parse_error(" object expected, got `{}`", e2str(v.kind()));
     const boost::json::object& obj = v.as_object();
     if (obj.size() != 1)
-      throw parse_error(" expected exactly one key, but `{}` keys present", obj.size());
+      return parse_error(" expected exactly one key, but `{}` keys present", obj.size());
     std::string_view discriminator = obj.begin()->key();
     out.set_type_from_discriminator(discriminator);
-    std::visit([&](auto& x) { from_json(obj.begin()->value(), x); }, out.data);
+    return std::visit([&](auto& x) { return try_from_json(obj.begin()->value(), x); }, out.data);
   }
 };
 

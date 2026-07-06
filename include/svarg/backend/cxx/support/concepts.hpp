@@ -7,8 +7,9 @@
 
 #include <strswitch/strswitch.hpp>
 
-#include <omo/token.hpp>
-#include <omo/consumer.hpp>
+#include <boost/pfr.hpp>
+
+#include <metel/meta.hpp>
 
 #include <kelcoro/generator.hpp>
 
@@ -60,7 +61,7 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
   std::unreachable();
 }
 
-inline void efromstr(std::string_view s, parse_tag_e& out) {
+[[nodiscard]] inline bool efromstr(std::string_view s, parse_tag_e& out) {
   std::optional t = ss::string_switch<parse_tag_e>(s)
                         .case_("array", parse_tag_e::array)
                         .case_("anyof", parse_tag_e::anyof)
@@ -73,12 +74,10 @@ inline void efromstr(std::string_view s, parse_tag_e& out) {
                         .case_("body", parse_tag_e::body)
                         .or_nullopt();
   if (!t)
-    throw std::invalid_argument(std::format("unknown parse_tag_e value: '{}'", s));
+    return false;
   out = *t;
+  return true;
 }
-
-template <typename...>
-struct typelist {};
 
 // TODO генерировать геттеры сеттеры для объектов и вариантов (get if/is/visit)
 // TODO генерировать серверы и клиенты - у сервера адрес по выражению, функция которая определяет какой запрос
@@ -96,6 +95,73 @@ template <typename T>
 constexpr bool has_required_schemas = requires { typename T::required_schemas; };
 
 template <typename T>
+using required_schemas_t = decltype([] {
+  if constexpr (has_required_schemas<T>)
+    return std::type_identity<typename T::required_schemas>{};
+  else
+    return std::type_identity<metel::typelist<>>{};
+}())::type;
+
+namespace noexport {
+
+template <typename T, typename... Ts>
+constexpr auto typelist_rm(metel::typelist<Ts...> l) {
+  if constexpr (!l.contains(std::type_identity<T>{}))
+    return l;
+  else
+    return (metel::typelist<>{} + ... +
+            std::conditional_t<std::is_same_v<Ts, T>, metel::typelist<>, metel::typelist<Ts>>{});
+}
+
+// возвращает ВСЕ требуемые схемы, включая требуемые схемы требуемых схем.
+// Без дубликатов и обрабатывая возможную рекурсию
+template <typename T, typename... Types>
+consteval auto all_required_schemas(metel::typelist<Types...> collected_) {
+  // избегаем self reference
+  if constexpr (collected_.contains(std::type_identity<T>{}))
+    return metel::typelist<>{};
+  else {
+    constexpr metel::typelist collected = collected_ | metel::typelist<T>{};
+    metel::typelist R = required_schemas_t<T>{};
+    return [=]<typename... Schemas>(metel::typelist<Schemas...>) {
+      return (R | ... | all_required_schemas<Schemas>(collected | R));
+    }(R);
+  }
+}
+
+// пример функции для концепта. (лямбда в require сломает компилятор)
+struct noop_fn {
+  template <typename T>
+  void operator()() {
+  }
+};
+
+}  // namespace noexport
+
+template <typename Requirement, typename Schema>
+constexpr bool is_recursive_requirement() {
+  std::type_identity<Schema> t;
+  return noexport::all_required_schemas<Requirement>(metel::typelist<>{}).contains(t);
+}
+
+// TODO поставить это требование во все парсы объектов и тд
+template <typename Schema>
+constexpr bool has_recursive_requirements() {
+  // само по себе проверяет только первый уровень, но если эта проверка стоит на каждом уровне, то
+  // рекурсивность отловится
+  return []<typename... Requirements>(metel::typelist<Requirements...>) {
+    return (is_recursive_requirement<Requirements, Schema>() || ...);
+  }(required_schemas_t<Schema>{});
+}
+
+template <typename T>
+using all_required_schemas_t = decltype(noexport::typelist_rm<std::decay_t<T>>(
+    noexport::all_required_schemas<std::decay_t<T>>(metel::typelist<>{})));
+
+template <typename T>
+constexpr bool has_additional_fields = !std::same_as<typename std::decay_t<T>::additional_fields, void>;
+
+template <typename T>
 concept has_parse_tag = requires {
   { std::decay_t<T>::parse_tag } -> std::same_as<const parse_tag_e&>;
 };
@@ -107,6 +173,13 @@ constexpr bool tagged_as(parse_tag_e t) noexcept {
   else
     return false;
 }
+
+// oneof/anyof
+template <typename T>
+constexpr bool has_discriminator = requires(std::string_view discriminator_value) {
+  { T::discriminator_field } -> std::convertible_to<std::string_view>;
+  { T::discriminate(discriminator_value, noexport::noop_fn{}) };
+};
 
 template <typename T>
 constexpr inline parse_tag_e parse_tag_of = std::decay_t<T>::parse_tag;
@@ -156,27 +229,19 @@ concept serialize_tokens_consumer =
       v.on_null();
     };
 
+// TODO вместо этого нужно просто to_json_string и по adl вызывать таким же образом остальное (например
+// to_xml_string)
 // преобразует схему в токены для сериализации не зависящей от выходного формата, json/xml/...
-template <typename T>
-struct into_tokens {
-  // void operator()(const T&, serialize_tokens_consumer auto&);
-};
+/// template <typename T>
+/// struct into_tokens {
+///   // void operator()(const T&, serialize_tokens_consumer auto&);
+/// };
 
-// not using omo::sax_token for better clangd work
-using sax_token = omo::sax_token;
-using tokens_consumer = omo::tokens_consumer;
-
-tokens_consumer sax_ignore_value(sax_token& tok);
-
-// читает схему из токенов
-template <typename T>
-struct from_tokens {
-  // static tokens_consumer parse(T& v, sax_token& tok)
-};
+// TODO видимо надо специальный тип который сохраняет токены ЕСЛИ НАДО для повторного прохода
 
 // TODO все эти штуки на самом деле не знают откуда им придётся парсится. json/xml/query и так далее
-// так что нужно сюда переносить omo и парсинг организовывать на этом + видимо исключения не бросать, хотя хз,
-// пофиг на Not
+// так что нужно сюда переносить omo и парсинг организовывать на этом + видимо исключения не бросать, хотя
+// хз, пофиг на Not
 
 // сериализация в обратную сторону должна быть не привязана ни к чему. Вроде в тгбм +- так сделано для боди
 // это стоит заимствовать.
@@ -190,5 +255,14 @@ struct from_tokens {
 // видимо прокидывать
 
 // TODO условное serialize/parse parameter должно принимать стиль/формат помимо самой штуки
+
+// утилиты для сериализации и парсинга
+
+template <typename T>
+[[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
+  static_assert(boost::pfr::tuple_size_v<T> == 1);
+  // <special_field_name>
+  return in.data;
+}
 
 }  // namespace svarg::cxx_support

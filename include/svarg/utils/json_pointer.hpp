@@ -259,11 +259,12 @@ struct json_pointer {
 };
 
 template <>
-struct parse<json_pointer> {
-  void operator()(const boost::json::value& v, json_pointer& out) {
+struct from_json_value<json_pointer> {
+  error_code operator()(const boost::json::value& v, json_pointer& out) {
     // в v должен быть экранированный поинтер
     std::string_view in = v.as_string();
     out.add_json_ptr(in);
+    return {};
   }
 };
 

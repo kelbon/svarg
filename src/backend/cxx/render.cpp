@@ -4,6 +4,7 @@
 #include "svarg/errors.hpp"
 #include "svarg/ir/ir_visitor.hpp"
 
+#include "svarg/backend/cxx/support/types.hpp"
 #include "svarg/backend/cxx/support/concepts.hpp"
 
 namespace svarg::cxx {
@@ -385,8 +386,28 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         } else {
           result += render_parse_tag(cxx_support::parse_tag_e::enum_);
           result += std::format("static const inline std::array<{}, {}> values = {{", type, e.values.size());
-          for (auto&& v : e.values)
-            result += std::format("from_json<{}>({}),", type, render_string(boost::json::serialize(v.value)));
+          if (e.type.is_fundamental(ir::fundamental_e::boolean)) {
+            for (auto&& v : e.values)
+              result += std::format("{},", from_json<cxx_support::boolean>(v.value));
+          } else if (e.type.is_fundamental(ir::fundamental_e::integer)) {
+            for (auto&& v : e.values)
+              result += std::format("{},", from_json<cxx_support::integer>(v.value));
+          } else if (e.type.is_fundamental(ir::fundamental_e::number)) {
+            for (auto&& v : e.values)
+              result += std::format("{},", from_json<cxx_support::number>(v.value));
+          } else if (e.type.is_fundamental(ir::fundamental_e::null)) {
+            for (auto&& v : e.values) {
+              if (!v.value.is_null())
+                throw parse_error("cannot parse `null` from not null json value `{}`",
+                                  to_json_string(v, /*pretty=*/false));
+              result += std::format("null,");
+            }
+          } else {
+            throw render_error("not fundamental types in enums are not supported");
+            // for (auto&& v : e.values)
+            //   result += std::format("from_json_string<{}>({}),", type,
+            //                         render_string(boost::json::serialize(v.value)));
+          }
           result += "};\n";  // end values
           result += std::format("{} {};\n\n", type, special_field_name);
         }
