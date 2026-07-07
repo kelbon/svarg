@@ -9,6 +9,8 @@
 namespace svarg {
 
 struct license_object {
+  SVARG_FRONTEND_TYPE;
+
   string name;
   // может быть только одно поле identifier или url
   std::optional<string> identifier;  // SPDX апи, типа Apache-2.0
@@ -16,12 +18,16 @@ struct license_object {
 };
 
 struct contact_object {
+  SVARG_FRONTEND_TYPE;
+
   std::optional<string> name;
   std::optional<string> url;    // MUST be URL
   std::optional<string> email;  // MUST be valid email
 };
 
 struct info_object {
+  SVARG_FRONTEND_TYPE;
+
   string title;
   string version;
   std::optional<string> summary;
@@ -32,7 +38,11 @@ struct info_object {
 };
 
 struct server_object {
+  SVARG_FRONTEND_TYPE;
+
   struct variable {
+    SVARG_FRONTEND_TYPE;
+
     // MUST NOT be empty
     std::optional<array<string>> enum_;
     // если поле enum есть, то значение должно быть оттуда
@@ -46,11 +56,15 @@ struct server_object {
 };
 
 struct external_documentation_object {
+  SVARG_FRONTEND_TYPE;
+
   string url;  // MUST be URL
   std::optional<string> description;
 };
 
 struct example_object {
+  SVARG_FRONTEND_TYPE;
+
   std::optional<string> summary;
   std::optional<string> description;
   // разрешено только одно value или externalValue
@@ -73,11 +87,15 @@ MyResponseType:
 равным одному из имён типов (Cat/Dog/Lizard)
 */
 struct discriminator_object {
+  SVARG_FRONTEND_TYPE;
+
   string propertyName;
   std::optional<string_map<string>> mapping;
 };
 
 struct xml_object {
+  SVARG_FRONTEND_TYPE;
+
   std::optional<string> name;
   std::optional<string> namespace_;  // MUST be URI
   std::optional<string> prefix;
@@ -89,6 +107,8 @@ struct xml_object {
 };
 
 struct schema_object {
+  SVARG_FRONTEND_TYPE;
+
   static error_code parse_if_not_object(const boost::json::value& j, schema_object& out) {
     assert(!j.is_object());
     auto* b = j.if_bool();
@@ -259,6 +279,8 @@ struct media_type_object;
 
 // parameter_object с зафиксированным in == header
 struct header_object {
+  SVARG_FRONTEND_TYPE;
+
   // string name; имя берётся из ключа мапы в которой хранится объект
   // parameter_location in; == header
   optional<string> description;
@@ -275,6 +297,8 @@ struct header_object {
 };
 
 struct encoding_object {
+  SVARG_FRONTEND_TYPE;
+
   optional<string> contentType;
   // должно быть проигнорировано, если у запроса тело не multipart
   // и Content-Disposition / Content-Type тоже описываются отдельно и игнорируются
@@ -286,6 +310,8 @@ struct encoding_object {
 };
 
 struct media_type_object {
+  SVARG_FRONTEND_TYPE;
+
   optional<reference_or<schema_object>> schema;
   // разрешено только одно поле example / examples
   optional<Any> example;
@@ -305,6 +331,8 @@ struct media_type_object {
 // возможные локации: (поле `in`)
 // path, query, header, cookie
 struct parameter_object {
+  SVARG_FRONTEND_TYPE;
+
   string name;
   parameter_location in;
   std::optional<string> description;
@@ -338,6 +366,8 @@ struct parameter_object {
 };
 
 struct request_body_object {
+  SVARG_FRONTEND_TYPE;
+
   // REQUIRED
   // ключ content type (или media type range)
   string_map<media_type_object> content;
@@ -348,6 +378,8 @@ struct request_body_object {
 
 // бесполезная *****
 struct link_object {
+  SVARG_FRONTEND_TYPE;
+
   optional<string> operationRef;
   optional<string> operationId;
   optional<string_map<Any /*|{expression}*/>> parameters;
@@ -357,6 +389,8 @@ struct link_object {
 };
 
 struct response_object {
+  SVARG_FRONTEND_TYPE;
+
   string description;
   // Content-Type игнорируется. Независимо от регистра
   std::optional<string_map<reference_or<header_object>>> headers;
@@ -420,6 +454,8 @@ using callback_object = string_map<reference_or<path_item_object>>;
 using security_requirement_object = string_map<array<string>>;
 
 struct oauth_flow_object {
+  SVARG_FRONTEND_TYPE;
+
   // REQUIRED if "oauth2 ("implicit", "authorizationCode")"
   optional<string> authorizationUrl;
   // REQUIRED if "oauth2 ("password", "clientCredentials", "authorizationCode")"
@@ -431,6 +467,8 @@ struct oauth_flow_object {
 };
 
 struct oauth_flows_object {
+  SVARG_FRONTEND_TYPE;
+
   optional<oauth_flow_object> implicit;
   optional<oauth_flow_object> password;
   optional<oauth_flow_object> clientCredentials;
@@ -438,6 +476,8 @@ struct oauth_flows_object {
 };
 
 struct security_scheme_object {
+  SVARG_FRONTEND_TYPE;
+
   // возможные значения: "apiKey", "http", "mutualTLS", "oauth2"
   // "openIdConnect"
   string type;
@@ -459,6 +499,8 @@ struct security_scheme_object {
 };
 
 struct operation_object {
+  SVARG_FRONTEND_TYPE;
+
   optional<array<string>> tags;
   optional<string> summary;
   optional<string> description;
@@ -478,6 +520,8 @@ struct operation_object {
 };
 
 struct path_item_object {
+  SVARG_FRONTEND_TYPE;
+
   // в спецификации нормально написано, что reference_object и path_item_object полностью пересекаются по
   // полям но для парсинга здесь нет $ref (любой объект с $ref парсит все остальные поля в override fields)
   // при этом summary и description остаются здесь для соответствия спеке
@@ -526,6 +570,8 @@ struct path_item_object {
 using paths_object = string_map<reference_or<path_item_object>>;
 
 struct components_object {
+  SVARG_FRONTEND_TYPE;
+
   optional<string_map<reference_or<schema_object>>> schemas;
   optional<string_map<reference_or<response_object>>> responses;
   optional<string_map<reference_or<parameter_object>>> parameters;
@@ -539,12 +585,16 @@ struct components_object {
 };
 
 struct tag_object {
+  SVARG_FRONTEND_TYPE;
+
   string name;
   optional<string> description;
   optional<external_documentation_object> externalDocs;
 };
 
 struct openapi_object {
+  SVARG_FRONTEND_TYPE;
+
   // версия типа 3.1.0
   string openapi;
   info_object info;

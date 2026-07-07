@@ -65,6 +65,8 @@ inline std::string_view e2str(fundamental_e e) noexcept {
 }
 
 struct schema_ref {
+  SVARG_IR_TYPE;
+
   std::optional<string> name;
   // .filename() спеки где объявлена схема без расширения ИЛИ ссылка на фундаментал (типа @string@)
   string spec;
@@ -136,11 +138,15 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
 }
 
 struct enum_schema {
+  SVARG_IR_TYPE;
+
   schema_ref type;
   array<Any> values;
 };
 
 struct discriminator_desc {
+  SVARG_IR_TYPE;
+
   string propertyName;
   // при конвертации с фронтенда здесь оказывается полный маппинг
   // значение дискриминатора => ссылка на тип который ему соответствует
@@ -148,20 +154,28 @@ struct discriminator_desc {
 };
 
 struct oneof_schema {
+  SVARG_IR_TYPE;
+
   std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct anyof_schema {
+  SVARG_IR_TYPE;
+
   std::optional<discriminator_desc> discriminator;
   array<schema_ref> schemas;
 };
 
 struct allof_schema {
+  SVARG_IR_TYPE;
+
   array<schema_ref> schemas;
 };
 
 struct object_field_info {
+  SVARG_IR_TYPE;
+
   schema_ref type;
   string name;
   // поле считается required если
@@ -178,19 +192,27 @@ struct object_field_info {
 };
 
 struct object_schema {
+  SVARG_IR_TYPE;
+
   array<object_field_info> fields;
   std::optional<schema_ref> additional_properties;
 };
 
 struct array_schema {
+  SVARG_IR_TYPE;
+
   schema_ref element;
 };
 
 struct not_schema {
+  SVARG_IR_TYPE;
+
   schema_ref type;
 };
 
 struct schema_type {
+  SVARG_IR_TYPE;
+
   std::variant<fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema, object_schema,
                array_schema, not_schema>
       data;
@@ -303,6 +325,8 @@ struct schema_type {
 
 // fundamental | enum | object_type | oneof | anyof | allof
 struct schema {
+  SVARG_IR_TYPE;
+
   // .filename() спеки где написана схема без расширения
   string spec;
   json_pointer jsonptr;
@@ -386,6 +410,8 @@ struct schema {
 using meta_t = string_map<Any>;
 
 struct content_type_t {
+  SVARG_IR_TYPE;
+
  private:
   std::string data;
 
@@ -415,6 +441,8 @@ struct content_type_t {
 };
 
 struct operation_parameter {
+  SVARG_IR_TYPE;
+
   parameter_location location = parameter_location::path;
   string name;
   schema_ref schema;
@@ -435,6 +463,8 @@ struct operation_parameter {
 };
 
 struct header {
+  SVARG_IR_TYPE;
+
   // не зависит от регистра
   string name;
   // по умолчанию false
@@ -477,6 +507,8 @@ struct hash<::svarg::ir::operation_parameter> {
 namespace svarg::ir {
 
 struct body {
+  SVARG_IR_TYPE;
+
   // может быть также media type range */* - любой, image/* (image/x* уже невалидно)
   // выигрывает более специализированный
   content_type_t contentType;
@@ -525,6 +557,8 @@ struct default_response_t {
 
 // тег тип для сериализации
 struct response_status {
+  SVARG_IR_TYPE;
+
   std::variant<default_response_t, int64_t, status_range_e> status;
 
   std::string to_string() const noexcept {
@@ -561,6 +595,8 @@ struct response_status {
 };
 
 struct response_desc {
+  SVARG_IR_TYPE;
+
   response_status status;
   // content-type игнорируется (даже не попадает в этот список)
   // регистронезависимо
@@ -606,6 +642,8 @@ struct hash<::svarg::ir::response_desc> {
 namespace svarg::ir {
 
 struct operation {
+  SVARG_IR_TYPE;
+
   // operationId, а если нет, используется method + путь с большой буквы
   string id;
   // .filename() спеки где объявлена операция без расширения
@@ -678,6 +716,8 @@ using schemas_t = std::set<schema, schema::schema_cmp>;
 using schema_refs_t = std::set<schema_ref, schema::schema_cmp>;
 
 struct ir_object {
+  SVARG_IR_TYPE;
+
   std::optional<schemas_t> schemas;
   std::optional<std::set<operation>> operations;
   // здесь помимо webhooks лежат callbacks (они то же самое, но ещё вычислимый url)

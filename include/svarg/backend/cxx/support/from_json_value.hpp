@@ -9,52 +9,6 @@
 
 namespace svarg::cxx_support {
 #if 0
-// TODO errors codes etc
-template <>
-struct from_json_value<boolean> {
-  static void parse(bool& v, const boost::json::value& j, error_code&) {
-    tok.expect(sax_token::bool_);
-    v = tok.get_bool();
-    return {};
-  }
-};
-
-template <>
-struct from_json_value<std::string> {
-  static void parse(std::string& v, const boost::json::value& j, error_code&) {
-    tok.expect(sax_token::string);
-    v = tok.get_str();
-    return {};
-  }
-};
-
-template <typename T>
-  requires(std::integral<T>)
-struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    using enum sax_token::kind_e;
-    switch (tok.kind()) {
-      case int64:
-        safe_write(tok.get_int64(), v);
-        return {};
-      case uint64:
-        safe_write(tok.get_uint64(), v);
-        return {};
-      default:
-        throw svarg::parse_error("expected int64/uint64");
-    }
-  }
-};
-
-template <typename T>
-  requires(std::floating_point<T>)
-struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    tok.expect(sax_token::double_);
-    v = tok.get_double();
-    return {};
-  }
-};
 
 template <typename T>
 struct from_json_value<arrayof<T>> {
@@ -233,5 +187,4 @@ struct from_json_value<not_a<T>> {
   }
 };
 #endif
-
 }  // namespace svarg::cxx_support

@@ -12,6 +12,7 @@
 #include "svarg/utils/unescape_field_name.hpp"
 #include "svarg/validate.hpp"
 #include "svarg/parse.hpp"
+#include "svarg/utils/safe_cast.hpp"
 
 namespace svarg {
 
@@ -26,33 +27,18 @@ struct from_json_value<bool> {
   }
 };
 
-template <>
-struct from_json_value<uint64_t> {
-  error_code operator()(const boost::json::value& v, uint64_t& out) {
-    if (auto* x = v.if_uint64())
-      out = *x;
-    else if (auto* x = v.if_int64()) {
-      if (*x < 0)
-        return parse_error(" expected >= 0, got {}", *x);
-      out = *x;
-    } else
-      return parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
-    return {};
-  }
-};
-
-template <>
-struct from_json_value<int64_t> {
-  error_code operator()(const boost::json::value& v, int64_t& out) {
-    if (auto* x = v.if_uint64()) {
-      if (!std::in_range<int64_t>(*x))
-        return parse_error(" value `{}` is not in range int64_t", *x);
-      out = *x;
-    } else if (auto* x = v.if_int64()) {
-      out = *x;
-    } else
-      return parse_error(" uint64_t|int64_t expected, got `{}`", e2str(v.kind()));
-    return {};
+template <std::integral T>
+struct from_json_value<T> {
+  static error_code operator()(const boost::json::value& j, T& v) {
+    if (j.is_int64()) {
+      safe_write(j.get_int64(), v);
+      return {};
+    }
+    if (j.is_uint64()) {
+      safe_write(j.get_uint64(), v);
+      return {};
+    }
+    throw svarg::parse_error(" expected int64 | uint64, got {}", e2str(j.kind()));
   }
 };
 
@@ -82,13 +68,14 @@ struct from_json_value<number> {
   }
 };
 
-template <>
-struct from_json_value<double> {
-  error_code operator()(const boost::json::value& v, double& out) {
+template <std::floating_point T>
+struct from_json_value<T> {
+  error_code operator()(const boost::json::value& v, T& out) {
     number nm;
     error_code ec = try_from_json(v, nm);
+    // игнорируем возможные оверфлоу float -> double и тд
     if (!ec) [[likely]]
-      out = nm.get_as_double();
+      out = static_cast<T>(nm.get_as_double());
     return ec;
   }
 };
@@ -220,6 +207,20 @@ struct from_json_value<parameter_location> {
 template <typename T>
 concept aggregate = std::is_aggregate_v<std::decay_t<T>>;
 
+// маркер, чтобы точно отделить генерируемые типы при парсинге и сериализации от фронтенд/бекенд типов
+#define SVARG_FRONTEND_TYPE using svarg_frontend_type = int
+
+#define SVARG_IR_TYPE using svarg_ir_type = int
+
+template <typename T>
+concept frontend_type = requires { typename T::svarg_frontend_type; };
+
+template <typename T>
+concept ir_type = requires { typename T::svarg_ir_type; };
+
+template <typename T>
+concept front_or_ir_type = frontend_type<T> || ir_type<T>;
+
 namespace noexport {
 
 template <typename T>
@@ -236,7 +237,7 @@ constexpr bool has_field(std::string_view name) noexcept {
   }(std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
 }
 
-template <aggregate T, size_t I>
+template <front_or_ir_type T, size_t I>
 bool parse_field(const boost::json::object& obj, T& out, error_code& ec) {
   using Field = std::decay_t<decltype(boost::pfr::get<I>(out))>;
   constexpr std::string_view name = unescape_field_name(boost::pfr::get_name<I, T>());
@@ -257,7 +258,7 @@ bool parse_field(const boost::json::object& obj, T& out, error_code& ec) {
   return true;
 }
 
-template <aggregate T, size_t... Is>
+template <front_or_ir_type T, size_t... Is>
 error_code parse_all_fields(const boost::json::object& obj, T& out, std::index_sequence<Is...>) {
   error_code ec;
   (parse_field<T, Is>(obj, out, ec) && ...);
@@ -266,7 +267,7 @@ error_code parse_all_fields(const boost::json::object& obj, T& out, std::index_s
 
 }  // namespace noexport
 
-template <aggregate T>
+template <front_or_ir_type T>
 struct from_json_value<T> {
   static_assert(std::is_same_v<T, std::decay_t<T>>);
 

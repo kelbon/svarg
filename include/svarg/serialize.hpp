@@ -174,7 +174,7 @@ struct serialize<std::set<Types...>> {
 
 namespace noexport {
 
-template <aggregate T, size_t I>
+template <front_or_ir_type T, size_t I>
 void serialize_field(const T& in, boost::json::object& out) {
   constexpr std::string_view raw_name = boost::pfr::get_name<I, T>();
   constexpr std::string_view name = unescape_field_name(raw_name);
@@ -194,14 +194,14 @@ void serialize_field(const T& in, boost::json::object& out) {
   }
 }
 
-template <aggregate T, size_t... Is>
+template <front_or_ir_type T, size_t... Is>
 void serialize_all_fields(const T& in, boost::json::object& out, std::index_sequence<Is...>) {
   (serialize_field<T, Is>(in, out), ...);
 }
 
 }  // namespace noexport
 
-template <aggregate T>
+template <front_or_ir_type T>
 struct serialize<T> {
   static_assert(std::is_same_v<T, std::decay_t<T>>);
 

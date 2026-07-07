@@ -18,6 +18,8 @@ namespace svarg {
 // убрали в новой версии)
 
 struct reference_object {
+  SVARG_FRONTEND_TYPE;
+
   string ref_;  // MUST be URI, в json как $ref
   optional<string> summary;
   optional<string> description;
@@ -37,8 +39,53 @@ struct reference_object {
   }
 };
 
+// TODO frontend type
 template <typename T>
-using reference_or = std::variant<reference_object, T>;
+struct reference_or : private std::variant<reference_object, T> {
+  SVARG_FRONTEND_TYPE;
+
+  static_assert(!std::is_same_v<T, reference_object>);
+
+ private:
+  using base_t = std::variant<reference_object, T>;
+
+ public:
+  using base_t::base_t;
+  using base_t::operator=;
+
+  reference_object* get_if_ref() noexcept {
+    return std::get_if<reference_object>(static_cast<base_t*>(this));
+  }
+  const reference_object* get_if_ref() const noexcept {
+    return std::get_if<reference_object>(static_cast<const base_t*>(this));
+  }
+
+  T* get_if_value() noexcept {
+    return std::get_if<T>(static_cast<base_t*>(this));
+  }
+  const T* get_if_value() const noexcept {
+    return std::get_if<T>(static_cast<const base_t*>(this));
+  }
+
+  template <typename... Args>
+  T& emplace_value(Args&&... args) {
+    return static_cast<base_t&>(*this).template emplace<T>(std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  reference_object& emplace_ref(Args&&... args) {
+    return static_cast<base_t&>(*this).template emplace<reference_object>(std::forward<Args>(args)...);
+  }
+
+  template <typename Vtor>
+  decltype(auto) visit(Vtor&& vtor) {
+    return std::visit(std::forward<Vtor>(vtor), static_cast<base_t&>(*this));
+  }
+  template <typename Vtor>
+  decltype(auto) visit(Vtor&& vtor) const {
+    return std::visit(std::forward<Vtor>(vtor), static_cast<const base_t&>(*this));
+  }
+};
 
 template <>
 struct from_json_value<reference_object> {
@@ -72,22 +119,20 @@ struct from_json_value<reference_or<T>> {
     const auto* obj = v.if_object();
     if (!obj) {
       if constexpr (parsable_even_from_not_object<T>)
-        return T::parse_if_not_object(v, out.template emplace<T>());
+        return T::parse_if_not_object(v, out.emplace_value());
       else
         return parse_error(" object expected, got `{}`", e2str(v.kind()));
     }
     if (obj->contains("$ref"))
-      out = from_json<reference_object>(v);
-    else
-      out = from_json<T>(v);
-    return {};
+      return try_from_json<reference_object>(v, out.emplace_ref());
+    return try_from_json<T>(v, out.emplace_value());
   }
 };
 
 template <typename T>
 struct serialize<reference_or<T>> {
   boost::json::value operator()(const reference_or<T>& v) {
-    return std::visit([](const auto& x) -> boost::json::value { return to_json(x); }, v);
+    return v.visit([](const auto& x) -> boost::json::value { return to_json(x); });
   }
 };
 

@@ -398,7 +398,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
               result += std::format("{},", from_json<cxx_support::integer>(v.value));
           } else if (e.type.is_fundamental(ir::fundamental_e::number)) {
             for (auto&& v : e.values)
-              result += std::format("{},", from_json<cxx_support::number>(v.value));
+              result += std::format("{},", from_json<cxx_support::number>(v.value).get_as_double());
           } else if (e.type.is_fundamental(ir::fundamental_e::null)) {
             for (auto&& v : e.values) {
               if (!v.value.is_null())

@@ -11,7 +11,7 @@ namespace detail {
 static void remove_content_type_header(std::optional<string_map<reference_or<header_object>>>& headers) {
   if (!headers)
     return;
-  std::erase_if(*headers, [](auto const& kv) { return is_equal_ci(kv.first, "Content-Type"); });
+  std::erase_if(*headers, [](const auto& kv) { return is_equal_ci(kv.first, "Content-Type"); });
 }
 
 // https://spec.openapis.org/oas/v3.1.0#fixed-fields-9
@@ -21,8 +21,8 @@ static void remove_ignored_header_params(optional<array<reference_or<parameter_o
   if (!params)
     return;
   static constexpr std::string_view ignored[] = {"Accept", "Content-Type", "Authorization"};
-  std::erase_if(*params, [](reference_or<parameter_object> const& rop) {
-    auto* p = std::get_if<parameter_object>(&rop);
+  std::erase_if(*params, [](const reference_or<parameter_object>& rop) {
+    auto* p = rop.get_if_value();
     if (!p)
       return false;
     if (p->in != parameter_location::header)
@@ -62,21 +62,21 @@ static void postprocess_response_object(response_object& r) {
 static void postprocess_operation_object(operation_object& op) {
   remove_ignored_header_params(op.parameters);
   if (op.requestBody)
-    if (auto* rb = std::get_if<request_body_object>(&*op.requestBody))
+    if (request_body_object* rb = op.requestBody->get_if_value())
       for (auto& [_, mt] : rb->content)
         postprocess_media_type_object(mt);
   if (op.responses) {
     if (op.responses->default_)
-      if (auto* r = std::get_if<response_object>(&*op.responses->default_))
+      if (response_object* r = op.responses->default_->get_if_value())
         postprocess_response_object(*r);
     for (auto& [_, ror] : op.responses->_responses)
-      if (auto* r = std::get_if<response_object>(&ror))
+      if (response_object* r = ror.get_if_value())
         postprocess_response_object(*r);
   }
 }
 
 static void postprocess_path_item_object(reference_or<path_item_object>& pir) {
-  auto* pi = std::get_if<path_item_object>(&pir);
+  path_item_object* pi = pir.get_if_value();
   if (!pi)
     // TODO вообще-то там могут рядом со ссылкой лежать всякие данные, которые требуют обработки.
     // Пока игнорируется
@@ -119,12 +119,12 @@ void postprocess_openapi_object(openapi_object& obj) {
   if (obj.components) {
     if (obj.components->responses)
       for (auto& [_, ror] : *obj.components->responses)
-        if (auto* r = std::get_if<response_object>(&ror))
+        if (response_object* r = ror.get_if_value())
           detail::postprocess_response_object(*r);
 
     if (obj.components->headers)
       for (auto& [_, hor] : *obj.components->headers)
-        if (auto* h = std::get_if<header_object>(&hor))
+        if (header_object* h = hor.get_if_value())
           if (h->content)
             for (auto& [_, mt] : *h->content)
               detail::postprocess_media_type_object(mt);

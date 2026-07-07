@@ -11,10 +11,10 @@
 namespace svarg {
 
 // если внутри типа есть static функция error_code parse_if_not_object(boost::json::value const&, T& out)
-// то она вызывается, когда пришёл не объект чтобы распарсить агрегат
+// то она вызывается, когда пришёл не объект чтобы распарсить агрегат (только для фронтенд типов)
 template <typename T>
 struct from_json_value {
-  // error_code parse(const boost::json::value&, T& out)
+  // error_code operator()(const boost::json::value&, T& out)
 };
 
 // TODO складывать такие поля в meta

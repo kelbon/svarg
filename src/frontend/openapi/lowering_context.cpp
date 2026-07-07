@@ -148,8 +148,8 @@ object_and_path<T> resolve_ref_to(reference_object ref, fs::path file, json_poin
                     "$ref should be into /components/*, but $ref = {}", ref.ref_);
     }
     boost::json::value json = chain.follow(std::move(ref));
-    auto refered = from_json<reference_or<T>>(json);
-    if (auto* value = std::get_if<T>(&refered)) {
+    reference_or refered = from_json<reference_or<T>>(json);
+    if (auto* value = refered.get_if_value()) {
       if (chain.first_with_overrides) {
         auto [reffile, refjp] = *std::move(chain.first_with_overrides);
         // нужно изменить само загруженное апи, чтобы json pointer на поле внутри $reef
@@ -159,7 +159,7 @@ object_and_path<T> resolve_ref_to(reference_object ref, fs::path file, json_poin
       } else
         return {std::move(*value), std::move(chain.file), std::move(chain.jp)};
     }
-    ref = std::get<reference_object>(std::move(refered));
+    ref = std::move(*refered.get_if_ref());
   }
   throw semantic_error("recursion depth max reached");
 }
@@ -167,21 +167,21 @@ object_and_path<T> resolve_ref_to(reference_object ref, fs::path file, json_poin
 template <typename T>
 object_and_path<T> resolve_ref_and_ret(reference_or<T> x, fs::path file, json_pointer jp,
                                        lowering_context& ctx) {
-  if (auto* r = std::get_if<reference_object>(&x))
+  if (auto* r = x.get_if_ref())
     return resolve_ref_to<T>(std::move(*r), std::move(file), std::move(jp), ctx);
   else
-    return object_and_path(std::move(std::get<T>(x)), std::move(file), std::move(jp));
+    return object_and_path(std::move(*x.get_if_value()), std::move(file), std::move(jp));
 }
 
 // jp используется только если это инлайн схема для создания уникального scope
 [[nodiscard]] static resolved_schema resolve_schema(const reference_or<schema_object>& sor,
                                                     const fs::path& file, json_pointer jp,
                                                     lowering_context& ctx) {
-  if (auto* ref = std::get_if<reference_object>(&sor)) {
+  if (auto* ref = sor.get_if_ref()) {
     return ctx.resolve_schema_ref(*ref, file, std::move(jp));
   } else {
-    auto s = ctx.schema_lowering(std::get<schema_object>(sor), file, std::move(jp), std::nullopt);
-    return {std::move(s).ref(), std::get<schema_object>(sor)};
+    auto s = ctx.schema_lowering(*sor.get_if_value(), file, std::move(jp), std::nullopt);
+    return {std::move(s).ref(), *sor.get_if_value()};
   }
 }
 
@@ -645,7 +645,7 @@ struct schemas_collector {
   void operator()(std::string_view name, const reference_or<T>& x) {
     dbgprint(name);
 
-    if (auto* r = std::get_if<reference_object>(&x)) {
+    if (auto* r = x.get_if_ref()) {
       if constexpr (!std::is_same_v<T, schema_object>) {
         // проходимся на зарезолвленном объекте, чтобы собрать всё что упомянуто там
         auto [resolved, path, jp] = resolve_ref_and_ret(x, obj_file, currentjp / name, *ctx);
@@ -662,7 +662,7 @@ struct schemas_collector {
         ctx->resolve_schema_ref(*r, obj_file, currentjp / name);
       }
     } else {
-      recursion(name, *std::get_if<T>(&x));
+      recursion(name, *x.get_if_value());
     }
   }
 

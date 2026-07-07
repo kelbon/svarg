@@ -16,7 +16,7 @@ struct null {
 };
 
 using integer = int64_t;
-using number = double;
+using number = ::svarg::number;
 using boolean = bool;
 
 template <typename T>
