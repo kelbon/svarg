@@ -7,21 +7,8 @@
 
 #include "svarg/parse.hpp"
 
-namespace svarg::cxx_support {
+namespace svarg {
 #if 0
-
-template <typename T>
-struct from_json_value<arrayof<T>> {
-  static void parse(arrayof<T>& v, const boost::json::value& j, error_code& r) {
-    tok.expect(sax_token::array_begin);
-    for (;;) {
-      co_yield {};
-      if (tok.kind() == sax_token::array_end)
-        break;
-      co_yield dd::elements_of(parse_and_validate(v.emplace_back(), tok, r));
-    }
-  }
-};
 
 template <typename Optional>
 struct optional_parser_base {
@@ -187,4 +174,4 @@ struct from_json_value<not_a<T>> {
   }
 };
 #endif
-}  // namespace svarg::cxx_support
+}  // namespace svarg

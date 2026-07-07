@@ -119,8 +119,8 @@ struct from_json_value<std::optional<T>> {
 };
 
 template <typename T>
-struct from_json_value<array<T>> {
-  error_code operator()(const boost::json::value& v, array<T>& out) {
+struct from_json_value<arrayof<T>> {
+  error_code operator()(const boost::json::value& v, arrayof<T>& out) {
     const auto* arr = v.if_array();
     if (!arr)
       return parse_error(" array expected, got `{}`", e2str(v.kind()));

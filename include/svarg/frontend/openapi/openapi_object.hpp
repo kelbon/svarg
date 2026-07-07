@@ -44,7 +44,7 @@ struct server_object {
     SVARG_FRONTEND_TYPE;
 
     // MUST NOT be empty
-    std::optional<array<string>> enum_;
+    std::optional<arrayof<string>> enum_;
     // если поле enum есть, то значение должно быть оттуда
     string default_;
     std::optional<string> description;
@@ -138,7 +138,7 @@ struct schema_object {
   std::optional<bool> readOnly;
   // может присутствовать только в запросе
   std::optional<bool> writeOnly;
-  std::optional<array<Any>> examples;
+  std::optional<arrayof<Any>> examples;
   // в 3.1 убрано, остановлено чтобы парсилось и эквивалентно "type": ["x", "null"]
   // а оно в свою очередь эквивалентно anyof
   // Note: svarg считает, что nullable это эквивалент NOT required, а пришедший json null
@@ -162,7 +162,7 @@ struct schema_object {
 
   std::optional<one_or_array<string>> type;
   // если есть, то должно быть хотя бы одно значение и все значения должны быть уникальны
-  std::optional<array<Any>> enum_;
+  std::optional<arrayof<Any>> enum_;
   // == enum с одним значением, все значения должны быть такими
   std::optional<Any> const_;
 
@@ -198,23 +198,23 @@ struct schema_object {
   // если отсутствует эквивалентно 0
   std::optional<uint64_t> minProperties;
   // все элементы должны быть уникальны
-  std::optional<array<string>> required;
+  std::optional<arrayof<string>> required;
   // в каждом массиве строки ДОЛЖНЫ быть уникальны
   // списки требуемых полей если какое-то поле существует
-  std::optional<string_map<array<string>>> dependentRequired;
+  std::optional<string_map<arrayof<string>>> dependentRequired;
 
   // логические операции над схемами
 
   // allOf, anyOf, oneOf должны быть не пустым массивом
   // если есть одновременно type: и allOf/anyOf/oneOf/ not, то они обозначают требование, а не представление
   // типа. н-р type: object + anyOf: required [A], required [B]
-  std::optional<array<reference_or<schema_object>>> allOf;
+  std::optional<arrayof<reference_or<schema_object>>> allOf;
   // вопреки интуиции anyOf семантически парсит ВСЕ схемы, а не до первой попавшейся и выдаёт все поля,
   // которые получилось собрать в результате
   // для этого, вероятно, бекенду стоит объединять все типы в anyOf в некий один тип, либо просто делать это
   // набором опциональных полей, т.е. anyOf [A, B, C] => struct { optional A, optional B, optional C }
-  std::optional<array<reference_or<schema_object>>> anyOf;
-  std::optional<array<reference_or<schema_object>>> oneOf;
+  std::optional<arrayof<reference_or<schema_object>>> anyOf;
+  std::optional<arrayof<reference_or<schema_object>>> oneOf;
   optional<reference_or<schema_object>> not_;
 
   // условия на схемах...
@@ -232,7 +232,7 @@ struct schema_object {
   // для элементов массива
 
   // массив должен быть не пустым
-  optional<array<reference_or<schema_object>>> prefixItems;
+  optional<arrayof<reference_or<schema_object>>> prefixItems;
   // для валидации всех после prefixItems
   optional<reference_or<schema_object>> items;
   optional<reference_or<schema_object>> contains;
@@ -451,7 +451,7 @@ using callback_object = string_map<reference_or<path_item_object>>;
 // имена ДОЛЖНЫ соответствовать схемам декларированным в Security Schemas под Components Object
 // если тип схемы "oauth2" или "openIdConnect", то значение это список scope names требуемых для исполнения
 // и список может быть пустым, если авторизация не требует специфического скоупа
-using security_requirement_object = string_map<array<string>>;
+using security_requirement_object = string_map<arrayof<string>>;
 
 struct oauth_flow_object {
   SVARG_FRONTEND_TYPE;
@@ -501,13 +501,13 @@ struct security_scheme_object {
 struct operation_object {
   SVARG_FRONTEND_TYPE;
 
-  optional<array<string>> tags;
+  optional<arrayof<string>> tags;
   optional<string> summary;
   optional<string> description;
   optional<external_documentation_object> externalDocs;
   // должно быть уникально среди всех операций апи
   optional<string> operationId;
-  optional<array<reference_or<parameter_object>>> parameters;
+  optional<arrayof<reference_or<parameter_object>>> parameters;
   optional<reference_or<request_body_object>> requestBody;
   // формально опционально, но по сути можно не указать разве что для вебхука
   optional<responses_object> responses;
@@ -515,8 +515,8 @@ struct operation_object {
   optional<string_map<reference_or<callback_object>>> callbacks;
   // дефолт: false
   optional<bool> deprecated;
-  optional<array<security_requirement_object>> security;
-  optional<array<server_object>> servers;
+  optional<arrayof<security_requirement_object>> security;
+  optional<arrayof<server_object>> servers;
 };
 
 struct path_item_object {
@@ -536,9 +536,9 @@ struct path_item_object {
   optional<operation_object> head;
   optional<operation_object> patch;
   optional<operation_object> trace;
-  optional<array<server_object>> servers;
+  optional<arrayof<server_object>> servers;
   // все параметры должны быть уникальны (ключ name + location)
-  optional<array<reference_or<parameter_object>>> parameters;
+  optional<arrayof<reference_or<parameter_object>>> parameters;
 
   auto all_operations() const noexcept {
     return all(get, put, post, delete_, options, head, patch, trace);
@@ -601,13 +601,13 @@ struct openapi_object {
   optional<string> jsonSchemaDialect;
   // если этого поля нет или пустое, то это эквивалентно
   // одному server_object{.url = "/"}
-  optional<array<server_object>> servers;
+  optional<arrayof<server_object>> servers;
   // Должно быть хотя бы одно paths/webhooks/components
   optional<paths_object> paths;
   optional<string_map<reference_or<path_item_object>>> webhooks;
   optional<components_object> components;
-  optional<array<security_requirement_object>> security;
-  optional<array<tag_object>> tags;
+  optional<arrayof<security_requirement_object>> security;
+  optional<arrayof<tag_object>> tags;
   optional<external_documentation_object> externalDocs;
 };
 

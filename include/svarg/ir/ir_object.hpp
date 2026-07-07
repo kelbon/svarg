@@ -141,7 +141,7 @@ struct enum_schema {
   SVARG_IR_TYPE;
 
   schema_ref type;
-  array<Any> values;
+  arrayof<Any> values;
 };
 
 struct discriminator_desc {
@@ -157,20 +157,20 @@ struct oneof_schema {
   SVARG_IR_TYPE;
 
   std::optional<discriminator_desc> discriminator;
-  array<schema_ref> schemas;
+  arrayof<schema_ref> schemas;
 };
 
 struct anyof_schema {
   SVARG_IR_TYPE;
 
   std::optional<discriminator_desc> discriminator;
-  array<schema_ref> schemas;
+  arrayof<schema_ref> schemas;
 };
 
 struct allof_schema {
   SVARG_IR_TYPE;
 
-  array<schema_ref> schemas;
+  arrayof<schema_ref> schemas;
 };
 
 struct object_field_info {
@@ -194,7 +194,7 @@ struct object_field_info {
 struct object_schema {
   SVARG_IR_TYPE;
 
-  array<object_field_info> fields;
+  arrayof<object_field_info> fields;
   std::optional<schema_ref> additional_properties;
 };
 
@@ -340,7 +340,7 @@ struct schema {
   // схемы которые не влияют на представление, только на валидацию
   // н-р type: string enum: ... это означает что пользователь увидит строку, но она провалидируется по тому
   // что написано в enum
-  std::optional<array<schema_ref>> required;
+  std::optional<arrayof<schema_ref>> required;
 
   std::string scope() const {
     return std::format("{}#{}", spec, jsonptr.escaped());
@@ -350,7 +350,7 @@ struct schema {
     return required && !required->empty();
   }
 
-  void add_requirements(const array<schema_ref>& reqs) {
+  void add_requirements(const arrayof<schema_ref>& reqs) {
     if (!required)
       required.emplace();
     append_range(*required, reqs);
@@ -659,7 +659,7 @@ struct operation {
   // get/post и тд. Всегда маленькие буквы
   // строкой для поддержки кастомных методов (openapi 3.2)
   string method;
-  std::optional<array<operation_parameter>> parameters;
+  std::optional<arrayof<operation_parameter>> parameters;
   // на каждый contentType своё тело
   std::optional<std::set<body>> bodies;
   std::optional<std::set<response_desc>> responses;

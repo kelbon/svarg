@@ -17,7 +17,7 @@ static void remove_content_type_header(std::optional<string_map<reference_or<hea
 // https://spec.openapis.org/oas/v3.1.0#fixed-fields-9
 // "If `in` is `header` and the `name` field is "Accept", "Content-Type" or "Authorization",
 //  the parameter definition SHALL be ignored."
-static void remove_ignored_header_params(optional<array<reference_or<parameter_object>>>& params) {
+static void remove_ignored_header_params(optional<arrayof<reference_or<parameter_object>>>& params) {
   if (!params)
     return;
   static constexpr std::string_view ignored[] = {"Accept", "Content-Type", "Authorization"};
@@ -106,7 +106,7 @@ void postprocess_openapi_object(openapi_object& obj) {
   // "If the `servers` property is not provided, or is an empty array, the default value
   //  would be a Server Object with a url value of `/`."
   if (!obj.servers || obj.servers->empty())
-    obj.servers = array<server_object>{{.url = "/"}};
+    obj.servers = arrayof<server_object>{{.url = "/"}};
 
   if (obj.paths)
     for (auto& [_, pi] : *obj.paths)

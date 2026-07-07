@@ -63,7 +63,7 @@ struct renderer {
   }
 
   bool is_recursive_field(const ir::schema& s, const ir::schema_ref& field_type) const;
-  std::string render_schemas_array(const array<ir::schema_ref>& arr, std::string_view relspec,
+  std::string render_schemas_array(const arrayof<ir::schema_ref>& arr, std::string_view relspec,
                                    const json_pointer& relative) const;
   std::string render_struct_content(const ir::schema& s, std::string typeref) const;
 
@@ -77,7 +77,7 @@ struct renderer {
   // генерирует поля (сначала требуемые, затем опциональные), is_required, using additional_properties = ..
   // и если есть дополнительные поля, генерирует поле _additional_properties
   // TODO? геттеры и сеттеры
-  std::string render_object_fields(const array<ir::object_field_info>& fields, std::string_view relspec,
+  std::string render_object_fields(const arrayof<ir::object_field_info>& fields, std::string_view relspec,
                                    const json_pointer& relative, std::optional<ir::schema_ref> fields_owner,
                                    std::optional<ir::schema_ref> additional_properties) const;
 

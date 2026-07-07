@@ -47,7 +47,7 @@ template <typename T>
 using optional = metel::box<T>;
 using std::string;
 template <typename T>
-using array = std::vector<T>;
+using arrayof = std::vector<T>;
 
 template <typename T>
 using string_map = std::map<string, T, str_less>;
@@ -62,7 +62,7 @@ using unordered_string_map_ci = std::unordered_map<string, T, str_hash_ci, str_e
 // тег для парсинга
 template <typename T>
 struct one_or_array {
-  array<T> values;
+  arrayof<T> values;
 
   [[nodiscard]] bool empty() const noexcept {
     return values.empty();

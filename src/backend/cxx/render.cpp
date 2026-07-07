@@ -110,14 +110,14 @@ static std::string render_parse_tag(cxx_support::parse_tag_e tag) {
       e2str(tag));
 }
 
-static array<ir::object_field_info> as_object_fields(auto&& params) {
-  array<ir::object_field_info> result;
+static arrayof<ir::object_field_info> as_object_fields(auto&& params) {
+  arrayof<ir::object_field_info> result;
   for (const ir::operation_parameter& p : params)
     result.push_back({.type = p.schema, .name = p.name, .required = p.required.value_or(false)});
   return result;
 }
 
-std::string renderer::render_schemas_array(const array<ir::schema_ref>& arr, std::string_view relspec,
+std::string renderer::render_schemas_array(const arrayof<ir::schema_ref>& arr, std::string_view relspec,
                                            const json_pointer& relative) const {
   std::string result;
   if (arr.empty())
@@ -144,7 +144,7 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
     if (ref != s && !ref.is_fundamental())  // рекурсия
       out.insert(ref);                      // если ref уже там был, то автоматически обрабатывается
   };
-  auto collect_all = [&](const array<ir::schema_ref>& arr) {
+  auto collect_all = [&](const arrayof<ir::schema_ref>& arr) {
     for (auto& ref : arr)
       collect(ref);
   };
@@ -303,7 +303,7 @@ std::string renderer::render_object_field(const ir::object_field_info& field, st
   return render_optional_field(field.type, field.name, relspec, relative, recursive_field);
 }
 
-std::string renderer::render_object_fields(const array<ir::object_field_info>& fields,
+std::string renderer::render_object_fields(const arrayof<ir::object_field_info>& fields,
                                            std::string_view relspec, const json_pointer& relative,
                                            std::optional<ir::schema_ref> fields_owner,
                                            std::optional<ir::schema_ref> additional_properties) const {

@@ -185,14 +185,14 @@ static bool inline_into(T& to, access_schema get, schema* add_requirements) {
 
   // достаём все T из to.schemas
 
-  array<schema_ref> inlined;
+  arrayof<schema_ref> inlined;
   for (const schema_ref& r : to.schemas)
     if (condition(r))
       inlined.push_back(r);
 
   // все схемы всех T вставляем в to.schemas и удаляем заинлайненные схемы из to.schemas
 
-  array<schema_ref> inlined_schemas;
+  arrayof<schema_ref> inlined_schemas;
   for (schema_ref& ref : inlined) {
     auto& t = get(ref);
     if (add_requirements) {
@@ -318,11 +318,11 @@ pass_result pass_combinators_flatten(ir_object ir, const ir_options& options) {
 }
 
 // a subset b ?
-static bool is_subset(const array<schema_ref>& a, const array<schema_ref>& b) {
+static bool is_subset(const arrayof<schema_ref>& a, const arrayof<schema_ref>& b) {
   return std::ranges::all_of(a, [&](const schema_ref& need) { return std::ranges::contains(b, need); });
 }
 
-static std::optional<size_t> find_weak(const array<schema_ref>& reqs, access_schema get) {
+static std::optional<size_t> find_weak(const arrayof<schema_ref>& reqs, access_schema get) {
   // never покрывает всех,
   // allof<A, B> покрывает все allof<B, C, D> подмножества
   // anyof с меньшим числом аргументов перекрывает другой anyof

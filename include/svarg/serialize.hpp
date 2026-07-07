@@ -91,8 +91,8 @@ struct serialize<Any> {
 };
 
 template <typename T>
-struct serialize<array<T>> {
-  boost::json::value operator()(const array<T>& arr) {
+struct serialize<arrayof<T>> {
+  boost::json::value operator()(const arrayof<T>& arr) {
     boost::json::array out;
     out.reserve(arr.size());
     for (const auto& elem : arr)

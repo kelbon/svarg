@@ -238,7 +238,7 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
 }
 
 ir::discriminator_desc lowering_context::discriminator_lowering(const discriminator_object& d,
-                                                                const array<ir::schema_ref>& schemas) {
+                                                                const arrayof<ir::schema_ref>& schemas) {
   // дискриминатор оставляется даже если есть тривиальные схемы
   // бекенд может это считатЬ, например, дискриминаторов только для объектов в oneof/anyof
   // а для фундаментальных типов определять содержимое без помощи дискриминатора
@@ -265,7 +265,7 @@ template <typename... Args>
   return (size_t(bool(args)) + ...);
 }
 
-static ir::fundamental_e detect_enum_type(const array<Any>& values) noexcept {
+static ir::fundamental_e detect_enum_type(const arrayof<Any>& values) noexcept {
   if (values.empty())
     return ir::fundamental_e::never;  // енам без значений
   if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_string(); }))
@@ -395,7 +395,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     }
     res.type.data = std::move(es);
   } else if (schema.type) {
-    array<string> rtypes = schema.type->values;
+    arrayof<string> rtypes = schema.type->values;
 
     std::sort(rtypes.begin(), rtypes.end());
     rtypes.erase(std::unique(rtypes.begin(), rtypes.end()), rtypes.end());
@@ -460,8 +460,8 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
 
   // ── логические комбинаторы ──────────────────────────────────────────────────
 
-  auto resolve_array = [&](std::string_view ptr, const array<reference_or<schema_object>>& from,
-                           array<ir::schema_ref>& to) {
+  auto resolve_array = [&](std::string_view ptr, const arrayof<reference_or<schema_object>>& from,
+                           arrayof<ir::schema_ref>& to) {
     for (size_t i = 0; i < from.size(); ++i) {
       resolved_schema s = resolve_schema(from[i], file, jp / ptr / i, *this);
       to.push_back(s.ir_schema);
@@ -548,7 +548,7 @@ struct schemas_collector {
     // ss << name << '\n';
   }
   template <typename T>
-  void operator()(std::string_view name, const array<T>& f) try {
+  void operator()(std::string_view name, const arrayof<T>& f) try {
     dbgprint(name);
     currentjp.add_key(name);
     on_scope_exit {
@@ -949,9 +949,9 @@ struct arrays_sorter : ir::ir_visitor_base {
   using ir::ir_visitor_base::operator();
 
   template <typename T>
-  void operator()(const array<T>& obj) {
+  void operator()(const arrayof<T>& obj) {
     // массивы не влияют на хеш/сравнения в IR, const_cast безопасен
-    auto& arr = const_cast<array<T>&>(obj);
+    auto& arr = const_cast<arrayof<T>&>(obj);
     std::sort(arr.begin(), arr.end());
   }
 };

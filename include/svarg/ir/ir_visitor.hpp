@@ -37,7 +37,7 @@ struct ir_visitor_base {
       self(v);
   }
   template <typename T>
-  void operator()(this auto&& self, const array<T>& x) {
+  void operator()(this auto&& self, const arrayof<T>& x) {
     for (auto&& v : x)
       self(v);
   }

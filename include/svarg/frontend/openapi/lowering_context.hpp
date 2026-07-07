@@ -136,7 +136,7 @@ struct lowering_context {
   ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
                                       fs::path file, json_pointer);
   ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
-                                                const array<ir::schema_ref>& schemas);
+                                                const arrayof<ir::schema_ref>& schemas);
   ir::body media_type_object_lowering(const media_type_object&, fs::path file, json_pointer,
                                       std::string_view content_type);
 
