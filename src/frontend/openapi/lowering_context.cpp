@@ -321,7 +321,8 @@ static ir::fundamental_e detect_enum_type(const arrayof<Any>& values) noexcept {
  * если схема true/false - остальные поля игнорируются (их не должно быть)
  * если есть type - он отвечает за представление типа,
    а возможные anyOf/oneOf/allOf/not/enum/const описывают требования
- * если нет type и есть const/enum/allOf/oneOf/allOf/not - то это они описывают представление.
+ * если нет type и есть const/enum/allOf/oneOf/allOf - то это они описывают представление.
+ * not всегда описывает требование
  Если есть одновременно два и более из них - варнинг и все они будут требованиями, а представление будет Any
  * если ничего нет, но есть properties - то как будто неявно type: object
  * если нет ничего, то схема any, но возможно всё ещё с валидацией (н-р required [a, b, c])

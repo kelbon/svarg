@@ -29,11 +29,11 @@ constexpr bool has_field(std::string_view name) noexcept {
 
 template <typename T, size_t I>
 bool parse_field(const boost::json::object& obj, T& out, error_code& ec) {
-  using Field = std::decay_t<decltype(boost::pfr::get<I>(out))>;
+  using field_type = std::decay_t<decltype(boost::pfr::get<I>(out))>;
   constexpr std::string_view name = unescape_field_name(boost::pfr::get_name<I, T>());
   auto it = obj.find(name);
   if (it == obj.end()) {
-    if (is_optional_field<Field>::value)
+    if (is_optional_field<field_type>::value)
       return true;
     else {
       ec = parse_error(" field `{}` in type `{}` is REQUIRED but not present", name, type_name<T>());
@@ -76,6 +76,9 @@ struct from_json_value<T> {
   static_assert(metel::is_decayed_v<T>);
 
   error_code operator()(const boost::json::value& v, T& out) {
+    // TODO? можно развернуть парсинг - вместо того чтобы он зависел от количества полей в типе, он должен
+    // зависеть от количества ключей в джсоне т.е. идти по ключам и маппить куда они должны попасть. И
+    // проверять в конце, что все требуемые поля пришли
     const auto* obj = v.if_object();
     if (!obj) {
       if constexpr (parsable_even_from_not_object<T>)

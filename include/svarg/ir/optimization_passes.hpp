@@ -31,4 +31,9 @@ struct pass_result {
 // неиспользуемымми)
 [[nodiscard]] pass_result pass_rm_useless_requirements(ir_object, const ir_options&);
 
+// преобразует allOf из только фундаментальных типов в какой-то из них
+// allOf'ы с объектами объединяет в один объект, эмулируя "наследование"
+// также заодно убирает невозможные allof типа allof<int, string>
+[[nodiscard]] pass_result pass_transform_allofs(ir_object, const ir_options&);
+
 }  // namespace svarg::ir

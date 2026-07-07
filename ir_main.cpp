@@ -5,21 +5,23 @@
 
 #include <svarg/frontend/openapi/generate_ir.hpp>
 #include <print>
-#include <fstream>
 
 enum struct format_e {
   yaml,
   json,
 };
 
-enum struct passes_e {
-  rts,
-  rus,
-  cf,
-  rur,
-  // rts - remove trivial schemas, rus - remove unused schemas, cf - combinators flatten, rur - remove useless
-  // requirements
+using pass_ptr = decltype(&svarg::ir::pass_combinators_flatten);
+
+// clang-format off
+inline const std::unordered_map<std::string_view, pass_ptr> passes_map{
+  {"rts", svarg::ir::pass_rm_trivial_schemas},
+  {"rus", svarg::ir::pass_rm_unused_schemas},
+  {"cf", svarg::ir::pass_combinators_flatten},
+  {"rur",svarg::ir::pass_rm_useless_requirements},
+  {"ta",svarg::ir::pass_transform_allofs},
 };
+// clang-format on
 
 using namespace svarg;
 
@@ -75,30 +77,12 @@ int main(int argc, char* argv[]) try {
     for (auto v : cliopts.passes | std::views::split(' ')) {
       if (v.empty())
         continue;
-      std::optional p = ss::string_switch<passes_e>(std::string_view(v))
-                            .case_("rts", passes_e::rts)
-                            .case_("rus", passes_e::rus)
-                            .case_("cf", passes_e::cf)
-                            .case_("rur", passes_e::rur)
-                            .or_nullopt();
-      if (!p) {
+      std::string_view pass_name = std::string_view(v);
+      if (!passes_map.contains(pass_name)) {
         std::println("invalid passes stirng `{}`", cliopts.passes);
         return -1;
       }
-      switch (*p) {
-        case passes_e::rts:
-          ir = ir::pass_rm_trivial_schemas(std::move(ir), options.ir_opts).ir;
-          break;
-        case passes_e::rus:
-          ir = ir::pass_rm_unused_schemas(std::move(ir), options.ir_opts).ir;
-          break;
-        case passes_e::cf:
-          ir = ir::pass_combinators_flatten(std::move(ir), options.ir_opts).ir;
-          break;
-        case passes_e::rur:
-          ir = ir::pass_rm_useless_requirements(std::move(ir), options.ir_opts).ir;
-          break;
-      }
+      ir = passes_map.at(pass_name)(std::move(ir), options.ir_opts).ir;
     }
   }
   if (*f == format_e::yaml)

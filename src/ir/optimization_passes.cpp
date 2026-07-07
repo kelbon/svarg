@@ -3,6 +3,7 @@
 #include "svarg/utils/algo.hpp"
 
 #include <ranges>
+#include <print>
 
 namespace svarg::ir {
 
@@ -18,23 +19,25 @@ ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
   if (!options.enable_optimizations)
     return ir;
   size_t count = 0;
-  auto do_pass = [&](pass_result r) {
+  auto do_pass = [&](auto* pass) {
+    pass_result r = pass(std::move(ir), options);
     ir = std::move(r.ir);
     count += r.count;
   };
   for (MAYBE_EVER) {
     count = 0;
 
-    do_pass(pass_combinators_flatten(std::move(ir), options));
-    // после объединения oneOf некоторые схемы могут оказаться неиспользованными
-    // а после преобразования anyOf<X> -> X может даже получиться тривиальная схема, которую надо заменить
-    do_pass(pass_rm_trivial_schemas(std::move(ir), options));
-    do_pass(pass_rm_unused_schemas(std::move(ir), options));
+    do_pass(pass_combinators_flatten);
+    do_pass(pass_transform_allofs);
+    //  после объединения oneOf некоторые схемы могут оказаться неиспользованными
+    //  а после преобразования anyOf<X> -> X может даже получиться тривиальная схема, которую надо заменить
+    do_pass(pass_rm_trivial_schemas);
+    do_pass(pass_rm_unused_schemas);
 
     // убирание бесполезных требований может помочь другим оптимизациям
-    do_pass(pass_rm_useless_requirements(std::move(ir), options));
-    do_pass(pass_rm_trivial_schemas(std::move(ir), options));
-    do_pass(pass_rm_unused_schemas(std::move(ir), options));
+    do_pass(pass_rm_useless_requirements);
+    do_pass(pass_rm_trivial_schemas);
+    do_pass(pass_rm_unused_schemas);
 
     if (!count)
       break;
@@ -261,7 +264,6 @@ static maybe_replace flatten_oneof(schema& this_schema, oneof_schema& oneof, acc
 
 static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_schemas, size_t& changes,
                                         const ir_options& options) {
-  // тип не влияет на хеш и сравнение
   auto& this_schema = const_cast<schema&>(s);
   access_schema accessor(all_schemas);
   matcher vtor{
@@ -415,6 +417,90 @@ pass_result pass_rm_useless_requirements(ir_object ir, const ir_options& options
       }
       if (s.required->empty())
         s.required.reset();
+    }
+  }
+  assert(validate_ir_object(ir));
+  return {std::move(ir), count};
+}
+
+template <typename... Args>
+static void emit_warn(std::format_string<Args...> fmt, Args&&... args) {
+  std::println(fmt, std::forward<Args>(args)...);
+}
+
+[[nodiscard]] pass_result pass_transform_allofs(ir_object ir, const ir_options& options) {
+  if (!ir.schemas)
+    return {std::move(ir), 0};
+  ir.validate();
+  size_t count = 0;
+
+  access_schema get(*ir.schemas);
+  auto is_fundamental_schema = [&](const schema_ref& r) {
+    return r.is_fundamental() || get(r).type.is_fundamental();
+  };
+  auto get_fundamental = [&](const schema_ref& r) -> fundamental_e {
+    assert(is_fundamental_schema(r));
+    if (r.is_fundamental())
+      return *r.if_fundamental();
+    return *get(r).type.if_fundamental();
+  };
+  auto is_a_fundamental = [=](fundamental_e e) {
+    return [=](const schema_ref& r) { return get_fundamental(r) == e; };
+  };
+  auto is_object_schema = [&](const schema_ref& r) {
+    return !r.is_fundamental() && get(r).type.is_object();  //
+  };
+  auto get_object = [&](const schema_ref& r) -> const object_schema& {
+    assert(is_object_schema(r));
+    return *get(r).type.if_object();
+  };
+  auto replace_with_never = [&](schema& s, std::string_view err) {
+    s.type.data = fundamental_e::never;
+    ++count;
+    emit_warn("warning: allOf {}#{} {}, replaced with `schema: false`", s.spec, s.jsonptr.escaped(), err);
+  };
+
+  for (const schema& _s : *ir.schemas) {
+    // spec/jsonptr не меняются
+    schema& s = const_cast<schema&>(_s);
+    allof_schema* allof = s.type.if_allof();
+    if (!allof)
+      continue;
+    if (std::ranges::any_of(allof->schemas, is_fundamental_schema) &&
+        std::ranges::any_of(allof->schemas, is_object_schema)) {
+      replace_with_never(s, "contains both objects and fundamental types");
+      continue;
+    }
+    if (std::ranges::all_of(allof->schemas, is_fundamental_schema)) {
+      // если в allOf есть never - он невалидный
+      if (std::ranges::any_of(allof->schemas, is_a_fundamental(fundamental_e::never))) {
+        replace_with_never(s, "contains never");
+        continue;
+      }
+      // any не влияет на представление или требования в allof
+      count += std::erase_if(allof->schemas, is_a_fundamental(fundamental_e::any));
+      // если что-то integer оно всегда number, но если что-то number оно не всегда integer
+      // т.е. allof<integer, number> всегда сводится к integer. Сводить будет другая оптимизация
+      // здесь просто убираем лишний number
+      if (std::ranges::any_of(allof->schemas, is_a_fundamental(fundamental_e::integer)))
+        count += std::erase_if(allof->schemas, is_a_fundamental(fundamental_e::number));
+      remove_duplicates(allof->schemas);
+      // здесь в allof могли остаться только bool/null/string/number/integer, при этом number+integer
+      // одновременно быть не могут любая комбинация конфликтует, например allOf<bool, null> - эквивалентно
+      // never
+      if (allof->schemas.size() > 1)
+        replace_with_never(s, "has conflicting types");
+    } else if (std::ranges::all_of(allof->schemas, is_object_schema)) {
+      object_schema obj;
+      for (auto& var : allof->schemas) {
+        obj.combine(get_object(var));
+        // требования складываются
+        if (get(var).has_requirements())
+          s.add_requirements(*get(var).required);
+      }
+      ++count;
+      // заменяем allof на один объект
+      s.type.data = std::move(obj);
     }
   }
   assert(validate_ir_object(ir));

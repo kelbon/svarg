@@ -23,7 +23,7 @@ enum struct fundamental_e {
   null,
   boolean,
   integer,
-  number,
+  number,  // надмножество integer
   string,
   any,    // type: true
   never,  // type: never
@@ -198,6 +198,35 @@ struct object_schema {
 
   arrayof<object_field_info> fields;
   std::optional<schema_ref> additional_properties;
+
+  object_field_info* find_field(std::string_view name) noexcept {
+    for (auto& f : fields)
+      if (f.name == name)
+        return &f;
+    return nullptr;
+  }
+
+  const object_field_info* find_field(std::string_view name) const noexcept {
+    return const_cast<object_schema&>(*this).find_field(name);
+  }
+
+  // объединяет объекты как для allOf
+  // работает +- как наследование от *this, перекрывает в том числе и подполя
+  // если в other есть поле с таким же именем - оно полностью перекрывает поле в базе
+  void combine(const object_schema& other) {
+    for (auto& field : other.fields) {
+      auto* existing_field = find_field(field.name);
+      if (!existing_field) {
+        fields.push_back(field);
+        continue;
+      }
+      *existing_field = field;
+    }
+    // если у того есть - перекрывает
+    if (other.additional_properties) {
+      additional_properties = other.additional_properties;
+    }
+  }
 };
 
 struct array_schema {

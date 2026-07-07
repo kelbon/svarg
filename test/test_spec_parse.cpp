@@ -24,6 +24,17 @@ TEST("generate ir from openapi") {
   REQUIRE(o.webhooks && o.webhooks->size() == 1);
 }
 
+TEST("generate ir with allofs") {
+  // сложный случай с allOf когда должно сработать объединение в один объект
+  svarg::ir::ir_object o =
+      svarg::openapi2ir(std::filesystem::current_path(), {"./test_specs/TS26512_EventExposure.yaml"},
+                        {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
+
+  REQUIRE(o.schemas && o.schemas->size() == 125);
+  REQUIRE(!o.operations);
+  REQUIRE(!o.webhooks);
+}
+
 TEST("parse_spec") {
   svarg::openapi_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);

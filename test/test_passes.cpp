@@ -458,5 +458,203 @@ TEST("multilevel oneof/anyof/allof") {
                     make_pipe(&ir::pass_combinators_flatten, &ir::pass_rm_unused_schemas)));
 }
 
+TEST("pass transform allofs") {
+  std::string_view input = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF1"
+    "name": "AOF1"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@string@"
+          - "name": "Obj"
+            "spec": "testir"
+            "jsonptr": "/components/schemas/Obj"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF2"
+    "name": "AOF2"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@string@"
+          - "name": "Obj"
+            "spec": "testir"
+            "jsonptr": "/components/schemas/Obj"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Obj"
+    "name": "Obj"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "f1"
+            "required": false
+
+  )";
+  std::string_view output = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF1"
+    "name": "AOF1"
+    "type":
+      "fundamental": "never"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF2"
+    "name": "AOF2"
+    "type":
+      "fundamental": "never"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Obj"
+    "name": "Obj"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "f1"
+            "required": false
+)";
+
+  REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
+}
+
+TEST("pass transform allofs 2") {
+  std::string_view input = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/BaseEventCollection"
+    "name": "BaseEventCollection"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@integer@"
+            "name": "collectionTimestamp"
+            "required": true
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
+            "name": "records"
+            "required": true
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
+    "type":
+      "array":
+        "element":
+          "spec": "@any@"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection"
+    "name": "QoEMetricsCollection"
+    "type":
+      "allOf":
+        "schemas":
+          - "name": "BaseEventCollection"
+            "spec": "testir"
+            "jsonptr": "/components/schemas/BaseEventCollection"
+          - "spec": "testir"
+            "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+            "name": "abc"
+            "required": false
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+            "name": "records"
+            "required": true
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+    "type":
+      "object":
+        "fields": []
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+    "type":
+      "array":
+        "element":
+          "spec": "@string@"
+)";
+  std::string_view output = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/BaseEventCollection"
+    "name": "BaseEventCollection"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@integer@"
+            "name": "collectionTimestamp"
+            "required": true
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
+            "name": "records"
+            "required": true
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
+    "type":
+      "array":
+        "element":
+          "spec": "@any@"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection"
+    "name": "QoEMetricsCollection"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@integer@"
+            "name": "collectionTimestamp"
+            "required": true
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+            "name": "records"
+            "required": true
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+            "name": "abc"
+            "required": false
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+            "name": "abc"
+            "required": false
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+            "name": "records"
+            "required": true
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+    "type":
+      "object":
+        "fields": []
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+    "type":
+      "array":
+        "element":
+          "spec": "@string@"
+)";
+
+  REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;

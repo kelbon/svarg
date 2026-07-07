@@ -2,50 +2,37 @@
 
 #include "svarg/backend/cxx/support/types.hpp"
 #include "svarg/errors.hpp"
-
-#include <boost/json/value.hpp>
+#include "svarg/backend/cxx/support/concepts.hpp"
 
 #include "svarg/from_json_value.hpp"
 
 namespace svarg {
+
+template <cxx_support::an_array T>
+struct from_json_value<T> {
+  static error_code operator()(T& v, const boost::json::value& j) {
+    // TODO что с требованиями... Что-то типа
+    // * проверка что нет рекурсивных требований
+    // * для каждой схемы на один уровень выше
+    //    - если нужно парсить - парсим
+    //    - если нужно проверить конечный объект - проверяем его
+    // TODO не забыть для объектов проверять что все обязательные поля на месте
+    // требования проверяются выше, а больше кроме требований и значения в этом типе ничего нет
+    return try_from_json(get_special_field(v), j);
+  }
+};
 #if 0
-
-template <typename Optional>
-struct optional_parser_base {
-  using T = typename Optional::value_type;
-
-  static void parse(Optional& v, const boost::json::value& j, error_code& r) {
-    if (tok.kind() == sax_token::null) [[unlikely]]
-      return {};
-    return from_tokens_parser(v.emplace(), tok, r);
-  }
-};
-
-template <typename T>
-struct from_json_value<std::optional<T>> : optional_parser_base<std::optional<T>> {};
-
-template <typename T>
-struct from_json_value<metel::box<T>> : optional_parser_base<metel::box<T>> {};
-
-template <an_array T>
+template <cxx_support::a_not_a T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
+  static error_code operator()(T& v, const boost::json::value& j) {
     // требования проверяются выше, а больше кроме требований и значения в этом типе ничего нет
     return from_tokens_parser(get_special_field(v), tok, r);
   }
 };
 
-template <a_not_a T>
+template <cxx_support::a_string_enum T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    // требования проверяются выше, а больше кроме требований и значения в этом типе ничего нет
-    return from_tokens_parser(get_special_field(v), tok, r);
-  }
-};
-
-template <a_string_enum T>
-struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code&) {
+  static error_code operator()(T& v, const boost::json::value& j) {
     // по сути парсер для строки + встроенная валидация
     tok.expect(sax_token::string);
     std::string_view str = tok.get_str();
@@ -58,9 +45,9 @@ struct from_json_value<T> {
   }
 };
 
-template <an_enum T>
+template <cxx_support::an_enum T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code&) {
+  static error_code operator()(T& v, const boost::json::value& j) {
     using underlying = std::decay_t<decltype(get_special_field(v))>;
 
     auto invalid_value = [](auto&& v) {
@@ -108,70 +95,40 @@ struct from_json_value<T> {
   }
 };
 
-template <an_anyof T>
+template <cxx_support::an_anyof T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    return from_tokens_fallback(v, tok, r);
+  static error_code operator()(T& v, const boost::json::value& j) {
+    TODO;
   }
 };
 
-template <a_oneof T>
+template <cxx_support::a_oneof T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    return from_tokens_fallback(v, tok, r);
+  static error_code operator()(T& v, const boost::json::value& j) {
+    TODO;
   }
 };
 
-template <an_allof T>
+template <cxx_support::an_allof T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    return from_tokens_fallback(v, tok, r);
+  static error_code operator()(T& v, const boost::json::value& j) {
+    TODO;
   }
 };
 
-template <an_object T>
+template <cxx_support::an_object T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    // TODO здесь легко заменить фалбек
-    return from_tokens_fallback(v, tok, r);
+  static error_code operator()(T& v, const boost::json::value& j) {
+    TODO;
   }
 };
 
-template <a_body T>
+template <cxx_support::a_body T>
 struct from_json_value<T> {
-  static void parse(T& v, const boost::json::value& j, error_code& r) {
-    // TODO здесь легко заменить фалбек
-    return from_tokens_fallback(v, tok, r);
-  }
-};
-
-template <typename... Types>
-struct from_json_value<anyof<Types...>> {
-  static void parse(anyof<Types...>& v, const boost::json::value& j, error_code& r) {
-    return from_tokens_fallback(v, tok, r);
-  }
-};
-
-template <typename... Types>
-struct from_json_value<oneof<Types...>> {
-  static void parse(oneof<Types...>& v, const boost::json::value& j, error_code& r) {
-    return from_tokens_fallback(v, tok, r);
-  }
-};
-
-template <typename... Types>
-struct from_json_value<allof<Types...>> {
-  static void parse(allof<Types...>& v, const boost::json::value& j, error_code& r) {
-    return from_tokens_fallback(v, tok, r);
-  }
-};
-
-template <typename T>
-struct from_json_value<not_a<T>> {
-  static void parse(not_a<T>& v, const boost::json::value& j, error_code& r) {
-    // TODO вполне заменяется, единственная проблема это заменить исключение на еррор код
-    return from_tokens_fallback(v, tok, r);
+  static error_code operator()(T& v, const boost::json::value& j) {
+    TODO;
   }
 };
 #endif
+
 }  // namespace svarg
