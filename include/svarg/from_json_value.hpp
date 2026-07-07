@@ -55,7 +55,7 @@ T from_yaml(std::string_view str) {
       boost::json::parse(yaml2json(str), {}, boost::json::parse_options{.allow_comments = true}));
 }
 
-// специализации from_json_value
+// специализации
 
 template <>
 struct from_json_value<bool> {

@@ -9,7 +9,7 @@
 #include <boost/json/value.hpp>
 
 #include "svarg/utils/path_tools.hpp"
-#include "svarg/serialize.hpp"
+#include "svarg/to_json_value.hpp"
 #include "svarg/from_json_value.hpp"
 
 namespace svarg {

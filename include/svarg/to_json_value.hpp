@@ -51,6 +51,8 @@ template <typename T>
   return json2yaml(to_json_string(x, /*pretty=*/false));
 }
 
+// специализации
+
 template <>
 struct to_json_value<bool> {
   boost::json::value operator()(bool v) const {

@@ -1,6 +1,6 @@
 #include "svarg/frontend/openapi/openapi.hpp"
 #include <moko3/moko3.hpp>
-#include "svarg/serialize.hpp"
+#include "svarg/to_json_value.hpp"
 #include "svarg/frontend/openapi/generate_ir.hpp"
 #include "svarg/utils/json_pretty.hpp"
 #include <fstream>

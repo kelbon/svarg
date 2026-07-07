@@ -4,7 +4,7 @@
 #include <variant>
 
 #include "svarg/common_types.hpp"
-#include "svarg/serialize.hpp"
+#include "svarg/to_json_value.hpp"
 #include "svarg/utils/parse_ref.hpp"
 
 #include "svarg/utils/parse_frontend_or_ir_type.hpp"
