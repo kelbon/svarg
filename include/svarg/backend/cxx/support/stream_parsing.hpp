@@ -17,7 +17,7 @@ using tokens_consumer = omo::tokens_consumer;
 // НЕ делает валидацию. это происходит в логике уровнем выше
 template <typename T>
 struct from_tokens {
-  // static tokens_consumer parse(T& v, sax_token& ctx, dd::with_stack_resource r);
+  // static tokens_consumer operator()(T& v, sax_token& ctx, dd::with_stack_resource r);
 };
 
 // заглушка, которая неэффективно, но делает "потоковый" парсинг собирая json value и переиспользуя
@@ -37,7 +37,7 @@ tokens_consumer from_tokens_fallback(T& v, sax_token& tok, dd::with_stack_resour
 // а для подобъектов всегда parse_and_validate
 template <typename T>
 tokens_consumer from_tokens_parser(T& v, sax_token& tok, dd::with_stack_resource r) {
-  return from_tokens<T>::parse(v, tok, r);
+  return from_tokens<std::remove_cvref_t<T>>{}(v, tok, r);
 }
 
 template <typename T>

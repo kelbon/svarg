@@ -15,7 +15,7 @@ namespace svarg::cxx_support {
 
 template <>
 struct from_tokens<boolean> {
-  static tokens_consumer parse(bool& v, sax_token& tok, dd::with_stack_resource) {
+  static tokens_consumer operator()(bool& v, sax_token& tok, dd::with_stack_resource) {
     tok.expect(sax_token::bool_);
     v = tok.get_bool();
     return {};
@@ -24,7 +24,7 @@ struct from_tokens<boolean> {
 
 template <>
 struct from_tokens<std::string> {
-  static tokens_consumer parse(std::string& v, sax_token& tok, dd::with_stack_resource) {
+  static tokens_consumer operator()(std::string& v, sax_token& tok, dd::with_stack_resource) {
     tok.expect(sax_token::string);
     v = tok.get_str();
     return {};
@@ -34,7 +34,7 @@ struct from_tokens<std::string> {
 template <typename T>
   requires(std::integral<T>)
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     using enum sax_token::kind_e;
     switch (tok.kind()) {
       case int64:
@@ -52,7 +52,7 @@ struct from_tokens<T> {
 template <typename T>
   requires(std::floating_point<T>)
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     tok.expect(sax_token::double_);
     v = tok.get_double();
     return {};
@@ -61,7 +61,7 @@ struct from_tokens<T> {
 
 template <typename T>
 struct from_tokens<arrayof<T>> {
-  static tokens_consumer parse(arrayof<T>& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(arrayof<T>& v, sax_token& tok, dd::with_stack_resource r) {
     tok.expect(sax_token::array_begin);
     for (;;) {
       co_yield {};
@@ -74,7 +74,7 @@ struct from_tokens<arrayof<T>> {
 
 template <typename T>
 struct from_tokens<std::optional<T>> {
-  static tokens_consumer parse(std::optional<T>& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(std::optional<T>& v, sax_token& tok, dd::with_stack_resource r) {
     if (tok.kind() == sax_token::null) [[unlikely]]
       return {};
     return from_tokens_parser(v.emplace(), tok, r);
@@ -83,7 +83,7 @@ struct from_tokens<std::optional<T>> {
 
 template <typename T>
 struct from_tokens<metel::box<T>> {
-  static tokens_consumer parse(metel::box<T>& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(metel::box<T>& v, sax_token& tok, dd::with_stack_resource r) {
     if (tok.kind() == sax_token::null) [[unlikely]]
       return {};
     return from_tokens_parser(v.emplace(), tok, r);
@@ -92,7 +92,7 @@ struct from_tokens<metel::box<T>> {
 
 template <an_array T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     // требования проверяются выше, а больше кроме требований и значения в этом типе ничего нет
     return from_tokens_parser(get_special_field(v), tok, r);
   }
@@ -100,7 +100,7 @@ struct from_tokens<T> {
 
 template <a_not_a T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     // требования проверяются выше, а больше кроме требований и значения в этом типе ничего нет
     return from_tokens_parser(get_special_field(v), tok, r);
   }
@@ -108,7 +108,7 @@ struct from_tokens<T> {
 
 template <a_string_enum T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource) {
     // по сути парсер для строки + встроенная валидация
     tok.expect(sax_token::string);
     std::string_view str = tok.get_str();
@@ -123,7 +123,7 @@ struct from_tokens<T> {
 
 template <an_enum T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource) {
     using underlying = std::decay_t<decltype(get_special_field(v))>;
 
     auto invalid_value = [](auto&& v) {
@@ -173,28 +173,28 @@ struct from_tokens<T> {
 
 template <an_anyof T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     return from_tokens_fallback(v, tok, r);
   }
 };
 
 template <a_oneof T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     return from_tokens_fallback(v, tok, r);
   }
 };
 
 template <an_allof T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     return from_tokens_fallback(v, tok, r);
   }
 };
 
 template <an_object T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     // TODO здесь легко заменить фалбек
     return from_tokens_fallback(v, tok, r);
   }
@@ -202,7 +202,7 @@ struct from_tokens<T> {
 
 template <a_body T>
 struct from_tokens<T> {
-  static tokens_consumer parse(T& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
     // TODO здесь легко заменить фалбек
     return from_tokens_fallback(v, tok, r);
   }
@@ -210,28 +210,28 @@ struct from_tokens<T> {
 
 template <typename... Types>
 struct from_tokens<anyof<Types...>> {
-  static tokens_consumer parse(anyof<Types...>& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(anyof<Types...>& v, sax_token& tok, dd::with_stack_resource r) {
     return from_tokens_fallback(v, tok, r);
   }
 };
 
 template <typename... Types>
 struct from_tokens<oneof<Types...>> {
-  static tokens_consumer parse(oneof<Types...>& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(oneof<Types...>& v, sax_token& tok, dd::with_stack_resource r) {
     return from_tokens_fallback(v, tok, r);
   }
 };
 
 template <typename... Types>
 struct from_tokens<allof<Types...>> {
-  static tokens_consumer parse(allof<Types...>& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(allof<Types...>& v, sax_token& tok, dd::with_stack_resource r) {
     return from_tokens_fallback(v, tok, r);
   }
 };
 
 template <typename T>
 struct from_tokens<not_a<T>> {
-  static tokens_consumer parse(not_a<T>& v, sax_token& tok, dd::with_stack_resource r) {
+  static tokens_consumer operator()(not_a<T>& v, sax_token& tok, dd::with_stack_resource r) {
     // TODO вполне заменяется, единственная проблема это заменить исключение на еррор код
     return from_tokens_fallback(v, tok, r);
   }
