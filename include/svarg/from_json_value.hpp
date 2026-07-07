@@ -24,7 +24,7 @@ struct from_json_value {
 
 template <typename T>
 [[nodiscard]] error_code try_from_json(const boost::json::value& j, T& out) {
-  return from_json_value<T>{}(j, out);
+  return from_json_value<std::remove_volatile_t<T>>{}(j, out);
 }
 
 template <typename T>

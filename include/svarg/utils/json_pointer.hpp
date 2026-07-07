@@ -270,8 +270,8 @@ struct from_json_value<json_pointer> {
 };
 
 template <>
-struct serialize<json_pointer> {
-  boost::json::value operator()(const json_pointer& r) {
+struct to_json_value<json_pointer> {
+  boost::json::value operator()(const json_pointer& r) const {
     return boost::json::string(r.escaped());
   }
 };

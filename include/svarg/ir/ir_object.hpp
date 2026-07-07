@@ -772,22 +772,22 @@ struct from_json_value<ir::schema_type> {
 };
 
 template <>
-struct serialize<ir::content_type_t> {
-  boost::json::value operator()(const ir::content_type_t& r) {
+struct to_json_value<ir::content_type_t> {
+  boost::json::value operator()(const ir::content_type_t& r) const {
     return boost::json::string(r.str());
   }
 };
 
 template <>
-struct serialize<ir::response_status> {
-  boost::json::value operator()(const ir::response_status& r) {
+struct to_json_value<ir::response_status> {
+  boost::json::value operator()(const ir::response_status& r) const {
     return boost::json::string(r.to_string());
   }
 };
 
 template <>
-struct serialize<ir::schema_type> {
-  boost::json::value operator()(const ir::schema_type& s) {
+struct to_json_value<ir::schema_type> {
+  boost::json::value operator()(const ir::schema_type& s) const {
     boost::json::object obj;
     obj[s.discriminator()] = std::visit([](auto& x) { return to_json(x); }, s.data);
     return obj;

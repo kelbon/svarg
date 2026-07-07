@@ -15,19 +15,21 @@
 namespace svarg {
 
 template <typename T>
-struct serialize {};
+struct to_json_value {
+  // boost::json::value operator()(const T&) const;
+};
 
 template <typename E>
   requires(std::is_enum_v<E>)
-struct serialize<E> {
-  boost::json::value operator()(E v) {
+struct to_json_value<E> {
+  boost::json::value operator()(E v) const {
     return boost::json::string(e2str(v));
   }
 };
 
 template <typename T>
 [[nodiscard]] boost::json::value to_json(const T& x) {
-  return serialize<T>{}(x);
+  return to_json_value<std::remove_cvref_t<T>>{}(x);
 }
 
 [[nodiscard]] inline std::string to_json_string(const boost::json::value& v, bool pretty = true) {
@@ -50,50 +52,50 @@ template <typename T>
 }
 
 template <>
-struct serialize<bool> {
-  boost::json::value operator()(bool v) {
+struct to_json_value<bool> {
+  boost::json::value operator()(bool v) const {
     return v;
   }
 };
 
 template <>
-struct serialize<uint64_t> {
-  boost::json::value operator()(uint64_t v) {
+struct to_json_value<uint64_t> {
+  boost::json::value operator()(uint64_t v) const {
     return v;
   }
 };
 
 template <>
-struct serialize<int64_t> {
-  boost::json::value operator()(int64_t v) {
+struct to_json_value<int64_t> {
+  boost::json::value operator()(int64_t v) const {
     return v;
   }
 };
 
 template <>
-struct serialize<string> {
-  boost::json::value operator()(const string& v) {
+struct to_json_value<string> {
+  boost::json::value operator()(const string& v) const {
     return boost::json::string(v);
   }
 };
 
 template <>
-struct serialize<number> {
-  boost::json::value operator()(const number& v) {
+struct to_json_value<number> {
+  boost::json::value operator()(const number& v) const {
     return std::visit([](auto x) -> boost::json::value { return x; }, v.data);
   }
 };
 
 template <>
-struct serialize<Any> {
-  boost::json::value operator()(const Any& v) {
+struct to_json_value<Any> {
+  boost::json::value operator()(const Any& v) const {
     return v.value;
   }
 };
 
 template <typename T>
-struct serialize<arrayof<T>> {
-  boost::json::value operator()(const arrayof<T>& arr) {
+struct to_json_value<arrayof<T>> {
+  boost::json::value operator()(const arrayof<T>& arr) const {
     boost::json::array out;
     out.reserve(arr.size());
     for (const auto& elem : arr)
@@ -103,8 +105,8 @@ struct serialize<arrayof<T>> {
 };
 
 template <typename... Types>
-struct serialize<std::unordered_map<Types...>> {
-  boost::json::value operator()(const std::unordered_map<Types...>& map) {
+struct to_json_value<std::unordered_map<Types...>> {
+  boost::json::value operator()(const std::unordered_map<Types...>& map) const {
     boost::json::object out;
     for (const auto& [key, val] : map)
       out.emplace(key, to_json(val));
@@ -113,8 +115,8 @@ struct serialize<std::unordered_map<Types...>> {
 };
 
 template <typename... Types>
-struct serialize<std::map<Types...>> {
-  boost::json::value operator()(const std::map<Types...>& map) {
+struct to_json_value<std::map<Types...>> {
+  boost::json::value operator()(const std::map<Types...>& map) const {
     boost::json::object out;
     for (const auto& [key, val] : map)
       out.emplace(key, to_json(val));
@@ -123,9 +125,9 @@ struct serialize<std::map<Types...>> {
 };
 
 template <typename T>
-struct serialize<optional<T>> {
+struct to_json_value<optional<T>> {
   // возвращает null если пусто, иначе сериализует значение
-  boost::json::value operator()(const optional<T>& opt) {
+  boost::json::value operator()(const optional<T>& opt) const {
     if (!opt)
       return nullptr;
     return to_json(*opt);
@@ -133,9 +135,9 @@ struct serialize<optional<T>> {
 };
 
 template <typename T>
-struct serialize<std::optional<T>> {
+struct to_json_value<std::optional<T>> {
   // возвращает null если пусто, иначе сериализует значение
-  boost::json::value operator()(const std::optional<T>& opt) {
+  boost::json::value operator()(const std::optional<T>& opt) const {
     if (!opt)
       return nullptr;
     return to_json(*opt);
@@ -143,8 +145,8 @@ struct serialize<std::optional<T>> {
 };
 
 template <typename T>
-struct serialize<one_or_array<T>> {
-  boost::json::value operator()(const one_or_array<T>& v) {
+struct to_json_value<one_or_array<T>> {
+  boost::json::value operator()(const one_or_array<T>& v) const {
     if (v.values.size() == 1)
       return to_json(v.values[0]);
     return to_json(v.values);
@@ -152,8 +154,8 @@ struct serialize<one_or_array<T>> {
 };
 
 template <typename... Types>
-struct serialize<std::unordered_set<Types...>> {
-  boost::json::value operator()(const std::unordered_set<Types...>& r) {
+struct to_json_value<std::unordered_set<Types...>> {
+  boost::json::value operator()(const std::unordered_set<Types...>& r) const {
     boost::json::array out;
     out.reserve(r.size());
     for (const auto& elem : r)
@@ -163,8 +165,8 @@ struct serialize<std::unordered_set<Types...>> {
 };
 
 template <typename... Types>
-struct serialize<std::set<Types...>> {
-  boost::json::value operator()(const std::set<Types...>& r) {
+struct to_json_value<std::set<Types...>> {
+  boost::json::value operator()(const std::set<Types...>& r) const {
     boost::json::array out;
     out.reserve(r.size());
     for (const auto& elem : r)
@@ -203,10 +205,10 @@ void serialize_all_fields(const T& in, boost::json::object& out, std::index_sequ
 }  // namespace noexport
 
 template <front_or_ir_type T>
-struct serialize<T> {
+struct to_json_value<T> {
   static_assert(std::is_same_v<T, std::decay_t<T>>);
 
-  boost::json::value operator()(const T& in) {
+  boost::json::value operator()(const T& in) const {
     // костыль для schema_object
     if constexpr (requires { in._keyfield_boolean_schema; }) {
       if (in._keyfield_boolean_schema.has_value())

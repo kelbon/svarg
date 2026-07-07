@@ -428,14 +428,14 @@ struct from_json_value<responses_object> {
 };
 
 template <>
-struct serialize<responses_object> {
-  boost::json::value operator()(const responses_object& in) {
+struct to_json_value<responses_object> {
+  boost::json::value operator()(const responses_object& in) const {
     // собираем всё обратно в плоскую string_map
     boost::json::object out;
     if (in.default_.has_value())
-      out.emplace("default", serialize<reference_or<response_object>>{}(*in.default_));
+      out.emplace("default", to_json(*in.default_));
     for (const auto& [code, resp] : in._responses)
-      out.emplace(code, serialize<reference_or<response_object>>{}(resp));
+      out.emplace(code, to_json(resp));
     return out;
   }
 };

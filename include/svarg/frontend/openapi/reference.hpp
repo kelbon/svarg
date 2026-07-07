@@ -127,8 +127,8 @@ struct from_json_value<reference_or<T>> {
 };
 
 template <typename T>
-struct serialize<reference_or<T>> {
-  boost::json::value operator()(const reference_or<T>& v) {
+struct to_json_value<reference_or<T>> {
+  boost::json::value operator()(const reference_or<T>& v) const {
     return v.visit([](const auto& x) -> boost::json::value { return to_json(x); });
   }
 };
