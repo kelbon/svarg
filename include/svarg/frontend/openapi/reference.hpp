@@ -7,13 +7,11 @@
 #include "svarg/serialize.hpp"
 #include "svarg/utils/parse_ref.hpp"
 
+#include "svarg/utils/parse_frontend_or_ir_type.hpp"
+
 namespace svarg {
 
-// data types
-
-// integer, string, number
-
-// formats
+// TODO support formats
 // int32, int64, float, double, password, ... и тд может быть определено пользователем (data ещё, но видимо
 // убрали в новой версии)
 

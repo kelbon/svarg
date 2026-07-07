@@ -7,7 +7,7 @@
 #include "svarg/utils/type_name.hpp"
 #include "svarg/utils/unescape_field_name.hpp"
 #include "svarg/validate.hpp"
-#include "svarg/parse.hpp"
+#include "svarg/from_json_value.hpp"
 
 namespace svarg {
 
@@ -56,6 +56,20 @@ error_code parse_all_fields(const boost::json::object& obj, T& out, std::index_s
 }
 
 }  // namespace noexport
+
+// TODO складывать такие поля в meta
+template <front_or_ir_type>
+struct allow_additional_field {
+  [[nodiscard]] static bool allow(std::string_view name) noexcept {
+    // https://spec.openapis.org/oas/v3.1.0#specification-extensions
+    return name.starts_with("x-");
+  }
+};
+
+template <typename T>
+concept parsable_even_from_not_object = front_or_ir_type<T> && requires(const boost::json::value& v, T& out) {
+  { T::parse_if_not_object(v, out) } -> std::same_as<error_code>;
+};
 
 template <front_or_ir_type T>
 struct from_json_value<T> {

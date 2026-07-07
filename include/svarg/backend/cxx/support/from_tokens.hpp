@@ -72,11 +72,9 @@ struct from_tokens<arrayof<T>> {
   }
 };
 
-template <typename Optional>
-struct optional_parser_base {
-  using T = typename Optional::value_type;
-
-  static tokens_consumer parse(Optional& v, sax_token& tok, dd::with_stack_resource r) {
+template <typename T>
+struct from_tokens<std::optional<T>> {
+  static tokens_consumer parse(std::optional<T>& v, sax_token& tok, dd::with_stack_resource r) {
     if (tok.kind() == sax_token::null) [[unlikely]]
       return {};
     return from_tokens_parser(v.emplace(), tok, r);
@@ -84,10 +82,13 @@ struct optional_parser_base {
 };
 
 template <typename T>
-struct from_tokens<std::optional<T>> : optional_parser_base<std::optional<T>> {};
-
-template <typename T>
-struct from_tokens<metel::box<T>> : optional_parser_base<metel::box<T>> {};
+struct from_tokens<metel::box<T>> {
+  static tokens_consumer parse(metel::box<T>& v, sax_token& tok, dd::with_stack_resource r) {
+    if (tok.kind() == sax_token::null) [[unlikely]]
+      return {};
+    return from_tokens_parser(v.emplace(), tok, r);
+  }
+};
 
 template <an_array T>
 struct from_tokens<T> {

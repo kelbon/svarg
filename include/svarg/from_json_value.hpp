@@ -22,20 +22,6 @@ struct from_json_value {
   // error_code operator()(const boost::json::value&, T& out)
 };
 
-// TODO складывать такие поля в meta
-template <typename>
-struct allow_additional_field {
-  [[nodiscard]] static bool allow(std::string_view name) noexcept {
-    // https://spec.openapis.org/oas/v3.1.0#specification-extensions
-    return name.starts_with("x-");
-  }
-};
-
-template <typename T>
-concept parsable_even_from_not_object = front_or_ir_type<T> && requires(const boost::json::value& v, T& out) {
-  { T::parse_if_not_object(v, out) } -> std::same_as<error_code>;
-};
-
 template <typename T>
 [[nodiscard]] error_code try_from_json(const boost::json::value& j, T& out) {
   return from_json_value<T>{}(j, out);
