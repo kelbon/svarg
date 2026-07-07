@@ -144,7 +144,7 @@ struct discriminator_desc {
   string propertyName;
   // при конвертации с фронтенда здесь оказывается полный маппинг
   // значение дискриминатора => ссылка на тип который ему соответствует
-  ordered_string_map<schema_ref> mapping;
+  string_map<schema_ref> mapping;
 };
 
 struct oneof_schema {
@@ -179,7 +179,7 @@ struct object_field_info {
 
 struct object_schema {
   array<object_field_info> fields;
-  std::optional<schema_ref> additional_fields;
+  std::optional<schema_ref> additional_properties;
 };
 
 struct array_schema {
@@ -383,7 +383,7 @@ struct schema {
 // все ключи должны быть is_meta_key(key)
 // хранилище разных вспомогательных тегов, которые фронтенд хочет прокинуть бекенду
 // н-р deprecated или формат query и тд
-using meta_t = ordered_string_map<Any>;
+using meta_t = string_map<Any>;
 
 struct content_type_t {
  private:
@@ -483,7 +483,7 @@ struct body {
   schema_ref schema;
   // мапа имя property из schema => как его кодировать конкретно в этом теле
   // application/json и тд контент типы
-  std::optional<ordered_string_map<content_type_t>> membersEncoding;
+  std::optional<string_map<content_type_t>> membersEncoding;
   // означает, что schema применяется не ко всему телу, а к единице стрима
   // (например openapi 3.2 itemsSchema)
   // по умолчанию false

@@ -159,7 +159,12 @@ using all_required_schemas_t = decltype(noexport::typelist_rm<std::decay_t<T>>(
     noexport::all_required_schemas<std::decay_t<T>>(metel::typelist<>{})));
 
 template <typename T>
-constexpr bool has_additional_fields = !std::same_as<typename std::decay_t<T>::additional_fields, void>;
+constexpr bool has_additional_fields = [] {
+  if constexpr (requires { typename T::additional_fields_type; }) {
+    return !std::is_void_v<typename T::additional_fields_type>;
+  } else
+    return false;
+}();
 
 template <typename T>
 concept has_parse_tag = requires {

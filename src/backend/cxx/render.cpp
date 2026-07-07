@@ -157,8 +157,8 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
       [&](const ir::not_schema& a) { return collect(a.type); },
       [&](const ir::enum_schema& a) { return collect(a.type); },
       [&](const ir::object_schema& a) {
-        if (a.additional_fields)
-          collect(*a.additional_fields);
+        if (a.additional_properties)
+          collect(*a.additional_properties);
         for (auto& f : a.fields)
           collect(f.type);
         return;
@@ -306,28 +306,32 @@ std::string renderer::render_object_field(const ir::object_field_info& field, st
 std::string renderer::render_object_fields(const array<ir::object_field_info>& fields,
                                            std::string_view relspec, const json_pointer& relative,
                                            std::optional<ir::schema_ref> fields_owner,
-                                           std::optional<ir::schema_ref> additional_fields) const {
+                                           std::optional<ir::schema_ref> additional_properties) const {
+  auto is_recursive = [&](const ir::schema_ref& r) {
+    return fields_owner ? is_recursive_field(schemaof(*fields_owner), r) : false;
+  };
+
   std::string result;
   for (auto&& f : fields) {
     if (f.required) {
-      result += render_object_field(
-          f, relspec, relative, fields_owner ? is_recursive_field(schemaof(*fields_owner), f.type) : false);
+      result += render_object_field(f, relspec, relative, is_recursive(f.type));
       result += ";\n";
     }
   }
   // затем опциональные
   for (auto&& f : fields) {
     if (!f.required) {
-      result += render_object_field(
-          f, relspec, relative, fields_owner ? is_recursive_field(schemaof(*fields_owner), f.type) : false);
+      result += render_object_field(f, relspec, relative, is_recursive(f.type));
       result += ";\n";
     }
   }
-  if (!additional_fields) {
-    result += "\nusing additional_fields = void;\n\n";
+  if (!additional_properties || additional_properties->is_fundamental(ir::fundamental_e::never)) {
+    result += "\nusing additional_fields_type = void;\n\n";
   } else {
-    result += std::format("\nusing additional_fields = {};\n\n",
-                          render_schema_ref(*additional_fields, relspec, relative).typeref);
+    result += std::format("\nusing additional_properties_type = {};\n\n",
+                          render_schema_ref(*additional_properties, relspec, relative).typeref);
+    // TODO обработать возможное пересечение имён с обычными полями
+    result += "additional_properties_t<additional_properties_type> _additional_properties;\n\n";
   }
   result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
   for (auto&& f : fields) {
@@ -415,8 +419,8 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
       },
       [&](const ir::object_schema& a) -> std::string {
         std::string result = render_parse_tag(cxx_support::parse_tag_e::object);
-        result +=
-            render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(), a.additional_fields);
+        result += render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(),
+                                       a.additional_properties);
         return result;
       },
   };
@@ -600,7 +604,7 @@ static std::string render_parameters(const auto& params, std::string_view relspe
   string s;
 
   s += ren.render_object_fields(as_object_fields(params), relspec, relative, /*fields_owner=*/std::nullopt,
-                                /*additional_fields=*/std::nullopt);
+                                /*additional_properties=*/std::nullopt);
 
   std::string encoding;
   for (const ir::operation_parameter& p : params) {

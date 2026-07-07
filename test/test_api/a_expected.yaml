@@ -71,7 +71,7 @@
               "spec": "@string@"
             "name": "name"
             "required": false
-        "additional_fields":
+        "additional_properties":
           "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"

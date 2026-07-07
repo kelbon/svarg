@@ -57,7 +57,7 @@
               "jsonptr": "/components/schemas/UserPatch/properties/name"
             "name": "name"
             "required": false
-        "additional_fields":
+        "additional_properties":
           "spec": "@any@"
   - "spec": "api-a.yaml"
     "jsonptr": "/components/schemas/User/properties/favoriteItem"

@@ -231,7 +231,7 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
     }
   }
   if (schema.additionalProperties) {
-    ot.additional_fields =
+    ot.additional_properties =
         resolve_schema(*schema.additionalProperties, file, jp / "additionalProperties", *this).ir_schema;
   }
   return ot;
@@ -563,6 +563,18 @@ struct schemas_collector {
 
   template <typename... Types>
   void operator()(std::string_view name, const std::unordered_map<Types...>& f) try {
+    dbgprint(name);
+    currentjp.add_key(name);
+    on_scope_exit {
+      currentjp.rm_last_segment();
+    };
+    for (auto& [key, v] : f)
+      recursion(std::string_view(key), v);
+  }
+  SVARG_ADD_EXCEPTION_INFO(parse_error, name)
+
+  template <typename... Types>
+  void operator()(std::string_view name, const std::map<Types...>& f) try {
     dbgprint(name);
     currentjp.add_key(name);
     on_scope_exit {

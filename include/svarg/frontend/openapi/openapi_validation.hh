@@ -347,8 +347,8 @@ struct postparse<schema_object> {
       // чтобы не получался пустой массив типов
       if (schema.type->empty())
         schema.type.reset();
-    } else if (schema.properties || schema.required || schema.additionalProperties) {
-      // TODO dependentRequired / minProperties / maxProperties это тоже неявный объект
+    } else if (schema.properties || schema.required || schema.additionalProperties ||
+               schema.dependentRequired || schema.minProperties || schema.maxProperties) {
       schema.type.emplace().values.push_back("object");
     }
     if (schema.is_write_only() && schema.is_read_only()) {

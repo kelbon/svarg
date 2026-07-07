@@ -74,11 +74,12 @@ struct renderer {
   std::string render_optional_field(const ir::schema_ref&, std::string_view name, std::string_view relspec,
                                     const json_pointer& relative, bool recursive) const;
 
-  // генерирует поля (сначала требуемые, затем опциональные), is_required, using additional_fields = ...
+  // генерирует поля (сначала требуемые, затем опциональные), is_required, using additional_properties = ..
+  // и если есть дополнительные поля, генерирует поле _additional_properties
   // TODO? геттеры и сеттеры
   std::string render_object_fields(const array<ir::object_field_info>& fields, std::string_view relspec,
                                    const json_pointer& relative, std::optional<ir::schema_ref> fields_owner,
-                                   std::optional<ir::schema_ref> additional_fields) const;
+                                   std::optional<ir::schema_ref> additional_properties) const;
 
   std::string render_object_field(const ir::object_field_info&, std::string_view relspec,
                                   const json_pointer& relative, bool recursive_field) const;

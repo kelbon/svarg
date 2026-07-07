@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <map>
 
 namespace svarg {
 
@@ -9,6 +10,15 @@ namespace svarg {
 template <typename... Args>
 [[nodiscard]] std::unordered_map<Args...> merge_with_override(std::unordered_map<Args...> a,
                                                               std::unordered_map<Args...> b) {
+  // удаляем все возможно дублирующиеся ключи из Б в А
+  for (auto& [k, _] : b)
+    a.erase(k);
+  a.merge(std::move(b));
+  return a;
+}
+
+template <typename... Args>
+[[nodiscard]] std::map<Args...> merge_with_override(std::map<Args...> a, std::map<Args...> b) {
   // удаляем все возможно дублирующиеся ключи из Б в А
   for (auto& [k, _] : b)
     a.erase(k);
