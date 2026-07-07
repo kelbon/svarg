@@ -4,6 +4,7 @@
 #include <boost/container_hash/hash.hpp>
 #include <set>  // используется для стабильности вывода вместо unordered_set
 
+#include "svarg/frontend/parameter_location.hpp"
 #include "svarg/utils/algo.hpp"
 #include "svarg/utils/forward_like.hpp"
 #include "svarg/utils/path_tools.hpp"
@@ -12,6 +13,7 @@
 #include "svarg/utils/combined_hash.hpp"
 #include "svarg/utils/from_chars.hpp"
 #include "svarg/utils/matcher.hpp"
+#include "svarg/utils/parse_frontend_or_ir_type.hpp"
 
 namespace svarg::ir {
 

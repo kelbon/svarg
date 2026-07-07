@@ -16,21 +16,9 @@ namespace svarg {
 
 namespace fs = std::filesystem;
 
-enum struct parameter_location : uint8_t {
-  path,
-  query,
-  header,
-  cookie,
-  // TODO querystring (openapi 3.2)?
-};
-
-std::string_view e2str(parameter_location l) noexcept;
 inline std::string_view e2str(boost::json::kind k) {
   return boost::json::to_string(k);
 }
-
-// возвращает false при ошибке
-[[nodiscard]] bool efromstr(std::string_view s, parameter_location& out);
 
 struct Any {
   boost::json::value value;
@@ -109,5 +97,3 @@ inline constexpr std::string_view e2str(status_range_e e) {
 }
 
 }  // namespace svarg
-
-#include "svarg/utils/parse_json.hh"

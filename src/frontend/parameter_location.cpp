@@ -1,6 +1,4 @@
-#include "svarg/common_types.hpp"
-
-#include "svarg/errors.hpp"
+#include "svarg/frontend/parameter_location.hpp"
 
 namespace svarg {
 

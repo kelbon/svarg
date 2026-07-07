@@ -10,6 +10,7 @@
 
 #include "svarg/utils/path_tools.hpp"
 #include "svarg/serialize.hpp"
+#include "svarg/parse.hpp"
 
 namespace svarg {
 

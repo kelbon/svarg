@@ -1,7 +1,9 @@
 #pragma once
 
+#include "svarg/frontend/parameter_location.hpp"
 #include "svarg/utils/all.hpp"
-#include "svarg/frontend/openapi/fundamental_types.hpp"
+#include "svarg/frontend/openapi/reference.hpp"
+#include "svarg/utils/parse_frontend_or_ir_type.hpp"  // IWYU pragma: keep (специализация для парсинга всех типов)
 
 #include <boost/json/serialize.hpp>
 #include <ranges>
@@ -264,8 +266,6 @@ struct schema_object {
     return readOnly && *readOnly;
   }
 };
-
-static_assert(parsable_even_from_not_object<schema_object>);
 
 template <>
 struct allow_additional_field<schema_object> {

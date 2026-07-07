@@ -1,15 +1,16 @@
 #pragma once
 
-#include <sstream>
+#include <set>
 
 #include <boost/pfr.hpp>
 #include <boost/json.hpp>
 #include <unordered_set>
 
 #include "svarg/common_types.hpp"
+#include "svarg/concepts.hpp"
 #include "svarg/utils/unescape_field_name.hpp"
 #include "svarg/utils/json_pretty.hpp"
-#include "svarg/utils/jsons_cache.hpp"
+#include "svarg/utils/yamljson.hpp"
 
 namespace svarg {
 
@@ -174,7 +175,7 @@ struct serialize<std::set<Types...>> {
 
 namespace noexport {
 
-template <front_or_ir_type T, size_t I>
+template <typename T, size_t I>
 void serialize_field(const T& in, boost::json::object& out) {
   constexpr std::string_view raw_name = boost::pfr::get_name<I, T>();
   constexpr std::string_view name = unescape_field_name(raw_name);

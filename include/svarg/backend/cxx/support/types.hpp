@@ -17,10 +17,8 @@ struct null {
 
 using integer = int64_t;
 using number = ::svarg::number;
+using ::svarg::arrayof;
 using boolean = bool;
-
-template <typename T>
-using arrayof = std::vector<T>;
 
 template <typename T>
 using additional_fields_t = string_map<T>;

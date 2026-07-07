@@ -5,6 +5,8 @@
 #include <set>
 #include "svarg/frontend/openapi/openapi_object.hpp"
 
+#include "svarg/validate.hpp"
+
 namespace svarg {
 
 // https://spec.openapis.org/oas/v3.1.0#fixed-fields-2

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "svarg/frontend/parameter_location.hpp"
 #include "svarg/ir/ir_object.hpp"
 
 namespace svarg::ir {

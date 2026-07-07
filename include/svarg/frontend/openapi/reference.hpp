@@ -39,10 +39,9 @@ struct reference_object {
   }
 };
 
-// TODO frontend type
 template <typename T>
 struct reference_or : private std::variant<reference_object, T> {
-  SVARG_FRONTEND_TYPE;
+  // не отмечено, так как вспомогательный тип SVARG_FRONTEND_TYPE;
 
   static_assert(!std::is_same_v<T, reference_object>);
 
