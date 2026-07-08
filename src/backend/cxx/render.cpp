@@ -4,10 +4,11 @@
 #include "svarg/errors.hpp"
 #include "svarg/ir/ir_visitor.hpp"
 
-#include "svarg/backend/cxx/support/types.hpp"
-#include "svarg/backend/cxx/support/concepts.hpp"
+#include "svarg/backend/cxx/support/utility_for_generated.hpp"
 
 namespace svarg::cxx {
+
+using cxx_support::special_field_name;
 
 // используется для опциональных полей
 static constexpr std::string_view optional_str = "std::optional";
@@ -41,15 +42,6 @@ static constexpr std::string_view operation_file_begin = R"(
 // добавляется в конце каждой схемы
 static constexpr std::string_view operation_file_end = "";
 static constexpr std::string_view typelist_str = "typelist";
-
-// используется как имя когда есть полутривиальные объекты с одним полем, которые не алиасы только потому
-// что у них есть дополнительные требования или дискриминатор и тд
-// например итоговая структура будет
-// struct Name {
-//    anyof<A, B, C> <special_field_name>; using
-//    required_schemas = <typelist_str><...>:
-// };
-static constexpr std::string_view special_field_name = "data";
 
 static std::string make_cxx_ident(std::string_view str, const render_options& options) {
   return options.simple_cxx_identifiers ? to_cxx_ident_simple(str) : to_cxx_ident(str);
@@ -199,16 +191,28 @@ schema_ref_result renderer::render_fundamental_type(const ir::fundamental_e f) c
 
 std::string renderer::render_discriminator(const ir::discriminator_desc& d, std::string_view relspec,
                                            const json_pointer& relative) const {
+  // discriminator_field
   std::string result = std::format("\nstatic constexpr inline std::string_view discriminator_field = {};\n\n",
                                    render_string(d.propertyName));
   result += "// `vtor` must accept type, e.g. []<typename X>() { ... }";
-  result += "decltype(auto) discriminate(std::string_view str, auto&& vtor) {\n";
+  // discriminate
+  result += "static decltype(auto) discriminate(std::string_view str, auto&& vtor) {\n";
   for (auto&& [str, type] : d.mapping) {
-    result += std::format("if (str == {}) {{ return vtor.template operator()<{}>(); }}\n", str,
+    result += std::format("if (str == {}) {{ return vtor.template operator()<{}>(); }}\n", render_string(str),
                           render_schema_ref(type, relspec, relative).typeref);
   }
   result += "return vtor.template operator()<void>();\n";
   result += "}\n";
+
+  // discriminator_for
+  result += "template<typename T> static std::string_view discriminator_for() {\n";
+  for (auto&& [str, type] : d.mapping) {
+    result += std::format("if constexpr (std::is_same_v<T, {}>) {{ return std::string_view({}); }}\n",
+                          render_schema_ref(type, relspec, relative).typeref, render_string(str));
+  }
+  result += "return std::string_view{};\n";
+  result += "}\n";
+
   return result;
 }
 
@@ -388,6 +392,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           for (auto&& v : e.values)
             result += std::format("{},", make_cxx_ident(std::string_view(v.value.as_string()), options));
           result += "};\nusing enum values_e;\n\n";  // end values_e
+          // возможное пересечение имён using enum / special_field_name игнорируется
           result += std::format("values_e {};\n\n", special_field_name);
         } else {
           result += render_parse_tag(cxx_support::parse_tag_e::enum_);

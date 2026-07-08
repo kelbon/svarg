@@ -97,38 +97,6 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
 template <typename T>
 constexpr bool has_required_schemas = requires { typename T::required_schemas; };
 
-namespace noexport {
-
-// пример функции для концепта. (лямбда в require сломает компилятор)
-struct noop_fn {
-  template <typename>
-  void operator()() {
-  }
-};
-
-}  // namespace noexport
-
-template <typename T>
-constexpr bool has_additional_properties = [] {
-  if constexpr (requires { typename T::additional_properties_type; })
-    return !std::is_void_v<typename T::additional_properties_type>;
-  else
-    return false;
-}();
-
-template <typename T>
-using additional_properties_schema_t = typename std::decay_t<T>::additional_properties_type;
-
-constexpr inline std::string_view additional_properties_schema_alias_name = "additional_properties_type";
-constexpr inline std::string_view additional_properties_field_name = "_additional_properties";
-
-template <typename T>
-constexpr auto& get_additional_properties(T& x) noexcept {
-  static_assert(std::is_same_v<decltype(x._additional_properties),
-                               additional_properties_t<additional_properties_schema_t<T>>>);
-  return x._additional_properties;
-}
-
 template <typename T>
 concept has_parse_tag = requires {
   { std::decay_t<T>::parse_tag } -> std::same_as<const parse_tag_e&>;
@@ -141,6 +109,17 @@ constexpr bool tagged_as(parse_tag_e t) noexcept {
   else
     return false;
 }
+
+namespace noexport {
+
+// пример функции для концепта. (лямбда в require сломает компилятор)
+struct noop_fn {
+  template <typename>
+  void operator()() {
+  }
+};
+
+}  // namespace noexport
 
 // oneof/anyof
 template <typename T>
@@ -236,30 +215,5 @@ concept serialize_tokens_consumer =
 // видимо прокидывать
 
 // TODO условное serialize/parse parameter должно принимать стиль/формат помимо самой штуки
-
-// утилиты для сериализации и парсинга
-
-template <typename T>
-[[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
-  static_assert(boost::pfr::tuple_size_v<T> == 1);
-  // <special_field_name>
-  return in.data;
-}
-
-template <typename T>
-consteval bool valid_generated_object() {
-  static_assert(metel::is_decayed_v<T>);
-  if (!an_object<T>)
-    return false;
-
-  if constexpr (has_additional_properties<T>) {
-    // лежит последним полем и с правильным типом
-    return boost::pfr::get_name<boost::pfr::tuple_size_v<T> - 1>() ==
-               additional_properties_schema_alias_name &&
-           std::is_same_v<boost::pfr::tuple_element_t<boost::pfr::tuple_size_v<T> - 1, T>,
-                          additional_properties_schema_t<T>>;
-  }
-  return true;
-}
 
 }  // namespace svarg::cxx_support

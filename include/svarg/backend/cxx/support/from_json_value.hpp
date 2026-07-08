@@ -9,7 +9,12 @@
 #include "svarg/backend/cxx/support/concepts.hpp"
 #include "svarg/backend/cxx/support/validate.hpp"
 
+#include "svarg/backend/cxx/support/utility_for_generated.hpp"
+
 namespace svarg {
+
+using cxx_support::get_special_field;
+using cxx_support::object_fields_count;
 
 template <cxx_support::an_array T>
 struct from_json_value<T> {
@@ -172,34 +177,6 @@ struct from_json_value<T> {
 };
 
 template <aggregate A>
-constexpr size_t object_fields_count() {
-  // дополнительные лежат всегда последним полем и их нужно здесь игнорировать
-  constexpr bool ignore_last_field = cxx_support::an_object<A> && cxx_support::has_additional_properties<A>();
-  return boost::pfr::tuple_size_v<A> - size_t(ignore_last_field);
-}
-
-template <aggregate A>
-std::optional<size_t> get_field_index(std::string_view field_name) {
-  auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
-    using switch_t = ss::string_switch<size_t>;
-    return (switch_t(field_name) | ... | switch_t::case_t(boost::pfr::get_name<Is, A>(), Is)).or_nullopt();
-  };
-  return helper(std::make_index_sequence<object_fields_count<A>()>{});
-}
-
-// возвращает битовую маску где единицы расставлены на места требуемых полей
-template <cxx_support::an_object O>
-consteval std::bitset<object_fields_count<O>()> get_required_bits_mask() {
-  std::bitset<object_fields_count<O>()> mask;
-
-  auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
-    (mask.set(Is, O::is_required(boost::pfr::get_name<Is, O>())), ...);
-  };
-  helper(std::make_index_sequence<object_fields_count<O>()>{});
-  return mask;
-}
-
-template <aggregate A>
 error_code aggregate_from_json(A& v, const boost::json::value& j) {
   const auto* obj = v.if_object();
   error_code ec;
@@ -210,7 +187,7 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
   std::bitset<object_fields_count<A>()> parsed = {};
 
   for (auto&& [key, value] : *obj) {
-    std::optional<size_t> i = get_field_index<A>(key);
+    std::optional<size_t> i = cxx_support::get_field_index<A>(key);
     if (i) {
       metel::visit_index<object_fields_count<A>()>([&]<size_t I>() {
         if constexpr (A::is_required(boost::pfr::get_name<I, A>()))
@@ -231,7 +208,7 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
       }
     }
   }
-  constexpr std::bitset required_bits_mask = get_required_bits_mask<A>();
+  constexpr std::bitset required_bits_mask = cxx_support::get_required_bits_mask<A>();
   if ((parsed & required_bits_mask) != required_bits_mask) {
     ec = parse_error("not all required fields of type `{}` parsed", type_name<A>());
     return ec;
@@ -252,14 +229,10 @@ struct from_json_value<T> {
 
 template <cxx_support::a_body T>
 struct from_json_value<T> {
-  // сознательно игнорируем content_type, на случай если кто-то захотел сериализовать как json тело с каким-то
-  // другим медиа типом
   static error_code operator()(T& v, const boost::json::value& j) {
     // encoding игнорируется, так как для application/json не имеет смысла
     return try_from_json(cxx_support::get_special_field(v), j);
   }
 };
-
-// TODO to_json
 
 }  // namespace svarg
