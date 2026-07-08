@@ -23,7 +23,7 @@ static constexpr std::string_view array_str = "arrayof";
 // куда вставлять аргумент 'not' из openapi
 static constexpr std::string_view not_str = "not_a";
 // для схемы без имени. Она будет в отдельном уникальном неймспейсе с этим именем
-static constexpr std::string_view inline_schema_name = "schema";
+static constexpr std::string_view inline_schema_name = "_schema";
 // добавляется в начале каждой схемы
 static constexpr std::string_view schema_file_begin = R"(
 #pragma once
@@ -141,7 +141,7 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
       collect(ref);
   };
   matcher collector{
-      [](const ir::fundamental_e&) { std::unreachable(); },
+      [](const ir::fundamental_e&) { metel::unreachable(); },
       [&](const ir::array_schema& a) { return collect(a.element); },
       [&](const ir::allof_schema& a) { return collect_all(a.schemas); },
       [&](const ir::anyof_schema& a) { return collect_all(a.schemas); },
@@ -216,6 +216,41 @@ std::string renderer::render_discriminator(const ir::discriminator_desc& d, std:
   return result;
 }
 
+std::string renderer::render_special_field_type(const ir::schema_type& type, std::string_view relspec,
+                                                const json_pointer& relative) const {
+  matcher vtor{
+      [&](const ir::fundamental_e& e) -> std::string { return render_fundamental_type(e).typeref; },
+      [&](const ir::array_schema& a) {
+        return std::format("{}<{}>", array_str, render_schema_ref(a.element, relspec, relative).typeref);
+      },
+      [&](const ir::allof_schema& a) {
+        return std::format("{}<{}>", allof_str, render_schemas_array(a.schemas, relspec, relative));
+      },
+      [&](const ir::anyof_schema& a) {
+        if (a.discriminator)
+          return std::string{};  // нетривиальный
+        return std::format("{}<{}>", anyof_str, render_schemas_array(a.schemas, relspec, relative));
+      },
+      [&](const ir::oneof_schema& a) {
+        if (a.discriminator)
+          return std::string{};  // нетривиальный
+        return std::format("{}<{}>", oneof_str, render_schemas_array(a.schemas, relspec, relative));
+      },
+      [&](const ir::not_schema& a) {
+        return std::format("{}<{}>", not_str, render_schema_ref(a.type, relspec, relative).typeref);
+      },
+      [&](const ir::enum_schema&) -> std::string {
+        // enum всегда преобразуется в структуру, внутри которой values и (для строк) enum + using enum
+        return "";
+      },
+      [&](const ir::object_schema&) -> std::string {
+        // объект всегда не алиас
+        return "";
+      },
+  };
+  return std::visit(vtor, type.data);
+}
+
 schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::string_view relspec,
                                               const json_pointer& relative) const {
   if (s.is_fundamental())  // ссылка на фундаментал напрямую
@@ -225,44 +260,9 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   // именованные даже простые алиасы оставляем, например чтобы oneof<A, B, C,...> не дублировать во многих
   // местах. Если пользователь в спеке дал ему имя - значит так и хотел
   if (!t.name && !t.has_requirements()) {
-    if (auto* f = t.type.if_fundamental()) {
-      // t.is_trivial() == true
-      return render_fundamental_type(*f);
-    }
-
-    matcher vtor{
-        [](const ir::fundamental_e&) -> std::string { std::unreachable(); },
-        [&](const ir::array_schema& a) {
-          return std::format("{}<{}>", array_str, render_schema_ref(a.element, relspec, relative).typeref);
-        },
-        [&](const ir::allof_schema& a) {
-          return std::format("{}<{}>", allof_str, render_schemas_array(a.schemas, relspec, relative));
-        },
-        [&](const ir::anyof_schema& a) {
-          if (a.discriminator)
-            return std::string{};  // нетривиальный
-          return std::format("{}<{}>", anyof_str, render_schemas_array(a.schemas, relspec, relative));
-        },
-        [&](const ir::oneof_schema& a) {
-          if (a.discriminator)
-            return std::string{};  // нетривиальный
-          return std::format("{}<{}>", oneof_str, render_schemas_array(a.schemas, relspec, relative));
-        },
-        [&](const ir::not_schema& a) {
-          return std::format("{}<{}>", not_str, render_schema_ref(a.type, relspec, relative).typeref);
-        },
-        [&](const ir::enum_schema&) -> std::string {
-          // enum всегда преобразуется в структуру, внутри которой values и (для строк) enum + using enum
-          return "";
-        },
-        [&](const ir::object_schema&) -> std::string {
-          // объект всегда не алиас
-          return "";
-        },
-    };
-    std::string res = std::visit(vtor, t.type.data);
+    std::string res = render_special_field_type(t.type, relspec, relative);
     if (!res.empty())
-      return {.typeref = std::move(res), .is_alias = true};
+      return {.typeref = std::format("{} {};\n", res, special_field_name), .is_alias = true};
   }
   // всё остальное на выводе это полноценные struct
 
@@ -282,7 +282,7 @@ std::string renderer::render_optional_field(const ir::schema_ref& field, std::st
                                             bool recursive) const {
   // oneof раскрывается в box_union, который в себе уже скрывает
   // опциональность требуемость поля узнаётся из is_required
-  if (schemaof(field).type.is_oneof())
+  if (!field.is_fundamental() && schemaof(field).type.is_oneof())
     return std::format("{} {}", render_schema_ref(field, relspec, relative).typeref,
                        make_cxx_ident(name, options));
   std::string_view tempstr = recursive ? box_str : optional_str;
@@ -312,6 +312,8 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
                                            std::optional<ir::schema_ref> fields_owner,
                                            std::optional<ir::schema_ref> additional_properties) const {
   auto is_recursive = [&](const ir::schema_ref& r) {
+    if (r.is_fundamental())
+      return false;
     return fields_owner ? is_recursive_field(schemaof(*fields_owner), r) : false;
   };
 
@@ -351,32 +353,20 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
 
 // `typeref` - тип поля, если s полутривиальный объект
 std::string renderer::render_struct_content(const ir::schema& s, std::string typeref) const {
-  std::string field_str = std::format("{} {};", typeref, special_field_name);
+  auto make_field_str = [](std::string_view fieldtype) {
+    return std::format("{} {};", fieldtype, special_field_name);
+  };
+  // пытаемся алиас, для объектов и енамов возвращает пустую строку
+  std::string r = render_special_field_type(s.type, s.spec, s.jsonptr);
+  if (!r.empty())
+    return std::format("{} {};\n", r, special_field_name);
   matcher vtor{
-      [](const ir::fundamental_e&) -> std::string { std::unreachable(); },
-      [&](const ir::array_schema& a) {
-        return render_parse_tag(cxx_support::parse_tag_e::array) + std::move(field_str);
-      },
-      [&](const ir::allof_schema& a) {
-        return render_parse_tag(cxx_support::parse_tag_e::allof) + std::move(field_str);
-      },
-      [&](const ir::anyof_schema& a) {
-        std::string result = std::move(field_str);
-        result += render_parse_tag(cxx_support::parse_tag_e::anyof);
-        if (a.discriminator)
-          result += render_discriminator(*a.discriminator, s.spec, s.jsonptr);
-        return result;
-      },
-      [&](const ir::oneof_schema& a) {
-        std::string result = std::move(field_str);
-        result += render_parse_tag(cxx_support::parse_tag_e::oneof);
-        if (a.discriminator)
-          result += render_discriminator(*a.discriminator, s.spec, s.jsonptr);
-        return result;
-      },
-      [&](const ir::not_schema& a) {
-        return render_parse_tag(cxx_support::parse_tag_e::not_a) + std::move(field_str);
-      },
+      [&](const ir::fundamental_e& f) -> std::string { metel::unreachable(); },
+      [&](const ir::array_schema& a) -> std::string { metel::unreachable(); },
+      [&](const ir::allof_schema& a) -> std::string { metel::unreachable(); },
+      [&](const ir::anyof_schema& a) -> std::string { metel::unreachable(); },
+      [&](const ir::oneof_schema& a) -> std::string { metel::unreachable(); },
+      [&](const ir::not_schema& a) -> std::string { metel::unreachable(); },
       [&](const ir::enum_schema& e) -> std::string {
         bool is_string_enum = e.type.is_fundamental(ir::fundamental_e::string);
         std::string type = render_schema_ref(e.type, s.spec, s.jsonptr).typeref;
@@ -386,7 +376,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           result += std::format("static constexpr inline std::array<std::string_view, {}> values = {{",
                                 e.values.size());
           for (auto&& v : e.values)
-            result += render_string(std::string_view(v.value.as_string()));
+            result += std::format("{}, ", render_string(std::string_view(v.value.as_string())));
           result += "};\n";  // end values
           result += "enum struct values_e {";
           for (auto&& v : e.values)
@@ -506,13 +496,15 @@ std::vector<fs::path> renderer::render_all(fs::path output_dir, dd::generator<re
 }
 
 std::vector<fs::path> renderer::render_all_schemas(fs::path output_dir) const {
-  auto foo = [&]() -> dd::generator<render_result> {
+  auto foo = [this](this auto) -> dd::generator<render_result> {
     for (auto&& s : schemas()) {
       auto rr = render_schema(s);
       if (!rr.filename.empty())  // алиас, файл не нужен
         co_yield std::move(rr);
     }
   };
+  if (!ir.schemas)
+    return {};
   return render_all(std::move(output_dir), foo());
 }
 

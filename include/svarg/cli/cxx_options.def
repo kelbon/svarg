@@ -1,0 +1,19 @@
+BOOLEAN(simple_identifiers, "if false, C++ identifiers guaranteed to be unique, but can be ugly", default_value(true))
+RENAME(simple_identifiers, "simple-identifiers")
+
+TAG(ignore_requirements, "removes all requirements before generating."
+" Reducing count of schemas, generates much less, but validation is not complete")
+
+RENAME(ignore_requirements, "ignore-requirements")
+
+BOOLEAN(optimize, "optimizes IR before generate", default_value(true))
+
+ALIAS(O2, optimize)
+
+// берёт на вход файлы, делает из них IR
+ALLOW_ADDITIONAL_ARGS
+
+STRING(out, "output directory")
+ALIAS(o, out)
+
+ALIAS(h, help)

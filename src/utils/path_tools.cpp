@@ -253,7 +253,7 @@ bool match_content_type(std::string_view candidate, std::string_view content_typ
       return compare_ci(without_media_type_parameters(candidate), content_type) ==
              std::strong_ordering::equal;
   }
-  std::unreachable();
+  metel::unreachable();
 }
 
 std::string_view without_media_type_parameters(std::string_view s) {

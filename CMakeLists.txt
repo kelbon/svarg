@@ -39,11 +39,13 @@ endif()
 
 add_executable(svarg main.cpp)
 add_executable(svarg-ir ir_main.cpp)
+add_executable(svarg-ir-cxx cxx_main.cpp)
 
 target_link_libraries(svarg PUBLIC svarglib)
 target_link_libraries(svarg-ir PUBLIC svarglib)
+target_link_libraries(svarg-ir-cxx PUBLIC svarglib)
 
-set_target_properties(svarg svarg-ir svarglib PROPERTIES
+set_target_properties(svarg svarg-ir svarg-ir-cxx svarglib PROPERTIES
 	LINKER_LANGUAGE CXX
 	CXX_STANDARD 23
 	CMAKE_CXX_STANDARD_REQUIRED ON

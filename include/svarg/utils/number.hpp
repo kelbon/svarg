@@ -23,7 +23,7 @@ struct number {
 
   number(const number&) = default;
   number(number&&) = default;
-  number& operator=(number const&) = default;
+  number& operator=(const number&) = default;
   number& operator=(number&&) = default;
 
   ~number() = default;
@@ -58,7 +58,7 @@ struct number {
       case 2:
         return int64_t(std::get<double>(data));
     }
-    std::unreachable();
+    metel::unreachable();
   }
 
   uint64_t get_as_uint64() const {
@@ -78,7 +78,7 @@ struct number {
         return uint64_t(v);
       }
     }
-    std::unreachable();
+    metel::unreachable();
   }
 };
 

@@ -16,6 +16,15 @@ namespace svarg {
 using cxx_support::get_special_field;
 using cxx_support::object_fields_count;
 
+template <cxx_support::an_fundamental T>
+struct to_json_value<T> {
+  static boost::json::value operator()(const T& v) {
+    boost::json::value j = to_json(get_special_field(v));
+    cxx_support::validate_required_schemas(j, v).rethrow_if_failed();
+    return j;
+  }
+};
+
 template <cxx_support::an_array T>
 struct to_json_value<T> {
   static boost::json::value operator()(const T& v) {

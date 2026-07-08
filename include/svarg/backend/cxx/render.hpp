@@ -51,6 +51,7 @@ struct renderer {
   }
 
   const ir::schema& schemaof(const ir::schema_ref& ref) const {
+    assert(!ref.is_fundamental());
     auto it = schemas().find(ref);
     if (it == schemas().end())
       throw render_error("schema {}#{} do not refer to any schema in IR", ref.spec, ref.jsonptr->escaped());
@@ -99,6 +100,11 @@ struct renderer {
   // не возвращает никогда `in_what` в `out`
   // но если рекурсивно тип зависит сам от себя возвращается true
   bool collect_all_mentioned(const ir::schema_ref& in_what, ir::schema_refs_t& out) const;
+
+  // генерирует обращение к тому что в schema_type
+  // для объектов и енамов возвращает пустую строку
+  std::string render_special_field_type(const ir::schema_type&, std::string_view relspec,
+                                        const json_pointer& relative) const;
 
   // генерирует обращение к имени типа обозначаемого схемой. Если это алиас, то он будет повторён
   // т.е. возможно это a::b::mytype, а может и arrayof<arrayof<a::b::X>>

@@ -63,7 +63,7 @@ inline std::string_view e2str(fundamental_e e) noexcept {
     case fundamental_e::never:
       return "never";
   }
-  std::unreachable();
+  metel::unreachable();
 }
 
 struct schema_ref {

@@ -116,7 +116,7 @@ struct from_json_value<cxx_support::allof<Types...>> {
     }
       return {};
   }
-  std::unreachable();
+  metel::unreachable();
 }
 
 template <typename... Types>

@@ -56,11 +56,12 @@ int main(int argc, char* argv[]) try {
       std::println("invalid output file extension, expected: {}, actual {}", cliopts.out_format,
                    e.generic_string());
       return -1;
-    }
+    } else if (out.extension().empty())
+      out += std::format(".{}", cliopts.out_format);
   }
 
   if (cliopts.additional_args.empty()) {
-    std::println("no one spec file not provided, expected atleast one");
+    std::println("no one spec file provided, expected atleast one");
     return -1;
   }
   std::vector<fs::path> inputs;

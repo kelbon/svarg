@@ -6,7 +6,11 @@ namespace svarg::cxx {
 
 std::string jsonptr2namespace(const json_pointer& jp) {
   std::string result;
-  for (std::string_view s : jp.segments()) {
+  if (jp.empty())
+    return result;
+  auto jpcopy = jp;
+  jpcopy.rm_last_segment();
+  for (std::string_view s : jpcopy.segments()) {
     result += to_cxx_ident(jp_unescape_segment(s));
     result += "::";
   }
@@ -20,7 +24,11 @@ std::string jsonptr2namespace(const json_pointer& jp) {
 
 std::string jsonptr2namespace_simple(const json_pointer& jp) {
   std::string result;
-  for (std::string_view s : jp.segments()) {
+  if (jp.empty())
+    return result;
+  auto jpcopy = jp;
+  jpcopy.rm_last_segment();
+  for (std::string_view s : jpcopy.segments()) {
     result += to_cxx_ident_simple(jp_unescape_segment(s));
     result += "::";
   }

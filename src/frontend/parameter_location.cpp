@@ -13,7 +13,7 @@ std::string_view e2str(parameter_location l) noexcept {
     case parameter_location::cookie:
       return "cookie";
   }
-  std::unreachable();
+  metel::unreachable();
 }
 
 bool efromstr(std::string_view s, parameter_location& out) {
