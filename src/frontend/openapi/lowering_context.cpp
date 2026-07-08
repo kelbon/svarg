@@ -748,14 +748,18 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
     auto [ref, rschema] = resolve_schema(*obj.schema, file, jp / "schema", *this);
     result.schema = ref;
     if (obj.encoding) {
-      auto _ = guard_array(result.membersEncoding);
-      // есть только если есть schema (валидируется до этого)
-      // наличие property в схеме не проверяется, так как там очень сложно - может быть в anyOf и тд
-      // где-то
-      for (auto& [property, enc] : *obj.encoding) {
-        if (!enc.contentType)
-          continue;  // остальное пока игнорируется (всякие style и тд)
-        result.membersEncoding->try_emplace(property, *enc.contentType);
+      if (media_type_supports_encodings(content_type)) {
+        auto _ = guard_array(result.membersEncoding);
+        // есть только если есть schema (валидируется до этого)
+        // наличие property в схеме не проверяется, так как там очень сложно - может быть в anyOf и тд
+        // где-то
+        for (auto& [property, enc] : *obj.encoding) {
+          if (!enc.contentType)
+            continue;  // остальное пока игнорируется (всякие style и тд)
+          result.membersEncoding->try_emplace(property, *enc.contentType);
+        }
+      } else {
+        emit_warn(file, jp, "media type `{}` does not support encodings, `encoding` ignored", content_type);
       }
     }
   }

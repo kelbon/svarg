@@ -26,15 +26,14 @@ template <typename T>
 tokens_consumer from_tokens_fallback(T& v, sax_token& tok, dd::with_stack_resource r) {
   boost::json::value value;
   co_yield dd::elements_of(omo::json_value_collector(tok, value, r));
-  error_code ec;
-  from_json_value<T>::parse(v, value, ec);
+  error_code ec = try_from_json(v, value);
   if (ec)
     ec.rethrow_if_failed();
 }
 
 // шорткат
 // НЕ валидирует, так что его нужно использовать для верхнеуровневого парса,
-// а для подобъектов всегда parse_and_validate
+// а для подобъектов всегда from_tokens_subobject
 template <typename T>
 tokens_consumer from_tokens_parser(T& v, sax_token& tok, dd::with_stack_resource r) {
   return from_tokens<std::remove_cvref_t<T>>{}(v, tok, r);

@@ -12,6 +12,7 @@
 #include <metel/meta.hpp>
 
 #include <kelcoro/generator.hpp>
+#include "svarg/backend/cxx/support/types.hpp"
 
 // описание генерируемых по умолчанию структур - операций и схем
 
@@ -30,11 +31,13 @@ enum struct parse_tag_e {
   not_a,  // одно спецполе
 
   // не комбинаторы
-  object,  // сначала требуемые поля, затем опциональные + is_required(string_view)
+  object,  // сначала требуемые поля, затем опциональные + is_required(string_view) +
+           // additional_properties_type / additional_properties
   enum_,
   string_enum,
 
-  body,
+  body,  // string_view content_type + <special_field_name> единственное поле с данными +
+         // encoding_for(string_view)
 };
 
 constexpr std::string_view e2str(parse_tag_e e) noexcept {
@@ -94,77 +97,37 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
 template <typename T>
 constexpr bool has_required_schemas = requires { typename T::required_schemas; };
 
-template <typename T>
-using required_schemas_t = decltype([] {
-  if constexpr (has_required_schemas<T>)
-    return std::type_identity<typename T::required_schemas>{};
-  else
-    return std::type_identity<metel::typelist<>>{};
-}())::type;
-
 namespace noexport {
-
-template <typename T, typename... Ts>
-constexpr auto typelist_rm(metel::typelist<Ts...> l) {
-  if constexpr (!l.contains(std::type_identity<T>{}))
-    return l;
-  else
-    return (metel::typelist<>{} + ... +
-            std::conditional_t<std::is_same_v<Ts, T>, metel::typelist<>, metel::typelist<Ts>>{});
-}
-
-// возвращает ВСЕ требуемые схемы, включая требуемые схемы требуемых схем.
-// Без дубликатов и обрабатывая возможную рекурсию
-template <typename T, typename... Types>
-consteval auto all_required_schemas(metel::typelist<Types...> collected_) {
-  // избегаем self reference
-  if constexpr (collected_.contains(std::type_identity<T>{}))
-    return metel::typelist<>{};
-  else {
-    constexpr metel::typelist collected = collected_ | metel::typelist<T>{};
-    metel::typelist R = required_schemas_t<T>{};
-    return [=]<typename... Schemas>(metel::typelist<Schemas...>) {
-      return (R | ... | all_required_schemas<Schemas>(collected | R));
-    }(R);
-  }
-}
 
 // пример функции для концепта. (лямбда в require сломает компилятор)
 struct noop_fn {
-  template <typename T>
+  template <typename>
   void operator()() {
   }
 };
 
 }  // namespace noexport
 
-template <typename Requirement, typename Schema>
-constexpr bool is_recursive_requirement() {
-  std::type_identity<Schema> t;
-  return noexport::all_required_schemas<Requirement>(metel::typelist<>{}).contains(t);
-}
-
-// TODO поставить это требование во все парсы объектов и тд
-template <typename Schema>
-constexpr bool has_recursive_requirements() {
-  // само по себе проверяет только первый уровень, но если эта проверка стоит на каждом уровне, то
-  // рекурсивность отловится
-  return []<typename... Requirements>(metel::typelist<Requirements...>) {
-    return (is_recursive_requirement<Requirements, Schema>() || ...);
-  }(required_schemas_t<Schema>{});
-}
-
 template <typename T>
-using all_required_schemas_t = decltype(noexport::typelist_rm<std::decay_t<T>>(
-    noexport::all_required_schemas<std::decay_t<T>>(metel::typelist<>{})));
-
-template <typename T>
-constexpr bool has_additional_fields = [] {
-  if constexpr (requires { typename T::additional_fields_type; }) {
-    return !std::is_void_v<typename T::additional_fields_type>;
-  } else
+constexpr bool has_additional_properties = [] {
+  if constexpr (requires { typename T::additional_properties_type; })
+    return !std::is_void_v<typename T::additional_properties_type>;
+  else
     return false;
 }();
+
+template <typename T>
+using additional_properties_schema_t = typename std::decay_t<T>::additional_properties_type;
+
+constexpr inline std::string_view additional_properties_schema_alias_name = "additional_properties_type";
+constexpr inline std::string_view additional_properties_field_name = "_additional_properties";
+
+template <typename T>
+constexpr auto& get_additional_properties(T& x) noexcept {
+  static_assert(std::is_same_v<decltype(x._additional_properties),
+                               additional_properties_t<additional_properties_schema_t<T>>>);
+  return x._additional_properties;
+}
 
 template <typename T>
 concept has_parse_tag = requires {
@@ -215,6 +178,19 @@ concept a_string_enum = tagged_as<T>(parse_tag_e::string_enum);
 
 template <typename T>
 concept a_body = tagged_as<T>(parse_tag_e::body);
+
+template <a_body T>
+consteval std::string_view get_content_type() {
+  return std::decay_t<T>::content_type;
+}
+
+template <typename T>
+constexpr bool has_encodings = requires(std::string_view str) {
+  { T::encoding_for(str) };
+};
+
+template <typename T>
+concept an_application_json_body = a_body<T> && get_content_type<T>() == "application/json";
 
 static_assert(!an_object<int>);
 
@@ -268,6 +244,22 @@ template <typename T>
   static_assert(boost::pfr::tuple_size_v<T> == 1);
   // <special_field_name>
   return in.data;
+}
+
+template <typename T>
+consteval bool valid_generated_object() {
+  static_assert(metel::is_decayed_v<T>);
+  if (!an_object<T>)
+    return false;
+
+  if constexpr (has_additional_properties<T>) {
+    // лежит последним полем и с правильным типом
+    return boost::pfr::get_name<boost::pfr::tuple_size_v<T> - 1>() ==
+               additional_properties_schema_alias_name &&
+           std::is_same_v<boost::pfr::tuple_element_t<boost::pfr::tuple_size_v<T> - 1, T>,
+                          additional_properties_schema_t<T>>;
+  }
+  return true;
 }
 
 }  // namespace svarg::cxx_support

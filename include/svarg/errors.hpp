@@ -45,6 +45,11 @@ struct render_error : svarg_exception {
   using svarg_exception::operator=;
 };
 
+struct serialize_error : svarg_exception {
+  using svarg_exception::svarg_exception;
+  using svarg_exception::operator=;
+};
+
 struct old_message_t {
   explicit old_message_t() = default;
 };
@@ -60,16 +65,18 @@ using strview_if_old_msg =
 
 }
 
+#define SVARG_ALL_EXCEPTIONS parse_error, validate_error, semantic_error, render_error, serialize_error
+
 struct METEL_TRIVIAL_ABI error_code {
  private:
   // аллокация в случае ошибки, это снижает плату в случае если ошибки нет
   // всего 8 байт и тривиальное аби для всего еррор кода
-  metel::box_union<parse_error, validate_error, semantic_error, render_error> err;
+  metel::box_union<SVARG_ALL_EXCEPTIONS> err;
 
  public:
   error_code() = default;
 
-  template <metel::oneof_types<parse_error, validate_error, semantic_error, render_error> Err>
+  template <metel::oneof_types<SVARG_ALL_EXCEPTIONS> Err>
   error_code(Err e) : err(std::move(e)) {
   }
 
@@ -88,12 +95,13 @@ struct METEL_TRIVIAL_ABI error_code {
     return err.visit(m);
   }
 
-  void rethrow_if_failed() const {
+  template <typename Me>
+  void rethrow_if_failed(this Me&& self) {
     metel::matcher m{
-        [](const metel::nothing_t&) {},
-        [](const auto& x) { throw x; },
+        [](metel::nothing_t) {},
+        [](auto&& x) { throw std::forward_like<Me>(x); },
     };
-    err.visit(m);
+    self.err.visit(m);
   }
 
   // переформатирует старое сообщение, см. `old_message_t`
@@ -107,7 +115,7 @@ struct METEL_TRIVIAL_ABI error_code {
     err.visit(m);
   }
 
-  template <metel::oneof_types<parse_error, validate_error, semantic_error, render_error> Err>
+  template <metel::oneof_types<SVARG_ALL_EXCEPTIONS> Err>
   void set(Err e) {
     err = std::move(e);
   }

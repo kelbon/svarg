@@ -82,12 +82,52 @@ struct from_json_value<cxx_support::allof<Types...>> {
   }
 };
 
+// результат возвращается в `into`
+[[nodiscard]] inline error_code make_json_union(boost::json::value& into, boost::json::value&& from) {
+  if (into.kind() != from.kind()) {
+    return serialize_error("cannot unite json values, kind 1: {}, kind2: {}", e2str(into.kind()),
+                           e2str(from.kind()));
+  }
+  switch (into.kind()) {
+    case boost::json::kind::null:
+    case boost::json::kind::bool_:
+    case boost::json::kind::int64:
+    case boost::json::kind::uint64:
+    case boost::json::kind::double_:
+    case boost::json::kind::string:
+    case boost::json::kind::array:
+      if (into != from)
+        return serialize_error("cannot unite json value `{}` with value `{}`", boost::json::serialize(into),
+                               boost::json::serialize(from));
+      return {};
+    case boost::json::kind::object: {
+      auto& into_obj = into.as_object();
+      auto& from_obj = from.as_object();
+      for (auto&& [k, v] : from_obj) {
+        auto* value = into_obj.if_contains(k);
+        if (value && *value != v) {
+          return serialize_error(
+              "cannot unite json values: value of key `{}` mismatch. Value `{}` is not equal to `{}`",
+              std::string_view(k), boost::json::serialize(*value), boost::json::serialize(v));
+        } else {
+          into_obj[k] = std::move(v);
+        }
+      }
+    }
+      return {};
+  }
+  std::unreachable();
+}
+
 template <typename... Types>
 struct to_json_value<cxx_support::allof<Types...>> {
-  // сериализация для allof запрещена, т.к. он должен появляться только в требованиях
-  // непонятно как сериализовать allof<anyof<A, B>, C> и тд
-  // все allof полностью из объектов или фундаменталов преобразуются в IR
-  static boost::json::value operator()(const cxx_support::allof<Types...>& v) = delete;
+  static boost::json::value operator()(const cxx_support::allof<Types...>& v) {
+    static_assert(sizeof...(Types) > 1);  // IR должен был отработать
+    boost::json::value values[] = {to_json(v.template get<Types>())...};
+    for (size_t i = 1; i < sizeof...(Types); ++i)
+      make_json_union(values[0], std::move(values[i])).rethrow_if_failed();
+    return std::move(values[0]);
+  }
 };
 
 }  // namespace svarg

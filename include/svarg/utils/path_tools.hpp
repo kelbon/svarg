@@ -169,8 +169,6 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   }
   return out;
 }
-// TODO ещё же С++ экранирование для строк, которые пишутся в кавычки в С++...
-// TODO и везде где пишу расставить это НАДО РАССТАВИТЬ РАВ СТРОКИ ВЕЗДЕ, ЧТОБЫ НЕ НАДО БЫЛО ЭКРАНИРОВАТЬ
 
 // убирает различия в представлении для разных медиа типов и ренжей
 // например application/JSoN; ChaRset: "UtF-8" -> application/json; charset=utf-8
@@ -185,7 +183,7 @@ std::string monomorph_media_type(std::string_view);
 //
 // precondition: `a` и `b` прошли `monomorph_media_type`
 // возвращает greater если 'a' более специализировано чем 'b' (или иногда просто для правильного порядка, если
-// они одинаковые)
+// они одного уровня специализированности)
 std::strong_ordering compare_media_types(std::string_view a, std::string_view b);
 
 // `content_type` может быть и медиа ренжом
@@ -194,5 +192,9 @@ std::strong_ordering compare_media_types(std::string_view a, std::string_view b)
 [[nodiscard]] bool match_content_type(std::string_view candidate, std::string_view content_type);
 
 [[nodiscard]] bool match_status_range(int status, status_range_e r) noexcept;
+
+// возвращает `true` если для медиа типа имеет смысл openapi encoding (кодирование разных частей в разных
+// форматах)
+[[nodiscard]] bool media_type_supports_encodings(std::string_view media_type);
 
 }  // namespace svarg

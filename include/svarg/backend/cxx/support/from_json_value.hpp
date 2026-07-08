@@ -1,32 +1,33 @@
 #pragma once
 
-#include "svarg/backend/cxx/support/types.hpp"
+#include <bitset>
 #include "svarg/errors.hpp"
-#include "svarg/backend/cxx/support/concepts.hpp"
 
 #include "svarg/from_json_value.hpp"
+
+#include "svarg/backend/cxx/support/types.hpp"
+#include "svarg/backend/cxx/support/concepts.hpp"
+#include "svarg/backend/cxx/support/validate.hpp"
 
 namespace svarg {
 
 template <cxx_support::an_array T>
 struct from_json_value<T> {
   static error_code operator()(T& v, const boost::json::value& j) {
-    // TODO что с требованиями... Что-то типа
-    // * проверка что нет рекурсивных требований
-    // * для каждой схемы на один уровень выше
-    //    - если нужно парсить - парсим
-    //    - если нужно проверить конечный объект - проверяем его
-    // TODO не забыть для объектов проверять что все обязательные поля на месте
-    // требования проверяются выше, а больше кроме требований и значения в этом типе ничего нет
-    return try_from_json(get_special_field(v), j);
+    error_code ec = try_from_json(get_special_field(v), j);
+    if (ec)
+      return ec;
+    return cxx_support::validate_required_schemas(j, v);
   }
 };
-#if 0
+
 template <cxx_support::a_not_a T>
 struct from_json_value<T> {
   static error_code operator()(T& v, const boost::json::value& j) {
-    // требования проверяются выше, а больше кроме требований и значения в этом типе ничего нет
-    return from_tokens_parser(get_special_field(v), tok, r);
+    error_code ec = try_from_json(get_special_field(v), j);
+    if (ec)
+      return ec;
+    return cxx_support::validate_required_schemas(j, v);
   }
 };
 
@@ -34,11 +35,12 @@ template <cxx_support::a_string_enum T>
 struct from_json_value<T> {
   static error_code operator()(T& v, const boost::json::value& j) {
     // по сути парсер для строки + встроенная валидация
-    tok.expect(sax_token::string);
-    std::string_view str = tok.get_str();
+    if (!j.is_string())
+      return parse_error("expected string, got `{}`", e2str(j.kind()));
+    std::string_view str = j.get_string();
     auto it = std::ranges::find(T::values, str);
     if (it == T::values.end())
-      throw validate_error("string {} cannot be value of enum {}", str, type_name<T>());
+      return validate_error("string {} cannot be value of enum {}", str, type_name<T>());
     // енам генерируется так, что порядок имён совпадает с порядком в массиве
     get_special_field(v) = T::values_e(std::distance(T::values.begin(), it));
     return {};
@@ -55,38 +57,40 @@ struct from_json_value<T> {
     };
     // рендер не создаёт енамов нетривиального типа
     // только bool, int64_t, double, null
-    if constexpr (std::is_same_v<underlying, integer>) {
-      integer i;
-      if (tok.kind() == sax_token::int64)
-        i = tok.get_int64();
-      else if (tok.kind() == sax_token::uint64)
-        i = tok.get_uint64();
-      else  // throw
-        tok.expect(sax_token::int64 | sax_token::uint64);
+    if constexpr (std::is_same_v<underlying, cxx_support::integer>) {
+      cxx_support::integer i;
+      if (j.is_int64())
+        i = j.get_int64();
+      else if (j.is_uint64())
+        i = j.get_uint64();
+      else
+        return parse_error("expected uint64|int64_t, got {}", e2str(j.kind()));
       if (!std::ranges::contains(T::values, i))
-        throw invalid_value(i);
+        return invalid_value(i);
       get_special_field(v) = i;
-    } else if constexpr (std::is_same_v<underlying, boolean>) {
-      tok.expect(sax_token::bool_);
-      boolean b = tok.get_bool();
+    } else if constexpr (std::is_same_v<underlying, cxx_support::boolean>) {
+      if (!j.is_bool())
+        return parse_error("expected bool, got {}", e2str(j.kind()));
+      cxx_support::boolean b = j.get_bool();
       if (!std::ranges::contains(T::values, b))
-        throw invalid_value(b);
+        return invalid_value(b);
       get_special_field(v) = b;
     } else if constexpr (std::is_same_v<underlying, number>) {
       number d;
-      if (tok.kind() == sax_token::int64)
-        d = tok.get_int64();
-      else if (tok.kind() == sax_token::uint64)
-        d = tok.get_uint64();
-      else if (tok.kind() == sax_token::double_)
-        d = tok.get_double();
+      if (j.is_int64())
+        d = j.get_int64();
+      else if (j.is_uint64())
+        d = j.get_uint64();
+      else if (j.is_double())
+        d = j.get_double();
       else  // throw
-        tok.expect(sax_token::int64 | sax_token::uint64 | sax_token::double_);
+        return parse_error("expected uint64|int64_t|double, got {}", e2str(j.kind()));
       if (!std::ranges::contains(T::values, d))  // сравнивает на ==, плевать
-        throw invalid_value(d);
+        return invalid_value(d);
       get_special_field(v) = d;
-    } else if constexpr (std::is_same_v<underlying, null>) {
-      tok.expect(sax_token::kind_e::null);
+    } else if constexpr (std::is_same_v<underlying, cxx_support::null>) {
+      if (!j.is_null())
+        return parse_error("expected null, got {}", e2str(j.kind()));
     } else {
       // C++23 позволяет так делать
       static_assert(false, "unsupported enum type");
@@ -98,37 +102,164 @@ struct from_json_value<T> {
 template <cxx_support::an_anyof T>
 struct from_json_value<T> {
   static error_code operator()(T& v, const boost::json::value& j) {
-    TODO;
+    if constexpr (cxx_support::has_discriminator<T>) {
+      if (!j.is_object()) {
+        // игнорируем дискриминатор на случай если фундаментальный тип
+        // TODO пытаться парсить только фундаментальные типы из anyOf
+        error_code ec = try_from_json(get_special_field(v), j);
+        if (ec)
+          return ec;
+        return cxx_support::validate_required_schemas(j, v);
+      }
+      auto& obj = j.as_object();
+      auto* discriminator = obj.if_contains(T::discriminator_value);
+      return T::discriminate(std::string_view(*discriminator), [&]<typename X>() {
+        if constexpr (std::is_void_v<X>) {
+          return parse_error("invalid discriminator value `{}` for anyOf `{}`",
+                             std::string_view(*discriminator), type_name<X>());
+        } else {
+          return try_from_json(v, j);
+        }
+      });
+    } else {
+      error_code ec = try_from_json(get_special_field(v), j);
+      if (ec)
+        return ec;
+      return cxx_support::validate_required_schemas(j, v);
+    }
   }
 };
 
 template <cxx_support::a_oneof T>
 struct from_json_value<T> {
   static error_code operator()(T& v, const boost::json::value& j) {
-    TODO;
+    if constexpr (cxx_support::has_discriminator<T>) {
+      if (!j.is_object()) {
+        // игнорируем дискриминатор на случай если фундаментальный тип
+        // TODO пытаться парсить только фундаментальные типы из oneOf
+        error_code ec = try_from_json(get_special_field(v), j);
+        if (ec)
+          return ec;
+        return cxx_support::validate_required_schemas(j, v);
+      }
+      auto& obj = j.as_object();
+      auto* discriminator = obj.if_contains(T::discriminator_value);
+      return T::discriminate(std::string_view(*discriminator), [&]<typename X>() {
+        if constexpr (std::is_void_v<X>) {
+          return parse_error("invalid discriminator value `{}` for oneOf `{}`",
+                             std::string_view(*discriminator), type_name<X>());
+        } else {
+          return try_from_json(v, j);
+        }
+      });
+    } else {
+      error_code ec = try_from_json(get_special_field(v), j);
+      if (ec)
+        return ec;
+      return cxx_support::validate_required_schemas(j, v);
+    }
   }
 };
 
 template <cxx_support::an_allof T>
 struct from_json_value<T> {
   static error_code operator()(T& v, const boost::json::value& j) {
-    TODO;
+    error_code ec = try_from_json(get_special_field(v), j);
+    if (ec)
+      return ec;
+    return cxx_support::validate_required_schemas(j, v);
   }
 };
+
+template <aggregate A>
+constexpr size_t object_fields_count() {
+  // дополнительные лежат всегда последним полем и их нужно здесь игнорировать
+  constexpr bool ignore_last_field = cxx_support::an_object<A> && cxx_support::has_additional_properties<A>();
+  return boost::pfr::tuple_size_v<A> - size_t(ignore_last_field);
+}
+
+template <aggregate A>
+std::optional<size_t> get_field_index(std::string_view field_name) {
+  auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
+    using switch_t = ss::string_switch<size_t>;
+    return (switch_t(field_name) | ... | switch_t::case_t(boost::pfr::get_name<Is, A>(), Is)).or_nullopt();
+  };
+  return helper(std::make_index_sequence<object_fields_count<A>()>{});
+}
+
+// возвращает битовую маску где единицы расставлены на места требуемых полей
+template <cxx_support::an_object O>
+consteval std::bitset<object_fields_count<O>()> get_required_bits_mask() {
+  std::bitset<object_fields_count<O>()> mask;
+
+  auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
+    (mask.set(Is, O::is_required(boost::pfr::get_name<Is, O>())), ...);
+  };
+  helper(std::make_index_sequence<object_fields_count<O>()>{});
+  return mask;
+}
+
+template <aggregate A>
+error_code aggregate_from_json(A& v, const boost::json::value& j) {
+  const auto* obj = v.if_object();
+  error_code ec;
+  if (!obj) {
+    ec = parse_error(" object expected, got `{}`", e2str(v.kind()));
+    return ec;
+  }
+  std::bitset<object_fields_count<A>()> parsed = {};
+
+  for (auto&& [key, value] : *obj) {
+    std::optional<size_t> i = get_field_index<A>(key);
+    if (i) {
+      metel::visit_index<object_fields_count<A>()>([&]<size_t I>() {
+        if constexpr (A::is_required(boost::pfr::get_name<I, A>()))
+          parsed.set(I);
+        ec = from_json(j, boost::pfr::get<I>(v));
+      });
+      if (ec)
+        return ec;
+    } else {
+      if constexpr (cxx_support::an_object<A> && cxx_support::has_additional_properties<A>) {
+        cxx_support::additional_properties_schema_t<A> property;
+        ec = try_from_json(value, property);
+        if (ec)
+          return ec;
+        cxx_support::get_additional_properties(v).try_emplace(key, std::move(property));
+      } else {
+        return parse_error("field `{}` unexpected in type `{}`", std::string_view(key), type_name<A>());
+      }
+    }
+  }
+  constexpr std::bitset required_bits_mask = get_required_bits_mask<A>();
+  if ((parsed & required_bits_mask) != required_bits_mask) {
+    ec = parse_error("not all required fields of type `{}` parsed", type_name<A>());
+    return ec;
+  }
+  return {};
+}
 
 template <cxx_support::an_object T>
 struct from_json_value<T> {
   static error_code operator()(T& v, const boost::json::value& j) {
-    TODO;
+    static_assert(cxx_support::valid_generated_object<T>());
+    error_code ec = aggregate_from_json(v, j);
+    if (ec)
+      return ec;
+    return cxx_support::validate_required_schemas(j, v);
   }
 };
 
 template <cxx_support::a_body T>
 struct from_json_value<T> {
+  // сознательно игнорируем content_type, на случай если кто-то захотел сериализовать как json тело с каким-то
+  // другим медиа типом
   static error_code operator()(T& v, const boost::json::value& j) {
-    TODO;
+    // encoding игнорируется, так как для application/json не имеет смысла
+    return try_from_json(cxx_support::get_special_field(v), j);
   }
 };
-#endif
+
+// TODO to_json
 
 }  // namespace svarg

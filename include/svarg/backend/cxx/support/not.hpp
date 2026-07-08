@@ -16,16 +16,19 @@ namespace svarg {
 
 template <typename T>
 struct from_json_value<cxx_support::not_a<T>> {
-  static error_code operator()(const boost::json::value& j, cxx_support::not_a<T>& v) {
-    ;  // TODO;
+  static error_code operator()(const boost::json::value& j, cxx_support::not_a<T>&) {
+    T value;
+    error_code ec = try_from_json(j, value);
+    if (ec)
+      return {};
+    return parse_error("when parsing not_a<{}>. Unexpected success of parsing", type_name<T>());
   }
 };
 
 template <typename T>
 struct to_json_value<cxx_support::not_a<T>> {
-  static boost::json::value operator()(const cxx_support::not_a<T>& v) {
-    ;  // TODO;
-  }
+  // сериализация not запрещена, так как он не может быть представлением типа. Только требованием
+  static boost::json::value operator()(const cxx_support::not_a<T>&) = delete;
 };
 
 }  // namespace svarg

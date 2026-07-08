@@ -21,6 +21,6 @@ using ::svarg::arrayof;
 using boolean = bool;
 
 template <typename T>
-using additional_fields_t = string_map<T>;
+using additional_properties_t = string_map<T>;
 
 }  // namespace svarg::cxx_support

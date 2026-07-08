@@ -278,4 +278,13 @@ bool match_status_range(int status, status_range_e r) noexcept {
   return false;
 }
 
+/*
+The encoding object SHALL only apply to requestBody objects
+when the media type is multipart or application/x-www-form-urlencoded
+*/
+bool media_type_supports_encodings(std::string_view media_type) {
+  std::string mt = monomorph_media_type(media_type);
+  return mt.starts_with("multipart/") || mt == "application/x-www-form-urlencoded";
+}
+
 }  // namespace svarg

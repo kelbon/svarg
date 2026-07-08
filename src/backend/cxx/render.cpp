@@ -326,12 +326,14 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
     }
   }
   if (!additional_properties || additional_properties->is_fundamental(ir::fundamental_e::never)) {
-    result += "\nusing additional_fields_type = void;\n\n";
+    result += std::format("\nusing {} = void;\n\n", cxx_support::additional_properties_schema_alias_name);
   } else {
-    result += std::format("\nusing additional_properties_type = {};\n\n",
+    result += std::format("\nusing {} = {};\n\n", cxx_support::additional_properties_schema_alias_name,
                           render_schema_ref(*additional_properties, relspec, relative).typeref);
     // TODO обработать возможное пересечение имён с обычными полями
-    result += "additional_properties_t<additional_properties_type> _additional_properties;\n\n";
+    result += std::format("additional_properties_t<{}> {};\n\n",
+                          cxx_support::additional_properties_schema_alias_name,
+                          cxx_support::additional_properties_field_name);
   }
   result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
   for (auto&& f : fields) {

@@ -3,7 +3,7 @@
 #include "svarg/backend/cxx/support/stream_parsing.hpp"
 #include "svarg/errors.hpp"
 #include "svarg/utils/safe_cast.hpp"
-#include "svarg/backend/cxx/support/validation.hpp"
+#include "svarg/backend/cxx/support/validate_stream.hpp"
 #include "svarg/backend/cxx/support/types.hpp"
 
 #include <metel/box.hpp>
@@ -67,7 +67,7 @@ struct from_tokens<arrayof<T>> {
       co_yield {};
       if (tok.kind() == sax_token::array_end)
         break;
-      co_yield dd::elements_of(parse_and_validate(v.emplace_back(), tok, r));
+      co_yield dd::elements_of(from_tokens_subobject(v.emplace_back(), tok, r));
     }
   }
 };
