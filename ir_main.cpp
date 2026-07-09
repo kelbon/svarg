@@ -1,4 +1,5 @@
 
+#include <filesystem>
 #include "svarg/ir/optimization_passes.hpp"
 #define program_options_file "svarg/cli/ir_options.def"
 #include <clinok/cli_interface.hpp>
@@ -42,7 +43,7 @@ int main(int argc, char* argv[]) try {
   if (cliopts.out.empty()) {
     std::string out_str = "a";
 
-    if (std::filesystem::exists(std::format("{}.{}", out_str, cliopts.out_format))) {
+    if (fs::exists(std::format("{}.{}", out_str, cliopts.out_format))) {
       size_t i = 1;
       while (fs::exists(std::format("{}{}.{}", out_str, i, cliopts.out_format)))
         ++i;
@@ -64,16 +65,24 @@ int main(int argc, char* argv[]) try {
     std::println("no one spec file provided, expected atleast one");
     return -1;
   }
+  if (!fs::exists(cliopts.specs_dir) || !fs::is_directory(cliopts.specs_dir)) {
+    std::println("spec directory `{}` does not exists", cliopts.specs_dir);
+    return -1;
+  }
+
   std::vector<fs::path> inputs;
   for (std::string_view arg : cliopts.additional_args) {
     fs::path p = arg;
+    if (!p.is_absolute())
+      p = cliopts.specs_dir / p;
     if (!fs::exists(p)) {
-      std::println("spec file {} not found", arg);
+      std::println("spec file `{}` not found", arg);
       return -1;
     }
-    inputs.push_back(std::move(p));
+    inputs.push_back(fs::relative(std::move(p), cliopts.specs_dir));
   }
-  ir::ir_object ir = openapi2ir(std::filesystem::current_path(), std::move(inputs), options);
+
+  ir::ir_object ir = openapi2ir(cliopts.specs_dir, std::move(inputs), options);
   if (!cliopts.passes.empty()) {
     for (auto v : cliopts.passes | std::views::split(' ')) {
       if (v.empty())

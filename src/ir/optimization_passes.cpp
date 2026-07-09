@@ -55,7 +55,7 @@ pass_result pass_rm_trivial_schemas(ir_object ir, const ir_options& options) {
   size_t count = 0;
   for (; it != e;) {
     auto& s = *it;
-    if (s.is_trivial() && (!s.name || options.allow_rm_trivial_named)) {
+    if (s.is_trivial() && (!s.name || options.allow_rm_unused == remove_category_e::any)) {
       schema_ref replace = make_fundamental_ref(std::get<fundamental_e>(s.type.data));
       auto foo = [&](schema_ref& r) {
         if (r.refers_to(s)) {
@@ -223,8 +223,7 @@ static maybe_replace flatten_allof(schema& this_schema, allof_schema& allof, acc
     this_schema.type.data = fundamental_e::any;
     ++changes;
   } else if (allof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    if (!this_schema.name || options.allow_rm_trivial_named ||
-        options.allow_rm_unused == remove_category_e::any)
+    if (!this_schema.name || options.allow_rm_unused == remove_category_e::any)
       return allof.schemas.front();  // allof<X> -> X
   }
   return std::nullopt;
@@ -239,8 +238,7 @@ static maybe_replace flatten_anyof(schema& this_schema, anyof_schema& anyof, acc
     this_schema.type.data = fundamental_e::never;
     ++changes;
   } else if (anyof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    if (!this_schema.name || options.allow_rm_trivial_named ||
-        options.allow_rm_unused == remove_category_e::any)
+    if (!this_schema.name || options.allow_rm_unused == remove_category_e::any)
       return anyof.schemas.front();  // anyof<X> -> X
   }
   return std::nullopt;
@@ -255,8 +253,7 @@ static maybe_replace flatten_oneof(schema& this_schema, oneof_schema& oneof, acc
     this_schema.type.data = fundamental_e::never;
     ++changes;
   } else if (oneof.schemas.size() == 1 && !this_schema.has_requirements()) {
-    if (!this_schema.name || options.allow_rm_trivial_named ||
-        options.allow_rm_unused == remove_category_e::any)
+    if (!this_schema.name || options.allow_rm_unused == remove_category_e::any)
       return oneof.schemas.front();  // oneof<X> -> X
   }
   return std::nullopt;

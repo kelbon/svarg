@@ -16,6 +16,13 @@ std::string yaml2json(std::string_view yaml);
 std::string json2yaml(std::string_view json);
 std::string load_yaml_as_json(fs::path yaml);
 
+[[nodiscard]] bool is_yaml_extension(std::string_view extension) noexcept;
+[[nodiscard]] bool is_json_extension(std::string_view extension) noexcept;
+
+[[nodiscard]] inline bool is_yaml_or_json_extension(std::string_view extension) noexcept {
+  return is_yaml_extension(extension) || is_json_extension(extension);
+}
+
 // передаёт в `fn` содержимое файла как json, даже если это yaml
 void pass_as_json(fs::path path, fn_cref<void(std::string_view) const> fn);
 

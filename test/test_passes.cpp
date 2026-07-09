@@ -102,7 +102,6 @@ TEST("flatten nested anyOf") {
   opts.allow_rm_unused = svarg::ir::remove_category_e::any;
   REQUIRE(test_pass(output, "", opts, &ir::pass_rm_unused_schemas));
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  opts.allow_rm_trivial_named = true;
   REQUIRE(test_pass(output, output, opts, make_pipe(&ir::pass_rm_trivial_schemas)));
 }
 
@@ -280,8 +279,7 @@ TEST("single type in anyof/allof/oneof") {
 )";
   // преобразуются в просто типы, но не удаляются как фундаментальные, так как именованы
   ir_options opts;
-  opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  opts.allow_rm_trivial_named = true;
+  opts.allow_rm_unused = svarg::ir::remove_category_e::any;
   REQUIRE(test_pass(input, "{}", opts, &ir::pass_combinators_flatten));
 }
 

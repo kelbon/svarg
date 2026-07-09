@@ -1,0 +1,33 @@
+// берёт на вход файлы openapi спецификаций, делает из них C++ файлы
+ALLOW_ADDITIONAL_ARGS
+
+STRING(out, "output directory")
+ALIAS(o, out)
+
+OPTION(std::string, specs_dir, "specs directory", default_value(std::filesystem::current_path().generic_string()))
+RENAME(specs_dir, "specs-dir")
+ALIAS(s, specs-dir)
+
+BOOLEAN(optimize, "optimizes IR before generate", default_value(true))
+ALIAS(O2, optimize)
+
+OPTION(clinok::multiarg<std::string>, include_dirs, "include directories", default_value(clinok::multiarg<std::string>{}))
+RENAME(include_dirs, "include-dirs")
+ALIAS(I, include-dirs)
+
+DECLARE_STRING_ENUM(allow_remove_e, noone, only_inline_schemas, any)
+OPTION(allow_remove_e, allow_remove, "which schemas optimization is allowed to remove", default("only_inline_schemas"))
+
+BOOLEAN(allow_network_refs, "allows references like https://... in openapi files", default_value(false))
+RENAME(allow_network_refs, "allow-network-refs")
+
+INTEGER(references_max_recursion_depth, "max recursion depth for $ref's", default_value(50))
+
+BOOLEAN(simple_identifiers, "if false, C++ identifiers guaranteed to be unique, but can be ugly", default_value(true))
+RENAME(simple_identifiers, "simple-identifiers")
+
+TAG(ignore_requirements, "removes all requirements before generating."
+                         " Reducing count of schemas, generates much less, but validation is not complete")
+RENAME(ignore_requirements, "ignore-requirements")
+
+ALIAS(h, help)

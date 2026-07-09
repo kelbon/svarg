@@ -6,7 +6,7 @@ TAG(ignore_requirements, "removes all requirements before generating."
 
 RENAME(ignore_requirements, "ignore-requirements")
 
-BOOLEAN(optimize, "optimizes IR before generate", default_value(true))
+TAG(optimize, "optimizes IR before generate")
 
 ALIAS(O2, optimize)
 

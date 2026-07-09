@@ -6,6 +6,7 @@
 #include "svarg/utils/json_pointer.hpp"
 #include "svarg/utils/guard_array.hpp"
 #include "svarg/utils/for_each_field.hpp"
+#include "svarg/backend/cxx/cxx_ident.hpp"  // to_cxx_ident
 
 #include <boost/pfr.hpp>
 
@@ -937,10 +938,13 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
       // но это нормально
       for (auto& [path, item] : *api.paths) {
         auto [ritem, file, item_jp] = resolve_ref_and_ret(item, obj_file, "/paths"_jp / path, *this);
-        string_map<std::string> name2path;
-        string_map<std::string> path2name;
-        // TODO? заменить на экранирующую версию!
-        std::string generatedname = path_to_name(path, name2path, path2name);
+        // отключено ради упрощения генерации и предсказуемости имён
+        //
+        // string_map<std::string> name2path;
+        // string_map<std::string> path2name;
+        // std::string generatedname = path_to_name(path, name2path, path2name);
+
+        std::string generatedname(cxx::to_cxx_ident(path));
         auto ops = path_item_object_lowering(path, obj_file, file, std::move(item_jp), generatedname,
                                              std::move(ritem));
         for (auto& [method, op] : ops)

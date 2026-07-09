@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) try {
       std::println("IR file {} not found", fs::absolute(p).generic_string());
       return -1;
     }
-    if (p.extension() != ".yaml" && p.extension() != ".yml")
+    if (!is_yaml_extension(p.extension().string()))
       std::println("warning: IR file extension is not yaml");
     inputs.push_back(std::move(p));
   }

@@ -6,15 +6,24 @@
 #include <ryml_std.hpp>
 
 #include <fstream>
+#include <strswitch/strswitch.hpp>
 
 namespace svarg {
 
+bool is_yaml_extension(std::string_view extension) noexcept {
+  return ss::string_switch<bool>(extension).cases(".yaml", ".yml", true).or_default(false);
+}
+
+bool is_json_extension(std::string_view extension) noexcept {
+  return ss::string_switch<bool>(extension).cases(".json", ".jsonc", ".json5", true).or_default(false);
+}
+
 void pass_as_json(fs::path path, fn_cref<void(std::string_view) const> fn) {
   fs::path ext = path.extension();
-  if (ext == ".yaml" || ext == ".yml") {
+  if (is_yaml_extension(ext.string())) {
     std::string json = load_yaml_as_json(path);
     return fn(std::string_view(json));
-  } else if (ext == ".json" || ext == ".jsonc" || ext == "json5") {
+  } else if (is_json_extension(path.string())) {
     boost::iostreams::mapped_file_source file(path.string());
     return fn(std::string_view(file.data(), file.size()));
   } else {
