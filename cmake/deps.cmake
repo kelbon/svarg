@@ -1,6 +1,6 @@
 include(cmake/get_cpm.cmake)
 
-set(BOOST_INCLUDE_LIBRARIES system asio pfr json iostreams)
+set(BOOST_INCLUDE_LIBRARIES system asio pfr json iostreams process)
 CPMAddPackage(
   NAME BOOST
   VERSION 1.87.0

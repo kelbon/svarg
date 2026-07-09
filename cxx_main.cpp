@@ -1,5 +1,6 @@
 
 #include "svarg/ir/optimization_passes.hpp"
+#include "svarg/utils/clang_format_dir.hpp"
 #define CLINOK_NAMESPACE_NAME cxxcli
 #define program_options_file "svarg/cli/cxx_options.def"
 #include <clinok/cli_interface.hpp>
@@ -38,6 +39,13 @@ int main(int argc, char* argv[]) try {
   options.simple_cxx_identifiers = cliopts.simple_identifiers;
   cxx::renderer r(ir, options);
   r.render2cxx(cliopts.out);
+  auto onfile = [](const fs::path& p, bool success) {
+    if (success)
+      std::println("file `{}` formatted", p.generic_string());
+    else
+      std::println("cannot format file `{}", p.generic_string());
+  };
+  clang_format_dir(cliopts.out, onfile);
   std::println("output written to {} directory", fs::absolute(cliopts.out).generic_string());
   return 0;
 } catch (std::exception& e) {

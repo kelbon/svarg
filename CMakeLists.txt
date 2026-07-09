@@ -24,6 +24,7 @@ target_link_libraries(svarglib PUBLIC
     clinoklib
     Boost::json
     Boost::pfr
+    Boost::process
     ryml
     Boost::iostreams # mapped file
     strswitchlib
