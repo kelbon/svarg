@@ -6,7 +6,7 @@
 namespace svarg {
 
 inline void remove_duplicates(auto& x) {
-  std::ranges::sort(x);
+  std::ranges::stable_sort(x);
   auto [b, e] = std::ranges::unique(x);
   x.erase(b, e);
 }

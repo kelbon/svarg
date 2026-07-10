@@ -649,6 +649,15 @@ struct response_desc {
     status = status.from_string(s);
   }
 
+  /*
+  что-то подобное:
+          default:
+          description: Unexpected error
+  */
+  [[nodiscard]] bool allows_anything() const noexcept {
+    return !bodies && !headers;
+  }
+
   bool operator==(const response_desc& r) const noexcept {
     return status == r.status;
   }

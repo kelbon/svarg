@@ -160,13 +160,6 @@ struct lowering_context {
  private:
   template <typename T>
   friend auto resolve_ref_to(reference_object ref, fs::path file, auto&& invocable, lowering_context&);
-  openapi_object do_parse_spec_file(fs::path spec) {
-    // подменяем кеш, чтобы в нём не было незарезолвленных сырых ссылок
-    boost::json::value& v = jcache.load_mutable(specs_dir / spec);
-    // resolve_raw_references НЕ использует jcache, так что это безопасно
-    v = resolve_raw_references(std::move(v), specs_dir / spec, opts);
-    return parse_spec(std::as_const(v), opts);
-  }
 
   void visit_and_generate_ir(const openapi_object& obj, const fs::path& obj_file);
 };

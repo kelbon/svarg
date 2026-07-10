@@ -14,8 +14,14 @@ namespace svarg {
 struct jsons_cache {
  private:
   std::unordered_map<fs::path, boost::json::value> cache;
+  // вызывается перед тем как положить json в кеш при загрузке
+  move_only_fn<boost::json::value(const fs::path&, boost::json::value)> preprocess;
 
  public:
+  // path передаётся в функцию точно такой же как и запрошенный в load/load_mutable
+  void set_preprocessor(move_only_fn<boost::json::value(const fs::path&, boost::json::value)> pp) {
+    preprocess = std::move(pp);
+  }
   const boost::json::value& load(fs::path path) {
     return load_mutable(std::move(path));
   }

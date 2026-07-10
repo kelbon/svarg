@@ -375,12 +375,29 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           result += render_parse_tag(cxx_support::parse_tag_e::string_enum);
           result += std::format("static constexpr inline std::array<std::string_view, {}> values = {{",
                                 e.values.size());
+          /*
+          сериализация вместо .as_string обходит такое:
+
+          type:string
+          enum:
+            - null
+            или
+            - 1
+            - 2
+
+            или даже то, что с точки зрения json похоже на объекты и массивы
+            Т.е. по сути сериализация вместо .as_string убирает требование кавычек вокруг значений
+          */
           for (auto&& v : e.values)
-            result += std::format("{}, ", render_string(std::string_view(v.value.as_string())));
+            result += std::format("{}, ", render_string(std::string_view(boost::json::serialize(v.value))));
           result += "};\n";  // end values
           result += "enum struct values_e {";
-          for (auto&& v : e.values)
-            result += std::format("{},", make_cxx_ident(std::string_view(v.value.as_string()), options));
+          for (auto&& v : e.values) {
+            // боюсь представить идентификатор созданный из какого-то объекта, но ты сам виноват если такое
+            // делаешь
+            result += std::format("{},",
+                                  make_cxx_ident(std::string_view(boost::json::serialize(v.value)), options));
+          }
           result += "};\nusing enum values_e;\n\n";  // end values_e
           // возможное пересечение имён using enum / special_field_name игнорируется
           result += std::format("values_e {};\n\n", special_field_name);
@@ -829,6 +846,9 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
       result += rendered;
       struct_names.push_back(std::move(struct_name));
     }
+    if (op.defaultResponse)
+      struct_names.push_back("default_response");
+    remove_duplicates(struct_names);
     result += "constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {\n";
     // сначала не ренжи (2ХХ)
     for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {

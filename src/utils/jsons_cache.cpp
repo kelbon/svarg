@@ -7,16 +7,18 @@
 
 namespace svarg {
 
-boost::json::value& jsons_cache::load_mutable(fs::path path) {
-  path = fs::canonical(path);
+boost::json::value& jsons_cache::load_mutable(fs::path path_) {
+  const fs::path path = fs::canonical(path_);
   auto it = cache.find(path);
   if (it != cache.end())
     return it->second;
-  decltype(cache)::iterator res;
 
+  decltype(cache)::iterator res;
   pass_as_json(path, [&](std::string_view content) {
-    auto [it, _] = cache.try_emplace(std::move(path), boost::json::parse(content));
-    res = std::move(it);
+    boost::json::value json = boost::json::parse(content);
+    if (preprocess)
+      json = preprocess(path_, std::move(json));
+    std::tie(res, std::ignore) = cache.try_emplace(std::move(path), std::move(json));
   });
   return res->second;
 }

@@ -276,6 +276,10 @@ static ir::fundamental_e detect_enum_type(const arrayof<Any>& values) noexcept {
     return ir::fundamental_e::integer;
   else if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_number(); }))
     return ir::fundamental_e::number;
+  else if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_null(); }))
+    return ir::fundamental_e::null;
+  else if (std::ranges::all_of(values, [](const Any& v) { return v.value.is_bool(); }))
+    return ir::fundamental_e::boolean;
   else
     return ir::fundamental_e::any;
 }
@@ -377,25 +381,27 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   assert(!(!schema.type && schema.required));
 
   if (schema.enum_) {
-    if (schema.enum_->empty())
-      throw semantic_error("enum at `{}` must have at least one value", jp.view());
-    ir::enum_schema es{.values = *schema.enum_};
-    if (schema.type) {
-      auto& types = schema.type->values;
-      if (types.size() > 1 || (types.front() == "object" || types.front() == "array")) {
-        // ссылаемся на тип определяемой прямо сейчас схемы
-        es.type = res.ref();
-      } else {
-        ir::fundamental_e e;
-        // types никогда не пустое
-        if (!efromstr(types.front(), e))
-          throw bad_enum_value<ir::fundamental_e>(types.front());
-        es.type = ir::make_fundamental_ref(e);
-      }
+    if (schema.enum_->empty()) {
+      res.type.data = ir::fundamental_e::never;
     } else {
-      es.type = ir::make_fundamental_ref(detect_enum_type(es.values));
+      ir::enum_schema es{.values = *schema.enum_};
+      if (schema.type) {
+        auto& types = schema.type->values;
+        if (types.size() > 1 || (types.front() == "object" || types.front() == "array")) {
+          // ссылаемся на тип определяемой прямо сейчас схемы
+          es.type = res.ref();
+        } else {
+          ir::fundamental_e e;
+          // types никогда не пустое
+          if (!efromstr(types.front(), e))
+            throw bad_enum_value<ir::fundamental_e>(types.front());
+          es.type = ir::make_fundamental_ref(e);
+        }
+      } else {
+        es.type = ir::make_fundamental_ref(detect_enum_type(es.values));
+      }
+      res.type.data = std::move(es);
     }
-    res.type.data = std::move(es);
   } else if (schema.type) {
     arrayof<string> rtypes = schema.type->values;
 
@@ -970,27 +976,29 @@ ir::ir_object lowering_context::generate_specs(fs::path specsdir, std::vector<fs
   // подготовка
   if (!fs::exists(specsdir) || !fs::is_directory(specsdir))
     throw parse_error("specs directory not exist, provided path: {}", specsdir.generic_string());
+  opts = options;
   specs_dir = fs::canonical(specsdir);
-  std::unordered_set<fs::path> loaded_specs;
-  std::unordered_map<fs::path, openapi_object> specs;
+  jcache.set_preprocessor([this](const fs::path& spec, boost::json::value v) {
+    return resolve_raw_references(std::move(v), specs_dir / spec, opts);
+  });
+
+  std::map<fs::path, openapi_object> specs;
 
   // парсинг спек
 
   for (fs::path& s : specs2generate) {
     s = find_existing_file(std::move(s), specs_dir);
-    if (!specs.contains(s)) {
-      specs[s] = do_parse_spec_file(s);
-      loaded_specs.insert(std::move(s));
-    }
+    if (!specs.contains(s))
+      specs[s] = parse_spec(jcache.load(specs_dir / s), opts);
   }
 
   // перевод в IR
 
-  for (auto& p : loaded_specs) {
+  for (auto& [p, _] : specs) {
     try {
       // результат собирается в this->result_ir
       visit_and_generate_ir(specs.at(p), p);
-    } catch (std ::exception& e) {
+    } catch (std::exception& e) {
       throw parse_error("{}/{}", p.generic_string(), e.what());
     }
   }
