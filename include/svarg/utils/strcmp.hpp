@@ -37,6 +37,13 @@ inline std::string lowered(std::string_view input) {
   return out;
 }
 
+inline std::string uppered(std::string_view input) {
+  std::string out(input);
+  for (char& c : out)
+    c = to_upper_ascii(c);
+  return out;
+}
+
 // case insensitive
 inline std::strong_ordering compare_ci(std::string_view a, std::string_view b) {
   size_t n = std::min(a.size(), b.size());

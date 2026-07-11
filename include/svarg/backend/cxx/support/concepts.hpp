@@ -37,8 +37,9 @@ enum struct parse_tag_e {
   enum_,
   string_enum,
 
-  body,  // string_view content_type + <special_field_name> единственное поле с данными +
-         // encoding_for(string_view)
+  body,       // string_view content_type + <special_field_name> единственное поле с данными +
+              // encoding_for(string_view)
+  operation,  // вообще парсится из запроса и сериализуется в запрос
 };
 
 constexpr std::string_view e2str(parse_tag_e e) noexcept {
@@ -63,6 +64,8 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
       return "string_enum";
     case parse_tag_e::body:
       return "body";
+    case parse_tag_e::operation:
+      return "operation";
   }
   metel::unreachable();
 }
@@ -79,6 +82,7 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
                         .case_("enum_", parse_tag_e::enum_)
                         .case_("string_enum", parse_tag_e::string_enum)
                         .case_("body", parse_tag_e::body)
+                        .case_("operation", parse_tag_e::operation)
                         .or_nullopt();
   if (!t)
     return false;
@@ -164,6 +168,9 @@ concept a_string_enum = tagged_as<T>(parse_tag_e::string_enum);
 
 template <typename T>
 concept a_body = tagged_as<T>(parse_tag_e::body);
+
+template <typename T>
+concept an_operation = tagged_as<T>(parse_tag_e::operation);
 
 template <a_body T>
 consteval std::string_view get_content_type() {

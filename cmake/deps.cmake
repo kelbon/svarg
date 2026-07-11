@@ -62,7 +62,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME HTTP2
   GIT_REPOSITORY https://github.com/kelbon/http2
-  GIT_TAG v0.9.5
+  GIT_TAG v0.10.0
   OPTIONS "KELHTTP2_USE_CPM ON"
 )
 

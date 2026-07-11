@@ -791,8 +791,21 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
       auto [hdrobj, reffile, refjp] = resolve_ref_and_ret(hdr, file, jp / "headers" / name, *this);
       if (hdrobj.required)
         result_hdr.required = *hdrobj.required;
+      if (hdrobj.schema && hdrobj.content)
+        throw validate_error("header object cannot have both `schema` and `content` set");
       if (hdrobj.schema)
         result_hdr.schema = resolve_schema(*hdrobj.schema, reffile, refjp / "schema", *this).ir_schema;
+      if (hdrobj.content) {
+        if (hdrobj.content->size() != 1)
+          throw validate_error("header object 'content' MUST contain one entry, but contais `{}`",
+                               hdrobj.content->size());
+        auto& [content_type, mtc] = *hdrobj.content->begin();
+        if (mtc.schema)
+          result_hdr.schema =
+              resolve_schema(*mtc.schema, reffile, refjp / "content" / content_type / "schema", *this)
+                  .ir_schema;
+        result_hdr.encoding = content_type;
+      }
       result.headers->insert(std::move(result_hdr));
     }
   }

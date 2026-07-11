@@ -47,11 +47,12 @@ static std::string make_cxx_ident(std::string_view str, const render_options& op
   return options.simple_cxx_identifiers ? to_cxx_ident_simple(str) : to_cxx_ident(str);
 }
 
-static std::string make_namespace(std::string_view spec, const json_pointer& jp,
-                                  const render_options& options) {
+static std::string make_namespace(std::string_view spec, json_pointer jp, const render_options& options) {
+  if (jp.segments_count() > 0)
+    jp.rm_last_segment();
   std::string ns = options.simple_cxx_identifiers ? jsonptr2namespace_simple(jp) : jsonptr2namespace(jp);
   if (ns.empty())
-    return ns;
+    return std::string(spec);
   return std::format("{}::{}", make_cxx_ident(spec, options), ns);
 }
 
@@ -262,7 +263,7 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   if (!t.name && !t.has_requirements()) {
     std::string res = render_special_field_type(t.type, relspec, relative);
     if (!res.empty())
-      return {.typeref = std::format("{} {};\n", res, special_field_name), .is_alias = true};
+      return {.typeref = std::move(res), .is_alias = true};
   }
   // всё остальное на выводе это полноценные struct
 
@@ -291,7 +292,12 @@ std::string renderer::render_optional_field(const ir::schema_ref& field, std::st
 }
 
 std::string renderer::render_required_field(const ir::schema_ref& field, std::string_view name,
-                                            std::string_view relspec, const json_pointer& relative) const {
+                                            std::string_view relspec, const json_pointer& relative,
+                                            bool recursive) const {
+  if (recursive) {
+    return std::format("{}<{}> {}", box_str, render_schema_ref(field, relspec, relative).typeref,
+                       make_cxx_ident(name, options));
+  }
   return std::format("{} {}", render_schema_ref(field, relspec, relative).typeref,
                      make_cxx_ident(name, options));
 }
@@ -303,7 +309,7 @@ std::string renderer::render_object_field(const ir::object_field_info& field, st
                        relative.escaped());
   }
   if (field.required)
-    return render_required_field(field.type, field.name, relspec, relative);
+    return render_required_field(field.type, field.name, relspec, relative, recursive_field);
   return render_optional_field(field.type, field.name, relspec, relative, recursive_field);
 }
 
@@ -597,7 +603,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   result += render_parse_tag(cxx_support::parse_tag_e::body);
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
                         render_string(body.contentType));
-  result += std::format("{} data;\n", render_schema_ref(body.schema, spec, jp).typeref);
+  result += std::format("{} {};\n", render_schema_ref(body.schema, spec, jp).typeref, special_field_name);
   if (body.membersEncoding && !body.membersEncoding->empty()) {
     std::string encoding;
     for (auto& [prop_name, content_type] : *body.membersEncoding) {
@@ -699,6 +705,8 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
           .name = h.name,
           .schema = h.schema ? *h.schema : ir::make_fundamental_ref(ir::fundamental_e::string),
           .required = h.required,
+          .encoding = h.encoding,
+          .meta = h.meta,
       });
     }
     result += render_parameters(params, spec, jp, *this);
@@ -787,11 +795,18 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   // id
   result += std::format("struct {} {{\n", op.id);
 
+  // parse tag
+  result += render_parse_tag(cxx_support::parse_tag_e::operation);
+
   // spec
   result += std::format("static constexpr inline std::string_view spec = {};\n\n", render_string(op.spec));
 
   // method
-  result += std::format("static constexpr inline std::string_view method = {};\n", render_string(op.method));
+
+  // uppered так как все методы в регистре методов должны быть upper (GET/POST а в опенапи файле пишутся
+  // маленькими буквами). Игнорируем что какой-то кастомный метод зачем быть GeT
+  result += std::format("static constexpr inline std::string_view method = {};\n",
+                        render_string(uppered(op.method)));
 
   // parameters
 
@@ -846,9 +861,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
       result += rendered;
       struct_names.push_back(std::move(struct_name));
     }
-    if (op.defaultResponse)
-      struct_names.push_back("default_response");
-    remove_duplicates(struct_names);
+
     result += "constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {\n";
     // сначала не ренжи (2ХХ)
     for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
@@ -872,7 +885,9 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     else
       result += "return vtor.template operator()<void>();\n";
     result += "}\n\n";
-
+    if (op.defaultResponse)
+      struct_names.push_back("default_response");
+    remove_duplicates(struct_names);
     auto names_rng = struct_names | std::views::join_with(',');
     result += std::format("\nusing all_responses = {}<{}>;\n\n", typelist_str,
                           std::string(names_rng.begin(), names_rng.end()));

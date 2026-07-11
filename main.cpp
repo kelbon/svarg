@@ -43,7 +43,6 @@ using namespace svarg;
   m.pop_back();
   return p.generic_string().starts_with(m);
 }
-// TODO test
 
 // возвращает set для одинакового порядка генерации. Все пути относительно specs_dir
 static std::set<fs::path> collect_input_files(fs::path specs_dir,

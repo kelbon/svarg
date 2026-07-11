@@ -493,15 +493,18 @@ struct operation_parameter {
   }
 };
 
+// operation_parameter без location (header)
 struct header {
   SVARG_IR_TYPE;
 
   // не зависит от регистра
   string name;
-  // по умолчанию false
-  std::optional<bool> required;
   // по умолчанию эквивалентно type: string
   std::optional<schema_ref> schema;
+  // по умолчанию false
+  std::optional<bool> required;
+  std::optional<content_type_t> encoding;
+  std::optional<meta_t> meta;
 
   bool operator==(const header& r) const noexcept {
     return is_equal_ci(name, r.name);
