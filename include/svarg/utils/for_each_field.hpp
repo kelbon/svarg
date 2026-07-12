@@ -23,14 +23,6 @@ void for_each_field_location_impl(T&& v, Fn&& fn, std::index_sequence<Is...>) {
    ...);
 }
 
-// для каждого поля вызывает fn(field_location<remove_cvref_t<T>, FieldIndex>, поле)
-template <typename T, typename Fn>
-void for_each_field_with_location(T&& v, Fn&& fn) {
-  return for_each_field_location_impl(
-      std::forward<T>(v), std::forward<Fn>(fn),
-      std::make_index_sequence<boost::pfr::tuple_size_v<std::remove_reference_t<T>>>{});
-}
-
 template <typename T, typename Fn, size_t... Is>
 void for_each_field_name_impl(T&& v, Fn&& fn, std::index_sequence<Is...>) {
   (std::forward<Fn>(fn)(boost::pfr::get_name<Is, std::remove_cvref_t<T>>(),

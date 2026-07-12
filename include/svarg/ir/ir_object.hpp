@@ -554,6 +554,9 @@ struct body {
   // (например openapi 3.2 itemsSchema)
   // по умолчанию false
   std::optional<bool> streaming;
+  // имеет смысл только для отправки. При получении определяется по хедеру content-type или по дефолту т.к.
+  // одно body
+  bool required = false;
 
   bool operator==(const body& r) const noexcept {
     return operator<=>(r) == std::strong_ordering::equal;

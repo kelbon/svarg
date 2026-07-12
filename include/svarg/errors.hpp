@@ -5,7 +5,8 @@
 #include <metel/meta.hpp>
 #include "metel/box_union.hpp"
 
-#include "utils/type_name.hpp"
+#include "svarg/utils/forward_like.hpp"
+#include "svarg/utils/type_name.hpp"
 
 namespace svarg {
 
@@ -99,7 +100,7 @@ struct METEL_TRIVIAL_ABI error_code {
   void rethrow_if_failed(this Me&& self) {
     metel::matcher m{
         [](metel::nothing_t) {},
-        [](auto&& x) { throw std::forward_like<Me>(x); },
+        [](auto&& x) { throw noadl::forwardLike<Me>(x); },
     };
     self.err.visit(m);
   }

@@ -43,6 +43,13 @@ static constexpr std::string_view operation_file_begin = R"(
 static constexpr std::string_view operation_file_end = "";
 static constexpr std::string_view typelist_str = "typelist";
 
+// выключено, чтобы генерировать любые апи. Ошибка будет выдана на этапе попытки записи в такой формат
+// static void throw_if_unsupported_content_type(const ir::content_type_t& t) {
+//   cxx_support::content_type_e e;
+//   if (!efromstr(t.str(), e))
+//     throw render_error("content type `{}` unsupported", t.str());
+// }
+
 static std::string make_cxx_ident(std::string_view str, const render_options& options) {
   return options.simple_cxx_identifiers ? to_cxx_ident_simple(str) : to_cxx_ident(str);
 }
@@ -92,9 +99,45 @@ static std::string_view get_schema_name(const ir::schema_ref& s, const render_op
   return s.name ? *s.name : inline_schema_name;
 }
 
+namespace detail {
+
+inline std::string escape_plain(std::string_view s) {
+  std::string out;
+  out.reserve(s.size() + 8);
+  for (unsigned char c : s) {
+    switch (c) {
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
+      default:
+        // управляющие символы и прочее странное пишется числовым кодом
+        if (c < 0x20 || c == 0x7F) {
+          // ровно 3 восьмеричных разряда — escape не "съест" следующий символ
+          out += std::format("\\{:03o}", c);
+        } else {
+          out += static_cast<char>(c);
+        }
+    }
+  }
+  return out;
+}
+
+}  // namespace detail
+
 static std::string render_string(std::string_view s) {
-  // всегда raw строки с двойной кавычкой, чтобы избежать экранирования и тд
-  return std::format("R\"\"({})\"\"", s);
+  return std::format("\"{}\"", detail::escape_plain(s));
 }
 
 static std::string render_parse_tag(cxx_support::parse_tag_e tag) {
@@ -349,11 +392,24 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
   }
   result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
   for (auto&& f : fields) {
-    if (f.required)
+    if (f.required)  // оперирует именами из спецификации, а не из полей
       result += std::format("if (str == {}) return true;\n", render_string(f.name));
   }
   result += "return false;\n";
   result += "}\n\n";
+  // имена полей нельзя использовать, так как С++ имена могут не совпадать с указанными в спецификации
+  // порядок такой же как в декларациях - сначала требуемые, затем опциональные
+  result +=
+      std::format("static constexpr std::array<std::string_view, {}> field_names = {{\n", fields.size());
+  for (auto&& f : fields) {
+    if (f.required)
+      result += std::format("{},\n", render_string(f.name));
+  }
+  for (auto&& f : fields) {
+    if (!f.required)
+      result += std::format("{},\n", render_string(f.name));
+  }
+  result += "};\n\n";
   return result;
 }
 
@@ -594,10 +650,11 @@ void renderer::render2cxx(fs::path output_dir) const {
 
 rendered_with_name renderer::render_body(const ir::body& body, std::string_view spec,
                                          const json_pointer& jp) const {
+  // throw_if_unsupported_content_type(body.contentType);
   std::string name = std::format("{}_body", make_cxx_ident(body.contentType, options));
   std::string result;
   result += std::format("struct {} {{\n", name);
-
+  result += std::format("static constexpr bool is_required = {}", body.required);
   if (body.streaming && *body.streaming)
     result += "using is_streaming = int;\n";
   result += render_parse_tag(cxx_support::parse_tag_e::body);
@@ -607,8 +664,9 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   if (body.membersEncoding && !body.membersEncoding->empty()) {
     std::string encoding;
     for (auto& [prop_name, content_type] : *body.membersEncoding) {
-      encoding +=
-          std::format("if (str == {}) return {};\n", render_string(prop_name), render_string(content_type));
+      // throw_if_unsupported_content_type(content_type);
+      encoding += std::format("if (str == {}) return {};\n",
+                              render_string(make_cxx_ident(prop_name, options)), render_string(content_type));
     }
     result += std::format(
         "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
@@ -630,9 +688,11 @@ static std::string render_parameters(const auto& params, std::string_view relspe
 
   std::string encoding;
   for (const ir::operation_parameter& p : params) {
-    if (p.encoding)
-      encoding +=
-          std::format("if (str == {}) return {};\n", render_string(p.name), render_string(*p.encoding));
+    if (p.encoding) {
+      // throw_if_unsupported_content_type(*p.encoding);
+      encoding += std::format("if (str == {}) return {};\n",
+                              render_string(make_cxx_ident(p.name, ren.options)), render_string(*p.encoding));
+    }
   }
   if (!encoding.empty()) {
     s += std::format(
@@ -659,7 +719,7 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     }
     auto names_rng = struct_names | std::views::join_with(',');
     std::string types = std::format("{}", std::string(names_rng.begin(), names_rng.end()));
-    result += std::format("{}<{}> body;\n\n", variant_str, types);
+    result += std::format("{}<std::monostate, {}> body;\n\n", variant_str, types);
     // боди уже сортированы по типу контента так, что сначала провериться более специализированный
     result +=
         "static constexpr decltype(auto) select_body_type(std::string_view content_type, auto&& vtor) {";
@@ -671,9 +731,13 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     result += "}\n\n";
   } else {
     // одно тело
-    auto [struct_name, str] = render_body(*bodies.begin(), spec, jp);
+    auto& body = *bodies.begin();
+    auto [struct_name, str] = render_body(body, spec, jp);
     result += str;
-    result += std::format("\n{} body;\n", struct_name);
+    if (body.required)
+      result += std::format("\n{} body;\n", struct_name);
+    else
+      result += std::format("\n{}<{}> body;\n", optional_str, struct_name);
   }
 
   return result;
@@ -754,6 +818,38 @@ static ir::schema_refs_t all_schemas_from(const auto& x, bool allow_fundamental 
   return schemas;
 }
 
+struct build_path_make_fn_visitor {
+  std::string& out;
+  size_t param_index = 0;
+  const std::vector<const ir::operation_parameter*>& params;
+  const render_options& options;
+
+  explicit build_path_make_fn_visitor(std::string& x, std::vector<const ir::operation_parameter*>& params,
+                                      const render_options& options)
+      : out(x), params(params), options(options) {
+    out += "static constexpr void visit_path(auto&& vtor) {";
+  }
+
+  void substr(std::string_view sv) {
+    out += std::format("vtor.substr({});\n", render_string(sv));
+  }
+  void param(std::string_view param_name) {
+    out += std::format("vtor.param(std::index_sequence<{}>{{}});\n", param_index);
+    ++param_index;
+  }
+  void param(std::string_view param_name, std::string_view sep) {
+    out += std::format("vtor.param(std::index_sequence<{}>{{}}, {});\n", param_index, render_string(sep));
+    ++param_index;
+  }
+
+  void pattern_end() {
+    out += "}\n\n";
+  }
+  void error(std::string_view msg) {
+    throw render_error("{}", msg);
+  }
+};
+
 render_result renderer::render_operation(const ir::operation& op, bool is_webhook) const {
   std::string result(operation_file_begin);
 
@@ -809,6 +905,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
                         render_string(uppered(op.method)));
 
   // parameters
+  visit_templated_path_parts(op.path, build_path_make_fn_visitor{result, path_params, options});
 
   auto deref = std::views::transform([](auto* p) -> auto& { return *p; });
   if (!path_params.empty()) {

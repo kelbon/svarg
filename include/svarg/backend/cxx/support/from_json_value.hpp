@@ -13,8 +13,8 @@
 
 namespace svarg {
 
+using cxx_support::fields_count;
 using cxx_support::get_special_field;
-using cxx_support::object_fields_count;
 
 template <cxx_support::an_fundamental T>
 struct from_json_value<T> {
@@ -186,7 +186,7 @@ struct from_json_value<T> {
   }
 };
 
-template <aggregate A>
+template <cxx_support::an_object A>
 error_code aggregate_from_json(A& v, const boost::json::value& j) {
   const auto* obj = v.if_object();
   error_code ec;
@@ -194,15 +194,15 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
     ec = parse_error(" object expected, got `{}`", e2str(v.kind()));
     return ec;
   }
-  std::bitset<object_fields_count<A>()> parsed = {};
+  std::bitset<fields_count<A>()> parsed = {};
 
   for (auto&& [key, value] : *obj) {
     std::optional<size_t> i = cxx_support::get_field_index<A>(key);
     if (i) {
-      metel::visit_index<object_fields_count<A>()>([&]<size_t I>() {
-        if constexpr (A::is_required(boost::pfr::get_name<I, A>()))
+      metel::visit_index<fields_count<A>()>([&]<size_t I>() {
+        if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
           parsed.set(I);
-        ec = from_json(j, boost::pfr::get<I>(v));
+        ec = from_json(j, get_field<I>(v));
       });
       if (ec)
         return ec;

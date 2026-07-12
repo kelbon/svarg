@@ -738,10 +738,12 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
 // и затем generate, в итоге один метод есть просто
 
 ir::body lowering_context::media_type_object_lowering(const media_type_object& obj, fs::path file,
-                                                      json_pointer jp, std::string_view content_type) {
+                                                      json_pointer jp, std::string_view content_type,
+                                                      bool is_required_body) {
   ir::body result;
   // возможно media type range
   result.contentType = content_type;
+  result.required = is_required_body;
   if (obj.itemSchema) {
     auto [ref, rschema] = resolve_schema(*obj.schema, file, jp / "itemSchema", *this);
     result.schema = ref;
@@ -797,7 +799,7 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
         result_hdr.schema = resolve_schema(*hdrobj.schema, reffile, refjp / "schema", *this).ir_schema;
       if (hdrobj.content) {
         if (hdrobj.content->size() != 1)
-          throw validate_error("header object 'content' MUST contain one entry, but contais `{}`",
+          throw validate_error("header object 'content' MUST contain one entry, but contains `{}`",
                                hdrobj.content->size());
         auto& [content_type, mtc] = *hdrobj.content->begin();
         if (mtc.schema)
@@ -813,8 +815,10 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
     auto _ = guard_array(result.bodies);
     for (auto& [content_type_, bodydesc] : *rsp.content) {
       ir::content_type_t content_type = content_type_;
+      // для респонса все body требуемые, так как если указан тип контента и статус код, дальше указано тело,
+      // то ожидается что оно придёт
       result.bodies->insert(media_type_object_lowering(bodydesc, file, jp / "content" / content_type.str(),
-                                                       content_type.str()));
+                                                       content_type.str(), /*is_required_body=*/true));
     }
   }
 
@@ -857,8 +861,10 @@ std::set<ir::body> lowering_context::request_body_lowering(request_body_object o
   std::set<ir::body> result;
   for (auto& [content_type_, mediaobj] : obj.content) {
     ir::content_type_t content_type = content_type_;
-    result.insert(
-        media_type_object_lowering(mediaobj, file, jp / "content" / content_type.str(), content_type.str()));
+    ir::body b =
+        media_type_object_lowering(mediaobj, file, jp / "content" / content_type.str(), content_type.str(),
+                                   /*is_required_body=*/obj.required.value_or(false));
+    result.insert(std::move(b));
   }
   return result;
 }

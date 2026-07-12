@@ -229,6 +229,7 @@
           "name": "UserPatch"
           "spec": "api-a"
           "jsonptr": "/components/schemas/UserPatch"
+        "required": false
     "responses":
       - "status": "200"
         "headers":
@@ -241,11 +242,13 @@
               "name": "User"
               "spec": "api-a"
               "jsonptr": "/components/schemas/User"
+            "required": true
       - "status": "404"
         "bodies":
           - "contentType": "application/json"
             "schema":
               "spec": "@number@"
+            "required": true
   - "id": "createOrder"
     "spec": "api-a"
     "path": "/orders"
@@ -255,6 +258,7 @@
         "schema":
           "spec": "api-a"
           "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
+        "required": false
     "responses":
       - "status": "201"
         "bodies":
@@ -263,6 +267,7 @@
               "name": "Order"
               "spec": "api-b"
               "jsonptr": "/components/schemas/Order"
+            "required": true
       - "status": "400"
         "bodies":
           - "contentType": "application/json"
@@ -270,6 +275,7 @@
               "name": "Error"
               "spec": "api-b"
               "jsonptr": "/components/schemas/Error"
+            "required": true
 "webhooks":
   - "id": "postOrderStatus"
     "spec": "api-a"
@@ -280,5 +286,6 @@
         "schema":
           "spec": "api-a"
           "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
+        "required": false
     "responses":
       - "status": "200"

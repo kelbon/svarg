@@ -1,16 +1,17 @@
 #pragma once
 
 #include <set>
+#include <unordered_set>
 
 #include <boost/pfr.hpp>
 #include <boost/json.hpp>
-#include <unordered_set>
 
 #include "svarg/common_types.hpp"
 #include "svarg/concepts.hpp"
 #include "svarg/utils/unescape_field_name.hpp"
 #include "svarg/utils/json_pretty.hpp"
 #include "svarg/utils/yamljson.hpp"
+#include "svarg/utils/indexes.hpp"
 
 namespace svarg {
 
@@ -179,7 +180,7 @@ struct to_json_value<std::set<Types...>> {
 
 namespace noexport {
 
-template <typename T, size_t I>
+template <front_or_ir_type T, size_t I>
 void serialize_field(const T& in, boost::json::object& out) {
   constexpr std::string_view raw_name = boost::pfr::get_name<I, T>();
   constexpr std::string_view name = unescape_field_name(raw_name);
@@ -199,11 +200,6 @@ void serialize_field(const T& in, boost::json::object& out) {
   }
 }
 
-template <front_or_ir_type T, size_t... Is>
-void serialize_all_fields(const T& in, boost::json::object& out, std::index_sequence<Is...>) {
-  (serialize_field<T, Is>(in, out), ...);
-}
-
 }  // namespace noexport
 
 template <front_or_ir_type T>
@@ -218,7 +214,9 @@ struct to_json_value<T> {
     }
 
     boost::json::object out;
-    noexport::serialize_all_fields(in, out, std::make_index_sequence<boost::pfr::tuple_size_v<T>>{});
+    APPLY_INDEXES(boost::pfr::tuple_size_v<T>) {
+      (noexport::serialize_field<T, Is>(in, out), ...);
+    };
     return out;
   }
 };

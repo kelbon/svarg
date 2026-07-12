@@ -12,9 +12,32 @@
 #include <metel/meta.hpp>
 
 #include <kelcoro/generator.hpp>
+
+#include "svarg/utils/forward_like.hpp"
 #include "svarg/backend/cxx/support/types.hpp"
+#include "svarg/utils/parse_frontend_or_ir_type.hpp"
+
+// эти 2 макроса только для генерируемых типов
+#define APPLY_FIELD_INDEXES(T) APPLY_INDEXES(::svarg::cxx_support::fields_count<T>())
+#define FOR_EACH_FIELD_INDEX_OF(T) FOR_EACH_INDEX(::svarg::cxx_support::fields_count<T>())
 
 // описание генерируемых по умолчанию структур - операций и схем
+
+namespace svarg::noexport {
+
+template <typename T>
+struct deoptional_type : std::type_identity<T> {};
+
+template <typename T>
+struct deoptional_type<std::optional<T>> : std::type_identity<T> {};
+
+template <typename T>
+struct deoptional_type<metel::box<T>> : std::type_identity<T> {};
+
+template <typename T>
+using deoptional_type_t = typename deoptional_type<std::decay_t<T>>::type;
+
+}  // namespace svarg::noexport
 
 namespace svarg::cxx_support {
 
@@ -182,6 +205,138 @@ constexpr bool has_encodings = requires(std::string_view str) {
   { T::encoding_for(str) };
 };
 
+template <an_operation O>
+constexpr bool has_path_params = requires {
+  typename O::path_t;
+  O::path;
+};
+
+template <an_operation Op>
+using path_t = typename std::decay_t<Op>::path_t;
+
+template <an_operation O>
+constexpr bool has_query_params = requires {
+  typename O::query_t;
+  O::query;
+};
+
+template <an_operation Op>
+using query_t = typename std::decay_t<Op>::query_t;
+
+template <an_operation O>
+constexpr bool has_cookie_params = requires {
+  typename O::cookies_t;
+  O::cookies;
+};
+
+template <an_operation Op>
+using cookies_t = typename std::decay_t<Op>::cookies_t;
+
+template <an_operation O>
+constexpr bool has_header_params = requires {
+  typename O::headers_t;
+  O::headers;
+};
+
+template <an_operation Op>
+using headers_t = typename std::decay_t<Op>::headers_t;
+
+template <an_operation Op>
+constexpr bool has_body = requires { Op::body; };
+
+template <an_operation Op>
+using body_t = decltype(std::declval<Op>().body);
+
+template <an_operation Op>
+constexpr bool has_single_body() noexcept {
+  if constexpr (!has_body<Op>)
+    return false;
+  else  // у variant/box_union не будет .body
+    return has_parse_tag<svarg::noexport::deoptional_type_t<body_t<Op>>>;
+}
+
+template <an_operation Op>
+constexpr bool has_many_bodies() noexcept {
+  if constexpr (!has_body<Op>)
+    return false;
+  else
+    return !has_single_body<Op>();
+}
+
+template <an_operation Op>
+[[nodiscard]] constexpr bool is_body_required() noexcept {
+  if constexpr (!has_body<Op>)
+    return false;
+  else {
+    if constexpr (has_single_body<Op>())
+      return svarg::noexport::deoptional_type_t<body_t<Op>>::is_required;  // TODO обработать опшнл
+    else {
+      return []<template <typename...> typename X, typename... Bodies>(X<std::monostate, Bodies...>) {
+        return (Bodies::is_required && ...);
+      }();
+    }
+  }
+}
+
+template <an_operation Op>
+[[nodiscard]] constexpr bool is_body_present(const Op& op) noexcept {
+  if constexpr (!has_body<Op>)
+    return false;
+  else if constexpr (has_single_body<Op>()) {
+    if constexpr (is_body_required<Op>())
+      return true;
+    else
+      return !!op.body;
+  } else {
+    return !std::holds_alternative<std::monostate>(op.body);
+  }
+}
+
+// ожидает что is_body_present(op) == true
+template <an_operation Op, typename Vtor>
+constexpr void visit_body(Op&& op, Vtor&& vtor) noexcept {
+  static_assert(has_body<Op>);
+  if constexpr (has_single_body<Op>()) {
+    if constexpr (is_body_required<Op>()) {
+      std::forward<Vtor>(vtor)(noadl::forwardLike<Op>(op.body));
+      return;
+    } else {
+      if (!is_body_present(op))
+        throw serialize_error("body for operation `{}` is required, but not present", type_name<Op>());
+      std::forward<Vtor>(vtor)(*noadl::forwardLike<Op>(op.body));
+      return;
+    }
+  } else {
+    if constexpr (is_body_required<Op>()) {
+      if (!is_body_present(op))
+        throw serialize_error("body for operation `{}` is required, but not present", type_name<Op>());
+    }
+    std::visit(metel::matcher{
+                   [](std::monostate) { metel::unreachable(); },
+                   [&]<typename B>(B&& b) { std::forward<Vtor>(vtor)(noadl::forwardLike<Op>(b)); },
+               },
+               std::forward_like<Op>(op.body));
+    return;
+  }
+}
+
+// ожидает что is_body_present(op) == true
+template <an_operation Op>
+[[nodiscard]] constexpr std::string_view get_content_type(const Op& op) {
+  static_assert(has_body<Op>);
+
+  if constexpr (has_single_body<Op>()) {
+    return get_content_type<svarg::noexport::deoptional_type_t<decltype(op.body)>>();
+  } else {
+    return std::visit(
+        metel::matcher{
+            [](std::monostate) -> std::string_view { throw serialize_error("body of operation is not set"); },
+            []<typename B>(const B&) -> std::string_view { return get_content_type<B>(); },
+        },
+        op.body);
+  }
+}
+
 template <typename T>
 concept an_application_json_body = a_body<T> && get_content_type<T>() == "application/json";
 
@@ -203,31 +358,95 @@ concept serialize_tokens_consumer =
       v.on_null();
     };
 
-// TODO вместо этого нужно просто to_json_string и по adl вызывать таким же образом остальное (например
-// to_xml_string)
-// преобразует схему в токены для сериализации не зависящей от выходного формата, json/xml/...
-/// template <typename T>
-/// struct into_tokens {
-///   // void operator()(const T&, serialize_tokens_consumer auto&);
-/// };
+enum struct content_type_e {
+  application_json,
+  application_problem_json,
+  multipart_related,  // TODO реально саппорт, а не просто тут
+};
 
-// TODO видимо надо специальный тип который сохраняет токены ЕСЛИ НАДО для повторного прохода
+inline constexpr std::string_view e2str(content_type_e c) noexcept {
+  switch (c) {
+    case content_type_e::application_json:
+      return "application/json";
+    case content_type_e::application_problem_json:
+      return "application/problem+json";
+    case content_type_e::multipart_related:
+      return "multipart/related";
+  }
+  metel::unreachable();
+}
 
-// TODO все эти штуки на самом деле не знают откуда им придётся парсится. json/xml/query и так далее
-// так что нужно сюда переносить omo и парсинг организовывать на этом + видимо исключения не бросать, хотя
-// хз, пофиг на Not
+inline constexpr bool efromstr(std::string_view str, content_type_e& out) noexcept {
+  std::optional c = ss::string_switch<content_type_e>(str)
+                        .case_("application/json", content_type_e::application_json)
+                        .case_("application/problem+json", content_type_e::application_problem_json)
+                        .case_("multipart/related", content_type_e::multipart_related)
+                        .or_nullopt();
+  if (!c)
+    return false;
+  out = *c;
+  return true;
+}
 
-// сериализация в обратную сторону должна быть не привязана ни к чему. Вроде в тгбм +- так сделано для боди
-// это стоит заимствовать.
-// а в целом для всего нужно превратить штуки в наборы токенов, которые потом для json/xml/query и прочего
+template <content_type_e C, typename T>
+[[nodiscard]] std::string serialize_into(const T& value) {
+  if constexpr (C == content_type_e::application_json) {
+    if constexpr (std::is_same_v<T, std::string>)
+      return value;
+    else if constexpr (std::is_same_v<T, bool>)
+      return value == true ? "true" : "false";
+    else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
+      return std::format("{}", value);
+    else
+      return boost::json::serialize(to_json(value));
+  } else {
+    static_assert(false, "unsupported content type");
+  }
+}
 
-// TODO поддерживать форматы. Возможно наконец прокинуть со входа "известные форматы" и по сути во что они
-// маппятся на уровне кодгена и они просто маппят тип + формат в какой-то тип конкретного языка
-// программирования
-// Хотя по сути поддержка формата это выдача варнинга на незнакомый на фронтенде + присутствие информации о
-// нём на бекенде в виде типа или отдельно поля формат (для фундаментального видимо) + для параметров стиль
-// видимо прокидывать
+template <typename T>
+constexpr bool has_additional_properties = [] {
+  if constexpr (requires { typename T::additional_properties_type; })
+    return !std::is_void_v<typename T::additional_properties_type>;
+  else
+    return false;
+}();
 
-// TODO условное serialize/parse parameter должно принимать стиль/формат помимо самой штуки
+template <size_t I, typename T>
+[[nodiscard]] consteval std::string_view get_field_name() noexcept {
+  return std::decay_t<T>::field_names[I];
+}
+
+template <typename T>
+consteval size_t fields_count() {
+  constexpr bool ignore_last_field = cxx_support::an_object<T> && cxx_support::has_additional_properties<T>();
+  return std::decay_t<T>::field_names.size() - size_t(ignore_last_field);
+}
+
+template <size_t I, typename T>
+[[nodiscard]] constexpr decltype(auto) get_field(T&& t) noexcept {
+  return boost::pfr::get<I>(std::forward<T>(t));
+}
+
+template <size_t I, typename T>
+[[nodiscard]] constexpr bool is_field_present(const T& t) noexcept {
+  if constexpr (T::is_required(get_field_name<I, T>())) {
+    return true;
+  } else {
+    return !!get_field<I>(t);
+  }
+}
+
+// достаёт филд из box/optional, если он опциональный
+template <size_t I, typename T>
+constexpr decltype(auto) get_presented_field(T&& t) noexcept {
+  using U = std::decay_t<T>;
+  assert(is_field_present<U>(t));
+  if constexpr (U::is_required(get_field_name<I, U>())) {
+    return noadl::forwardLike<T>(get_field<I>(t));
+  } else {
+    return noadl::forwardLike<T>(*get_field<I>(t));
+  }
+}
 
 }  // namespace svarg::cxx_support

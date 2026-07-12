@@ -138,7 +138,7 @@ struct lowering_context {
   ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
                                                 const arrayof<ir::schema_ref>& schemas);
   ir::body media_type_object_lowering(const media_type_object&, fs::path file, json_pointer,
-                                      std::string_view content_type);
+                                      std::string_view content_type, bool is_required_body);
 
   void replace_in_cache(const fs::path& p, const json_pointer& jp, boost::json::value newvalue) {
     boost::json::value& v = jcache.load_mutable(specs_dir / p);

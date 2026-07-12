@@ -195,12 +195,14 @@
           - "contentType": "application/json"
             "schema":
               "spec": "@never@"
+            "required": true
     "defaultResponse":
       "status": "default"
       "bodies":
         - "contentType": "application/json"
           "schema":
             "spec": "@any@"
+          "required": true
   - "id": "getOrder"
     "spec": "api-b"
     "path": "/orders/{orderId}"
@@ -217,3 +219,4 @@
           - "contentType": "application/json"
             "schema":
               "spec": "@string@"
+            "required": true

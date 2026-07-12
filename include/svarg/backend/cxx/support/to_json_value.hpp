@@ -13,8 +13,8 @@
 
 namespace svarg {
 
+using cxx_support::fields_count;
 using cxx_support::get_special_field;
-using cxx_support::object_fields_count;
 
 template <cxx_support::an_fundamental T>
 struct to_json_value<T> {
@@ -91,14 +91,14 @@ struct to_json_value<T> {
   }
 };
 
-template <aggregate A>
+template <cxx_support::an_object A>
 boost::json::value aggregate_to_json(const A& v) {
   boost::json::value j;
   boost::json::object& obj = j.emplace_object();
 
   auto serialize_one = [&]<size_t I>(std::index_sequence<I>) {
-    const auto& field = boost::pfr::get<I>(v);
-    constexpr std::string_view field_name = boost::pfr::get_name<I, A>();
+    const auto& field = cxx_support::get_field<I>(v);
+    constexpr std::string_view field_name = cxx_support::get_field_name<I, A>();
     if constexpr (A::is_required(field_name)) {
       obj[field_name] = to_json(field);
     } else {
@@ -106,10 +106,9 @@ boost::json::value aggregate_to_json(const A& v) {
         obj[field_name] = to_json(field);
     }
   };
-  auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
+  APPLY_INDEXES(fields_count<A>()) {
     (serialize_one(std::index_sequence<Is>{}), ...);
   };
-  helper(std::make_index_sequence<object_fields_count<A>()>{});
   cxx_support::validate_required_schemas(j, v).rethrow_if_failed();
   return obj;
 }
@@ -118,7 +117,7 @@ template <cxx_support::an_object T>
 struct to_json_value<T> {
   static boost::json::value operator()(const T& v) {
     static_assert(cxx_support::valid_generated_object<T>());
-    return aggregate_from_json(v);
+    return aggregate_to_json(v);
   }
 };
 

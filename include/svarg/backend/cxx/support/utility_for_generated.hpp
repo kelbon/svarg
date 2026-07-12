@@ -17,20 +17,12 @@ static constexpr std::string_view special_field_name = "_dATA";
 
 template <typename T>
 [[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
-  static_assert(boost::pfr::tuple_size_v<T> == 1);
+  static_assert(fields_count<T> == 1);
   // <special_field_name>
   return in._dATA;
 }
 
 // additional_properties
-
-template <typename T>
-constexpr bool has_additional_properties = [] {
-  if constexpr (requires { typename T::additional_properties_type; })
-    return !std::is_void_v<typename T::additional_properties_type>;
-  else
-    return false;
-}();
 
 template <typename T>
 using additional_properties_schema_t = typename std::decay_t<T>::additional_properties_type;
@@ -47,13 +39,6 @@ constexpr auto& get_additional_properties(T& x) noexcept {
 
 // object
 
-template <aggregate A>
-constexpr size_t object_fields_count() {
-  // дополнительные лежат всегда последним полем и их нужно здесь игнорировать
-  constexpr bool ignore_last_field = cxx_support::an_object<A> && cxx_support::has_additional_properties<A>();
-  return boost::pfr::tuple_size_v<A> - size_t(ignore_last_field);
-}
-
 template <typename T>
 consteval bool valid_generated_object() {
   static_assert(metel::is_decayed_v<T>);
@@ -62,8 +47,7 @@ consteval bool valid_generated_object() {
 
   if constexpr (has_additional_properties<T>) {
     // лежит последним полем и с правильным типом
-    return boost::pfr::get_name<boost::pfr::tuple_size_v<T> - 1>() ==
-               additional_properties_schema_alias_name &&
+    return boost::pfr::get_name<boost::pfr::tuple_size_v<T> - 1>() == additional_properties_field_name &&
            std::is_same_v<boost::pfr::tuple_element_t<boost::pfr::tuple_size_v<T> - 1, T>,
                           additional_properties_schema_t<T>>;
   }
@@ -72,23 +56,21 @@ consteval bool valid_generated_object() {
 
 // возвращает битовую маску где единицы расставлены на места требуемых полей
 template <cxx_support::an_object O>
-consteval std::bitset<object_fields_count<O>()> get_required_bits_mask() {
-  std::bitset<object_fields_count<O>()> mask;
+consteval std::bitset<fields_count<O>()> get_required_bits_mask() {
+  std::bitset<fields_count<O>()> mask;
 
-  auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
-    (mask.set(Is, O::is_required(boost::pfr::get_name<Is, O>())), ...);
+  APPLY_INDEXES(fields_count<O>()) {
+    (mask.set(Is, O::is_required(cxx_support::get_field_name<Is, O>())), ...);
   };
-  helper(std::make_index_sequence<object_fields_count<O>()>{});
   return mask;
 }
 
-template <aggregate A>
+template <an_object A>
 constexpr std::optional<size_t> get_field_index(std::string_view field_name) {
-  auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
+  return APPLY_INDEXES(fields_count<A>()) {
     using switch_t = ss::string_switch<size_t>;
-    return (switch_t(field_name) | ... | switch_t::case_t(boost::pfr::get_name<Is, A>(), Is)).or_nullopt();
+    return (switch_t(field_name) | ... | switch_t::case_t(get_field_name<Is, A>(), Is)).or_nullopt();
   };
-  return helper(std::make_index_sequence<object_fields_count<A>()>{});
 }
 
 }  // namespace svarg::cxx_support
