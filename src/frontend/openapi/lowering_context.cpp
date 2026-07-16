@@ -234,6 +234,10 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
   if (schema.additionalProperties) {
     ot.additional_properties =
         resolve_schema(*schema.additionalProperties, file, jp / "additionalProperties", *this).ir_schema;
+  } else {
+    ot.additional_properties = opts.unsetted_additional_properties == false
+                                   ? ir::make_fundamental_ref(ir::fundamental_e::never)
+                                   : ir::make_fundamental_ref(ir::fundamental_e::any);
   }
   return ot;
 }

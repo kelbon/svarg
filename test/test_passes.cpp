@@ -114,6 +114,8 @@ TEST("double not") {
     "type":
       "object":
         "fields": []
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "hmm.yaml"
     "jsonptr": "/components/schemas/DoubleNot"
     "name": "DoubleNot"
@@ -138,6 +140,8 @@ TEST("double not") {
     "type":
       "object":
         "fields": []
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "hmm.yaml"
     "jsonptr": "/components/schemas/DoubleNot/not"
     "type":
@@ -154,6 +158,8 @@ TEST("double not") {
     "type":
       "object":
         "fields": []
+        "additional_properties":
+          "spec": "@never@"
 )";
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
@@ -489,7 +495,8 @@ TEST("pass transform allofs") {
               "spec": "@string@"
             "name": "f1"
             "required": false
-
+        "additional_properties":
+          "spec": "@never@"
   )";
   std::string_view output = R"(
 "schemas":
@@ -513,6 +520,8 @@ TEST("pass transform allofs") {
               "spec": "@string@"
             "name": "f1"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
 )";
 
   REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
@@ -536,6 +545,8 @@ TEST("pass transform allofs 2") {
               "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
             "name": "records"
             "required": true
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "testir"
     "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
     "type":
@@ -568,11 +579,15 @@ TEST("pass transform allofs 2") {
               "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
             "name": "records"
             "required": true
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "testir"
     "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
     "type":
       "object":
         "fields": []
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "testir"
     "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
     "type":
@@ -597,6 +612,9 @@ TEST("pass transform allofs 2") {
               "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
             "name": "records"
             "required": true
+
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "testir"
     "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
     "type":
@@ -623,6 +641,9 @@ TEST("pass transform allofs 2") {
               "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
             "name": "abc"
             "required": false
+
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "testir"
     "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
     "type":
@@ -638,11 +659,17 @@ TEST("pass transform allofs 2") {
               "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
             "name": "records"
             "required": true
+
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "testir"
     "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
     "type":
       "object":
         "fields": []
+
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "testir"
     "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
     "type":

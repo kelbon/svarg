@@ -193,8 +193,7 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
       [&](const ir::not_schema& a) { return collect(a.type); },
       [&](const ir::enum_schema& a) { return collect(a.type); },
       [&](const ir::object_schema& a) {
-        if (a.additional_properties)
-          collect(*a.additional_properties);
+        collect(a.additional_properties);
         for (auto& f : a.fields)
           collect(f.type);
         return;
@@ -781,31 +780,6 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
   result += "};\n\n";
   return {std::move(struct_name), std::move(result)};
 }
-/*
-TODO:
-* собрать что генерируется для схемы, операции
-* генерализовать, упростить
-* на основе генерируемого написать концепты, собрать требуемые типы
-* на основе концептов написать вспомогательную библиотеку для подключения через смейк для сгенерированных
-render2cxx таргетов
-* написать смейк функцию генерации, которая генерирует таргеты, линкует вспомогательную библиотеку,
-устанавливает нужные зависимости таргетам. И как-то сделать чтобы генерация была на этапе конфигурации, а не
-на этапе билда
-* написать дравйер запускающий фронтенд и бекенд, это другой способ использования - пользователь запускает
-генерацию, получает необходимое, складывает куда ему нужно и при необходимости подключает вспомогательную
-библиотеку (может быть даже вынесенную отдельно)
-
-
-TODO пока использую воображаемый енам
-enum struct parse_type_e {
-path - именованный аргумент из path, нужно сложить все сегментированные имена тоже куда-то. Типа parse_path
-какой-то если есть такие параметры
-cookie, header, query,
-// query_string
-// + остальное body но там рантайм значение контент типа...
-}
-
-*/
 
 static ir::schema_refs_t all_schemas_from(const auto& x, bool allow_fundamental = false) {
   ir::schema_refs_t schemas;
@@ -905,12 +879,23 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
                         render_string(uppered(op.method)));
 
   // parameters
-  visit_templated_path_parts(op.path, build_path_make_fn_visitor{result, path_params, options});
-
+  if (op.has_path()) {
+    // static constexpr void visit_path(auto&& vtor)
+    visit_templated_path_parts(op.path, build_path_make_fn_visitor{result, path_params, options});
+    result += std::format("static constexpr std::string_view path_expr = {};\n\n", render_string(op.path));
+  }
   auto deref = std::views::transform([](auto* p) -> auto& { return *p; });
   if (!path_params.empty()) {
+    if (!op.has_path())
+      throw render_error("operation have path parameters while not having path");
+    for (const ir::operation_parameter& p : path_params | deref) {
+      if (!op.path.contains("{" + p.name + "}")) {
+        throw render_error(
+            "operation `{}` contains parameter `{}` which is not present in path expression `{}`", op.id,
+            p.name, op.path);
+      }
+    }
     result += "struct path_t {\n";
-    result += std::format("static constexpr std::string_view path_expr = {};\n\n", render_string(op.path));
     result += render_parameters(path_params | deref, op.spec, paths, *this);
     result += "};\n";
   }

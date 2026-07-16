@@ -245,6 +245,13 @@ struct schema_object {
   optional<string_map<reference_or<schema_object>>> properties;
   // регекс ecma-262 -> схема для валидации
   optional<string_map<reference_or<schema_object>>> patternProperties;
+  // по спецификации должно быть any по умолчанию
+  // на деле для удобства логичнее чтобы по умолчанию оно было false
+  // (чтобы не указывать ВСЕМ типам что у них additionalProperties: false)
+  // это регулируется опцией генератора
+  // https://json-schema.org/draft/2020-12/json-schema-core#name-additionalproperties
+  // "Omitting this keyword has the same assertion behavior as an empty schema"
+  // пустая схема пускает кого угодно
   optional<reference_or<schema_object>> additionalProperties;
   optional<reference_or<schema_object>> propertyNames;
 

@@ -23,6 +23,8 @@
               "jsonptr": "/components/schemas/Order"
             "name": "address"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Error"
     "name": "Error"
@@ -37,6 +39,8 @@
               "spec": "@string@"
             "name": "message"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Item"
     "name": "Item"
@@ -62,6 +66,8 @@
               "jsonptr": "/components/schemas/Money"
             "name": "price"
             "required": true
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Item/properties/tags"
     "type":
@@ -83,6 +89,8 @@
               "jsonptr": "/components/schemas/Money/properties/currency"
             "name": "currency"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
@@ -118,6 +126,8 @@
               "spec": "@string@"
             "name": "status"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item"
     "type":
@@ -142,6 +152,8 @@
               "spec": "@string@"
             "name": "title"
             "required": true
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
     "type":
@@ -162,6 +174,8 @@
               "spec": "@string@"
             "name": "f1"
             "required": true
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/UnusedSelfRecursive"
     "name": "UnusedSelfRecursive"
@@ -174,6 +188,8 @@
               "jsonptr": "/components/schemas/UnusedSelfRecursive"
             "name": "f1"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
 "operations":
   - "id": "getItem"
     "spec": "api-b"

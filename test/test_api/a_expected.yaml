@@ -16,6 +16,8 @@
               "spec": "@integer@"
             "name": "quantity"
             "required": true
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/components/schemas/OrderStatusEvent"
     "name": "OrderStatusEvent"
@@ -27,6 +29,8 @@
               "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
             "name": "status"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
     "type":
@@ -61,6 +65,8 @@
               "jsonptr": "/components/schemas/Order"
             "name": "address"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/components/schemas/UserPatch"
     "name": "UserPatch"
@@ -110,6 +116,8 @@
               "spec": "@string@"
             "name": "orderId"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
     "type":
@@ -132,6 +140,8 @@
               "spec": "@string@"
             "name": "message"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Money"
     "name": "Money"
@@ -147,6 +157,8 @@
               "jsonptr": "/components/schemas/Money/properties/currency"
             "name": "currency"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
@@ -182,6 +194,8 @@
               "spec": "@string@"
             "name": "status"
             "required": false
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item"
     "type":
@@ -206,6 +220,8 @@
               "spec": "@string@"
             "name": "title"
             "required": true
+        "additional_properties":
+          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
     "type":

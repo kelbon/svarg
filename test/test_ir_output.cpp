@@ -212,12 +212,11 @@ TEST("json pointers are correct (optimized + rm unused)") {
 }
 
 TEST("json repr") {
-  // openapi_options opts{.ir_opts{.allow_rm_unused = svarg::ir::remove_category_e::noone}};
+  openapi_options opts{.ir_opts{.allow_rm_unused = svarg::ir::remove_category_e::noone}};
   // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-a.yaml"}, opts));
   // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-b.yaml"}));
   // return;
-  ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"},
-                                {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
+  ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"}, opts);
   // cxx::renderer r(ir, {});
   // r.render2cxx("svarg/build/render_test_result");
   pass_as_json("./test_api/a_expected.yaml", [&](std::string_view data) {
@@ -226,8 +225,7 @@ TEST("json repr") {
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
-  ir = openapi2ir("./test_api", {"api-b.yaml"},
-                  {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
+  ir = openapi2ir("./test_api", {"api-b.yaml"}, opts);
   pass_as_json("./test_api/b_expected.yaml", [&](std::string_view data) {
     boost::json::value j = boost::json::parse(data);
     REQUIRE(j == to_json(ir));

@@ -29,7 +29,7 @@ using namespace svarg;
 int main(int argc, char* argv[]) try {
   cli::options cliopts = cli::parse_or_exit(argc, argv);
   openapi_options options;
-
+  options.unsetted_additional_properties = cliopts.unsetted_additional_properties;
   options.ir_opts.enable_optimizations = cliopts.optimize;
   std::optional f = ss::string_switch<format_e>(cliopts.out_format)
                         .case_("yaml", format_e::yaml)

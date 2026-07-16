@@ -18,42 +18,6 @@ consteval http2::http_method_e get_operation_method() {
   return method;
 }
 
-// из выражения Path::path_expr типа /abc/{x} делает /abc/{} для подставления в качестве форматной строки
-template <typename Path>
-consteval auto make_format_from_path_expr() {
-  // длина за вычетом всех имён внутри шаблонных сегментов
-  constexpr size_t len = [] {
-    size_t r = 0;
-    visit_path_segments(Path::path_expr, [&](std::string_view seg) {
-      if (seg.starts_with('{')) {
-        if (!seg.ends_with('}'))
-          throw "bad segment";
-        r += seg.size() - 2;
-      }
-    });
-    return Path::path_expr.size() - r;
-  };
-  std::array<char, len> fmt;
-  char* out = fmt.data();
-  visit_path_segments(Path::path_expr, [&](std::string_view seg) {
-    *out = '/';
-    ++out;
-
-    if (seg.starts_with('{')) {
-      *out = '{';
-      ++out;
-      *out = '}';
-      ++out;
-    } else {
-      out = std::copy_n(seg.data(), seg.size(), out);
-    }
-  });
-  assert(out == fmt.data() + fmt.size());
-  return fmt;
-}
-
-// TODO rvalue нужно чтобы строки уметь забирать из операции?
-
 // обрабатывает корректно encoding
 // `Into` - енкодинг по умолчанию в который идёт запись
 // `FieldIndex` - индекс поля которое нужно сериализовать
@@ -91,19 +55,34 @@ struct serialize_path_visitor {
     result += serialize_field_into<content_type_e::application_json>(p.path, field_index);
   }
   template <size_t I>
-  void param(std::index_sequence<I> is, std::string_view separator) {
-    param(is);
+  void param(std::index_sequence<I> field_index, std::string_view separator) {
+    static_assert(has_path_params<Op>);
+    auto part = serialize_field_into<content_type_e::application_json>(p.path, field_index);
+    // separator внутри самой части пути приведёт к неправильному парсу пути на другой стороне
+    // например /v1/{a}-{b}. Если {a} содержит '-', то /v1/part-a-cd распарсится не как a=part-a, b=cd,
+    // а как a=part, b=a-cd
+    assert(!part.contains(separator));
+    result += std::move(part);
     substr(separator);
   }
 };
 
 template <an_operation Op>
-std::string make_path(const Op& op) {
-  serialize_path_visitor<Op> vtor(op);
-  Op::visit_path(vtor);
-  return std::move(vtor.result);
+auto make_path(const Op& op) {
+  if constexpr (!has_path<Op>) {
+    return std::string_view{};
+  } else {
+    if constexpr (!has_path_params<Op>) {
+      return std::string_view(Op::path_expr);
+    } else {
+      serialize_path_visitor<Op> vtor(op);
+      Op::visit_path(vtor);
+      return std::move(vtor.result);
+    }
+  }
 }
 
+// не заполняет req.path, если у операции нет пути (вебхук...)
 template <an_operation Op>
 http2::http_request make_request(const Op& op) {
   http2::http_request req;
@@ -170,17 +149,28 @@ http2::http_request make_request(const Op& op) {
   }
 
   if constexpr (has_body<Op>) {
-    visit_body(op, [&]<typename B>(const B& x) {
-      req.body = serialize_into<get_content_type<body_t<Op>>()>(op.body);
-    });
+    if (is_body_present(op)) {
+      visit_body(op, [&]<typename B>(const B& x) {
+        req.body = serialize_into<get_content_type<body_t<Op>>()>(op.body);
+      });
+    }
   }
 
   return req;
 }
 
 template <an_operation Op>
-Op from_request(http2::http_request) {
+error_code from_request(http2::http_request req, Op& op) {
   // TODO
+  // хм, может быть поэтому в юсервере нет path и тд... Надо юзеру дать path весь вероятно отдельно
+  // path (извлечь аргументы)
+  // method
+  // query/cookie параметры
+  // body
+
+  // TODO функцию has_required_params (полей больше 0 и первое из полей отвечает true на требуемость, т.к. они
+  // так расположены) Надо бы как-то вынести эту логику, чтобы не забыть при изменении полей
+  // Хотя лучше просто по всем пройти и "кто то" из полей true выдал. Если есть - будет первый
 }
 
 }  // namespace svarg::cxx_support

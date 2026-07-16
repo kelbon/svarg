@@ -96,6 +96,7 @@ int main(int argc, char* argv[]) try {
 
   std::vector<fs::path> specs2generate(inputs.begin(), inputs.end());
   openapi_options options;
+  options.unsetted_additional_properties = cliopts.unsetted_additional_properties;
   for (auto&& inc : cliopts.include_dirs.args) {
     if (!fs::exists(inc) || !fs::is_directory(inc)) {
       std::println("include directory `{}` does not exists", inc);

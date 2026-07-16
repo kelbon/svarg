@@ -197,7 +197,7 @@ struct object_schema {
   SVARG_IR_TYPE;
 
   arrayof<object_field_info> fields;
-  std::optional<schema_ref> additional_properties;
+  schema_ref additional_properties;
 
   object_field_info* find_field(std::string_view name) noexcept {
     for (auto& f : fields)
@@ -222,10 +222,7 @@ struct object_schema {
       }
       *existing_field = field;
     }
-    // если у того есть - перекрывает
-    if (other.additional_properties) {
-      additional_properties = other.additional_properties;
-    }
+    additional_properties = other.additional_properties;
   }
 };
 
@@ -712,6 +709,10 @@ struct operation {
   std::optional<response_desc> defaultResponse;
   std::optional<meta_t> meta;
 
+  // у вебхуков и калбеков не указан path
+  bool has_path() const noexcept {
+    return !path.empty();
+  }
   bool operator==(const operation& r) const noexcept {
     // имя не участвует в сравнении, так как при отправлении на тот же путь с тем же методом
     // неважно как оно называется (при этом из разных спек это всё же разные операции)

@@ -206,6 +206,12 @@ constexpr bool has_encodings = requires(std::string_view str) {
 };
 
 template <an_operation O>
+constexpr bool has_path = requires {
+  O::path_expr;
+  // O::visit_path(vtor)
+};
+
+template <an_operation O>
 constexpr bool has_path_params = requires {
   typename O::path_t;
   O::path;
@@ -336,27 +342,6 @@ template <an_operation Op>
         op.body);
   }
 }
-
-template <typename T>
-concept an_application_json_body = a_body<T> && get_content_type<T>() == "application/json";
-
-static_assert(!an_object<int>);
-
-template <typename T>
-concept serialize_tokens_consumer =
-    requires(T& v, std::string_view s, int64_t i, uint64_t ui, double d, bool b) {
-      v.on_array_begin();
-      v.on_array_end();
-      v.on_object_begin();
-      v.on_object_end();
-      v.on_string(s);
-      v.on_key(s);
-      v.on_int64(i);
-      v.on_uint64(ui);
-      v.on_double(d);
-      v.on_bool(b);
-      v.on_null();
-    };
 
 enum struct content_type_e {
   application_json,

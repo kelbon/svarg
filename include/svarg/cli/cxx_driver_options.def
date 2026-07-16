@@ -21,6 +21,9 @@ OPTION(allow_remove_e, allow_remove, "which schemas optimization is allowed to r
 BOOLEAN(allow_network_refs, "allows references like https://... in openapi files", default_value(false))
 RENAME(allow_network_refs, "allow-network-refs")
 
+BOOLEAN(unsetted_additional_properties, "if additional properties in object is not set, this means = true or fales?", default_value(false))
+RENAME(unsetted_additional_properties, "unsetted-additional-properties")
+
 INTEGER(references_max_recursion_depth, "max recursion depth for $ref's", default_value(50))
 
 BOOLEAN(simple_identifiers, "if false, C++ identifiers guaranteed to be unique, but can be ugly", default_value(true))

@@ -13,6 +13,22 @@ using omo::sax_token;
 using omo::sax_token_value;
 using tokens_consumer = omo::tokens_consumer;
 
+template <typename T>
+concept serialize_tokens_consumer =
+    requires(T& v, std::string_view s, int64_t i, uint64_t ui, double d, bool b) {
+      v.on_array_begin();
+      v.on_array_end();
+      v.on_object_begin();
+      v.on_object_end();
+      v.on_string(s);
+      v.on_key(s);
+      v.on_int64(i);
+      v.on_uint64(ui);
+      v.on_double(d);
+      v.on_bool(b);
+      v.on_null();
+    };
+
 // читает схему из токенов
 // НЕ делает валидацию. это происходит в логике уровнем выше
 template <typename T>

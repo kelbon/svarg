@@ -28,6 +28,8 @@ struct openapi_options {
   // spec dir это тоже include dir и она имеет приоритет
   std::vector<fs::path> include_dirs = {};
   ir::ir_options ir_opts = {};
+  // если в объекте не указано additionalProperties это по умолчанию true или false?
+  bool unsetted_additional_properties = false;
 };
 
 // резолвит ссылки без #

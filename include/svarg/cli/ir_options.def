@@ -18,6 +18,9 @@ OPTION(std::string, specs_dir, "specs directory", default_value(std::filesystem:
 RENAME(specs_dir, "specs-dir")
 ALIAS(s, specs-dir)
 
+BOOLEAN(unsetted_additional_properties, "if additional properties in object is not set, this means = true or fales?", default_value(false))
+RENAME(unsetted_additional_properties, "unsetted-additional-properties")
+
 // берёт на вход файлы, делает из них IR
 ALLOW_ADDITIONAL_ARGS
 
