@@ -16,6 +16,10 @@
 #include "svarg/utils/forward_like.hpp"
 #include "svarg/backend/cxx/support/types.hpp"
 #include "svarg/utils/parse_frontend_or_ir_type.hpp"
+#include "svarg/utils/from_chars.hpp"
+#include "svarg/utils/path_tools.hpp"
+
+#include <http2/http_body.hpp>
 
 // эти 2 макроса только для генерируемых типов
 #define APPLY_FIELD_INDEXES(T) APPLY_INDEXES(::svarg::cxx_support::fields_count<T>())
@@ -197,6 +201,7 @@ concept an_operation = tagged_as<T>(parse_tag_e::operation);
 
 template <a_body T>
 consteval std::string_view get_content_type() {
+  static_assert(is_lowered(std::decay_t<T>::content_type));
   return std::decay_t<T>::content_type;
 }
 
@@ -326,65 +331,158 @@ constexpr void visit_body(Op&& op, Vtor&& vtor) noexcept {
   }
 }
 
+// pre: `content_type` в нижнем регистре
+// вызывает `vtor` передавая тип body которому соответствует `content_type`
+// если такого нет - передаёт void
+template <an_operation Op, typename Vtor>
+constexpr decltype(auto) select_body_type(std::string_view content_type, Vtor&& vtor) {
+  static_assert(has_body<Op>);
+
+  assert(is_lowered(content_type));
+
+  if constexpr (has_single_body<Op>()) {
+    using body_type = svarg::noexport::deoptional_type_t<body_t<Op>>;
+
+    if (get_content_type<body_type>() == content_type)
+      return vtor.template operator()<body_type>();
+    else
+      return vtor.template operator()<void>();
+  } else {
+    return std::decay_t<Op>::select_body_type(content_type, std::forward<Vtor>(vtor));
+  }
+}
+
 // ожидает что is_body_present(op) == true
 template <an_operation Op>
 [[nodiscard]] constexpr std::string_view get_content_type(const Op& op) {
   static_assert(has_body<Op>);
 
   if constexpr (has_single_body<Op>()) {
-    return get_content_type<svarg::noexport::deoptional_type_t<decltype(op.body)>>();
+    using body_type = svarg::noexport::deoptional_type_t<decltype(op.body)>;
+    static_assert(!is_wildcard_content_type(get_content_type<body_type>()));
+    return get_content_type<body_type>();
   } else {
     return std::visit(
         metel::matcher{
             [](std::monostate) -> std::string_view { throw serialize_error("body of operation is not set"); },
-            []<typename B>(const B&) -> std::string_view { return get_content_type<B>(); },
+            []<typename B>(const B&) -> std::string_view {
+              // звёздочки разрешены только в респонсах при определении что нужно парсить
+              static_assert(!is_wildcard_content_type(get_content_type<B>()));
+              return get_content_type<B>();
+            },
         },
         op.body);
   }
 }
 
-enum struct content_type_e {
-  application_json,
-  application_problem_json,
-  multipart_related,  // TODO реально саппорт, а не просто тут
-};
-
-inline constexpr std::string_view e2str(content_type_e c) noexcept {
-  switch (c) {
-    case content_type_e::application_json:
-      return "application/json";
-    case content_type_e::application_problem_json:
-      return "application/problem+json";
-    case content_type_e::multipart_related:
-      return "multipart/related";
-  }
-  metel::unreachable();
-}
-
-inline constexpr bool efromstr(std::string_view str, content_type_e& out) noexcept {
-  std::optional c = ss::string_switch<content_type_e>(str)
-                        .case_("application/json", content_type_e::application_json)
-                        .case_("application/problem+json", content_type_e::application_problem_json)
-                        .case_("multipart/related", content_type_e::multipart_related)
-                        .or_nullopt();
-  if (!c)
-    return false;
-  out = *c;
-  return true;
+// для cookie/headers/query
+template <typename T>
+std::string serialize_nonbody_into(const T& value) {
+  if constexpr (std::is_same_v<T, std::string>)
+    return value;
+  else if constexpr (std::is_same_v<T, bool>)
+    return value == true ? "true" : "false";
+  else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
+    return std::format("{}", value);
+  else
+    return boost::json::serialize(to_json(value));
 }
 
 template <content_type_e C, typename T>
 [[nodiscard]] std::string serialize_into(const T& value) {
   if constexpr (C == content_type_e::application_json) {
-    if constexpr (std::is_same_v<T, std::string>)
-      return value;
-    else if constexpr (std::is_same_v<T, bool>)
-      return value == true ? "true" : "false";
-    else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
-      return std::format("{}", value);
-    else
-      return boost::json::serialize(to_json(value));
+    return boost::json::serialize(to_json(value));
   } else {
+    static_assert(false, "unsupported content type");
+  }
+}
+
+namespace noexport {
+
+// код напрямую из boost json
+// https://github.com/boostorg/json/blob/ea9066875c7f1bac807110e47c64df8e9ba876a7/include/boost/json/impl/serialize.ipp#L56
+// но подходящий не только для std::string
+inline void serialize_impl(auto& s, boost::json::serializer& sr) {
+  // serialize to a small buffer to avoid
+  // the first few allocations in std::string
+  char buf[BOOST_JSON_STACK_BUFFER_SIZE];
+  boost::json::string_view sv;
+  sv = sr.read(buf);
+  if (sr.done()) {
+    // fast path
+    s.append(sv.data(), sv.size());
+    return;
+  }
+  std::size_t len = sv.size();
+  s.reserve(len * 2);
+  s.resize(s.capacity());
+  BOOST_ASSERT(s.size() >= len * 2);
+  std::memcpy(&s[0], sv.data(), sv.size());
+  const auto lim = s.max_size() / 2;
+  for (;;) {
+    sv = sr.read(&s[0] + len, s.size() - len);
+    len += sv.size();
+    if (sr.done())
+      break;
+    // growth factor 2x
+    if (s.size() < lim)
+      s.resize(s.size() * 2);
+    else
+      s.resize(2 * lim);
+  }
+  s.resize(len);
+}
+
+}  // namespace noexport
+
+template <content_type_e C, a_body B>
+[[nodiscard]] http2::http_body_bytes serialize_body(const B& body, const content_type_params&) {
+  if constexpr (C == content_type_e::application_json) {
+    // калька кода из boost json serialize, но не для строки, а для http_body_bytes
+    boost::json::value v = to_json(body);
+    unsigned char tmpbuf[256];
+    boost::json::serializer sr(boost::json::storage_ptr{}, +tmpbuf, sizeof(tmpbuf));
+    http2::http_body_bytes bytes;
+    sr.reset(&v);
+    noexport::serialize_impl(bytes, sr);
+    return bytes;
+  } else {
+    static_assert(false, "unsupported content type");
+  }
+}
+
+// парсинг для headers/cookies/queries которые не привязаны к конкретному content_type
+template <typename T>
+[[nodiscard]] error_code parse_nonbody_from(std::string_view str, T& out) {
+  using U = std::remove_cv_t<T>;
+  if constexpr (std::is_same_v<U, std::string>) {
+    out = str;
+    return {};
+  } else if constexpr (std::is_same_v<U, bool>) {
+    if (str == "true")
+      out = true;
+    else if (str == "false")
+      out = false;
+    else
+      return parse_error("cannot parse boolean from `{}`", str);
+    return {};
+  } else if constexpr (std::is_integral_v<U> || std::is_floating_point_v<U>) {
+    if (!try_from_chars(str, out))
+      return parse_error("cannot parse `{}` from `{}`", type_name<U>(), str);
+    return {};
+  } else {
+    boost::json::value v = boost::json::parse(str);
+    return from_json(v, out);
+  }
+}
+
+template <content_type_e C, typename T>
+[[nodiscard]] error_code parse_from(std::string_view data, T& out) {
+  if constexpr (C == content_type_e::application_json) {
+    boost::json::value v = boost::json::parse(data);
+    return from_json(v, out);
+  } else {
+    // starts_with_ci_prefix_lowered для тех у которых могут быть параметры
     static_assert(false, "unsupported content type");
   }
 }

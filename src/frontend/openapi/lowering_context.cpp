@@ -793,7 +793,7 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
     auto _ = guard_array(result.headers);
     for (auto& [name, hdr] : *rsp.headers) {
       ir::header result_hdr;
-      result_hdr.name = name;
+      result_hdr.name = lowered(name);
       auto [hdrobj, reffile, refjp] = resolve_ref_and_ret(hdr, file, jp / "headers" / name, *this);
       if (hdrobj.required)
         result_hdr.required = *hdrobj.required;
@@ -812,6 +812,7 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
                   .ir_schema;
         result_hdr.encoding = content_type;
       }
+      result_hdr.validate();
       result.headers->insert(std::move(result_hdr));
     }
   }

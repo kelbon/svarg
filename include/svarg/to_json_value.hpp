@@ -181,7 +181,7 @@ struct to_json_value<std::set<Types...>> {
 namespace noexport {
 
 template <front_or_ir_type T, size_t I>
-void serialize_field(const T& in, boost::json::object& out) {
+void frontent_type_serialize_field(const T& in, boost::json::object& out) {
   constexpr std::string_view raw_name = boost::pfr::get_name<I, T>();
   constexpr std::string_view name = unescape_field_name(raw_name);
 
@@ -215,7 +215,7 @@ struct to_json_value<T> {
 
     boost::json::object out;
     APPLY_INDEXES(boost::pfr::tuple_size_v<T>) {
-      (noexport::serialize_field<T, Is>(in, out), ...);
+      (noexport::frontent_type_serialize_field<T, Is>(in, out), ...);
     };
     return out;
   }

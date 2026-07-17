@@ -15,14 +15,14 @@ namespace svarg {
 namespace noexport {
 
 template <typename T>
-struct is_optional_field : std::false_type {};
+struct svarg_is_optional_field : std::false_type {};
 template <typename T>
-struct is_optional_field<optional<T>> : std::true_type {};
+struct svarg_is_optional_field<optional<T>> : std::true_type {};
 template <typename T>
-struct is_optional_field<std::optional<T>> : std::true_type {};
+struct svarg_is_optional_field<std::optional<T>> : std::true_type {};
 
 template <typename T>
-constexpr bool has_field(std::string_view name) noexcept {
+constexpr bool svarg_object_has_field(std::string_view name) noexcept {
   return APPLY_INDEXES(boost::pfr::tuple_size_v<T>) {
     return ((unescape_field_name(boost::pfr::get_name<Is, T>()) == name) || ...);
   };
@@ -34,7 +34,7 @@ bool parse_field(const boost::json::object& obj, T& out, error_code& ec) {
   constexpr std::string_view name = unescape_field_name(boost::pfr::get_name<I, T>());
   auto it = obj.find(name);
   if (it == obj.end()) {
-    if (is_optional_field<field_type>::value)
+    if (svarg_is_optional_field<field_type>::value)
       return true;
     else {
       ec = parse_error(" field `{}` in type `{}` is REQUIRED but not present", name, type_name<T>());
@@ -82,7 +82,7 @@ struct from_json_value<T> {
     }
     for (auto&& [key, _] : *obj) {
       std::string_view k(key);
-      if (!noexport::has_field<T>(k) && !allow_additional_field<T>{}.allow(k))
+      if (!noexport::svarg_object_has_field<T>(k) && !allow_additional_field<T>{}.allow(k))
         return parse_error(" not allowed field `{}` in type `{}`", k, type_name<T>());
     }
     error_code ec = APPLY_INDEXES(boost::pfr::tuple_size_v<T>) {

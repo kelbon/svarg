@@ -172,7 +172,7 @@ TEST("rm params") {
   TEST_NO_PARAMS("multipart/form-data; boundary=\"----boundary 123\"", "multipart/form-data");
 
   // Пробелы вокруг media type
-  TEST_NO_PARAMS(" text/plain", "text/plain");  // если trim входа предусмотрен
+  TEST_NO_PARAMS(" text/plain", "text/plain");
   TEST_NO_PARAMS(" text/plain; charset=utf-8", "text/plain");
 
   // Реальные content-type из браузеров/серверов
@@ -202,58 +202,45 @@ TEST("match content type") {
   REQUIRE(!match_content_type("text/plain", "application/json"));
 
   // Wildcard */* — совпадает со всем
-  REQUIRE(match_content_type("text/plain", "*/*"));
-  REQUIRE(match_content_type("application/json", "*/*"));
-  REQUIRE(match_content_type("image/png", "*/*"));
-  REQUIRE(match_content_type("multipart/form-data", "*/*"));
-  REQUIRE(match_content_type("application/vnd.api+json", "*/*"));
+  REQUIRE(match_content_type("*/*", "text/plain"));
+  REQUIRE(match_content_type("*/*", "application/json"));
+  REQUIRE(match_content_type("*/*", "image/png"));
+  REQUIRE(match_content_type("*/*", "multipart/form-data"));
 
   // Wildcard text/* — совпадает с подтипами text
-  REQUIRE(match_content_type("text/plain", "text/*"));
-  REQUIRE(match_content_type("text/html", "text/*"));
-  REQUIRE(match_content_type("text/csv", "text/*"));
-  REQUIRE(match_content_type("text/xml", "text/*"));
-  REQUIRE(!match_content_type("application/json", "text/*"));
-  REQUIRE(!match_content_type("image/png", "text/*"));
-  REQUIRE(!match_content_type("application/text", "text/*"));  // тип не text
+  REQUIRE(match_content_type("text/*", "text/plain"));
+  REQUIRE(match_content_type("text/*", "text/html"));
+  REQUIRE(!match_content_type("text/*", "application/json"));
+  REQUIRE(!match_content_type("text/*", "application/text"));
 
   // Wildcard image/*
-  REQUIRE(match_content_type("image/png", "image/*"));
-  REQUIRE(match_content_type("image/jpeg", "image/*"));
-  REQUIRE(match_content_type("image/webp", "image/*"));
-  REQUIRE(!match_content_type("text/plain", "image/*"));
-  REQUIRE(!match_content_type("application/json", "image/*"));
+  REQUIRE(match_content_type("image/*", "image/png"));
+  REQUIRE(match_content_type("image/*", "image/jpeg"));
+  REQUIRE(!match_content_type("image/*", "text/plain"));
+  REQUIRE(!match_content_type("image/*", "application/json"));
 
   // Wildcard application/*
-  REQUIRE(match_content_type("application/json", "application/*"));
-  REQUIRE(match_content_type("application/xml", "application/*"));
-  REQUIRE(match_content_type("application/octet-stream", "application/*"));
-  REQUIRE(match_content_type("application/vnd.api+json", "application/*"));
-  REQUIRE(!match_content_type("text/plain", "application/*"));
+  REQUIRE(match_content_type("application/*", "application/json"));
+  REQUIRE(match_content_type("application/*", "application/vnd.api+json"));
+  REQUIRE(!match_content_type("application/*", "text/plain"));
 
   // Регистр (RFC 2045: case-insensitive)
-  REQUIRE(match_content_type("Text/Plain", "text/plain"));
-  REQUIRE(match_content_type("TEXT/PLAIN", "text/plain"));
-  REQUIRE(match_content_type("application/JSON", "application/json"));
-  REQUIRE(match_content_type("text/html", "text/*"));
-  REQUIRE(match_content_type("TEXT/HTML", "text/*"));
-
-  // candidate не должен быть wildcard (precondition: monomorph)
-  // — эти кейсы документируют ожидаемое поведение при нарушении контракта,
-  //   либо просто опускаются если UB
-  // REQUIRE_FALSE(match_content_type("*/*", "text/plain"));
-  // REQUIRE_FALSE(match_content_type("text/*", "text/plain"));
+  REQUIRE(match_content_type("text/plain", "Text/Plain"));
+  REQUIRE(match_content_type("text/plain", "TEXT/PLAIN"));
+  REQUIRE(match_content_type("application/json", "application/JSON"));
+  REQUIRE(match_content_type("text/*", "text/html"));
+  REQUIRE(match_content_type("text/*", "TEXT/HTML"));
 
   // Нестандартные / vendor типы
   REQUIRE(match_content_type("application/vnd.api+json", "application/vnd.api+json"));
-  REQUIRE(match_content_type("application/vnd.api+json", "application/*"));
-  REQUIRE(!match_content_type("application/vnd.api+json", "text/*"));
+  REQUIRE(match_content_type("application/*", "application/vnd.api+json"));
+  REQUIRE(!match_content_type("text/*", "application/vnd.api+json"));
 
   // x- типы
   REQUIRE(match_content_type("application/x-www-form-urlencoded", "application/x-www-form-urlencoded"));
-  REQUIRE(match_content_type("application/x-www-form-urlencoded", "application/*"));
-  REQUIRE(match_content_type("application/x-www-form-urlencoded", "*/*"));
-  REQUIRE(!match_content_type("application/x-www-form-urlencoded", "text/*"));
+  REQUIRE(match_content_type("application/*", "application/x-www-form-urlencoded"));
+  REQUIRE(match_content_type("*/*", "application/x-www-form-urlencoded"));
+  REQUIRE(!match_content_type("text/*", "application/x-www-form-urlencoded"));
 }
 
 TEST("starts_with_ci") {

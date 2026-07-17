@@ -399,8 +399,8 @@ struct response_object {
   SVARG_FRONTEND_TYPE;
 
   string description;
-  // Content-Type игнорируется. Независимо от регистра
-  std::optional<string_map<reference_or<header_object>>> headers;
+  // Content-Type игнорируется
+  std::optional<string_map_ci<reference_or<header_object>>> headers;
   // ключ contentType или media type range
   optional<string_map<media_type_object>> content;
   optional<string_map<reference_or<link_object>>> links;

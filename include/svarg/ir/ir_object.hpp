@@ -494,7 +494,7 @@ struct operation_parameter {
 struct header {
   SVARG_IR_TYPE;
 
-  // не зависит от регистра
+  // всегда должно быть в нижнем регистре
   string name;
   // по умолчанию эквивалентно type: string
   std::optional<schema_ref> schema;
@@ -503,7 +503,14 @@ struct header {
   std::optional<content_type_t> encoding;
   std::optional<meta_t> meta;
 
+  void validate() const {
+    // чтобы не ломать агрегатность, проверяет валидность
+    if (!is_lowered(name))
+      throw validate_error("name of header `{}` must be lowered", name);
+  }
   bool operator==(const header& r) const noexcept {
+    validate();
+    r.validate();
     return is_equal_ci(name, r.name);
   }
   std::strong_ordering operator<=>(const header& r) const noexcept {

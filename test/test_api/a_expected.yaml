@@ -249,7 +249,7 @@
     "responses":
       - "status": "200"
         "headers":
-          - "name": "X-Rate-Limit"
+          - "name": "x-rate-limit"
             "schema":
               "spec": "@integer@"
         "bodies":

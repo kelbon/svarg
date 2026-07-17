@@ -2,13 +2,120 @@
 
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 #include "svarg/errors.hpp"
 
 #include "svarg/common_types.hpp"
 
 namespace svarg {
+
+namespace noexport {
+
+constexpr size_t count_star_segments(std::string_view content_type) {
+  if (content_type == "*/*")
+    return 2;
+  // сегмент не может оказаться в середине по грамматике
+  // при этом внури сегмента звёздочка оказаться может, поэтому просто count не подойдёт
+  if (content_type.ends_with("/*"))
+    return 1;
+  return 0;
+}
+
+// https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2
+//  token          = 1*tchar
+//
+//  tchar          = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+//                 / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+//                 / DIGIT / ALPHA
+//                 ; any VCHAR, except delimiters
+inline constexpr bool is_tchar(char c) noexcept {
+  // ALPHA
+  if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
+    return true;
+  // DIGIT
+  if (c >= '0' && c <= '9')
+    return true;
+  switch (c) {
+    case '!':
+    case '#':
+    case '$':
+    case '%':
+    case '&':
+    case '\'':
+    case '*':
+    case '+':
+    case '-':
+    case '.':
+    case '^':
+    case '_':
+    case '`':
+    case '|':
+    case '~':
+      return true;
+    default:
+      return false;
+  }
+}
+
+// https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.3
+// HTAB (horizontal tab)
+// SP (space)
+//   OWS            = *( SP / HTAB )
+//                 ; optional whitespace
+inline bool is_qws(char c) noexcept {
+  return c == ' ' || c == '\t';
+}
+
+inline void trim_qws_front(std::string_view& s) {
+  while (!s.empty() && is_qws(s.front()))
+    s.remove_prefix(1);
+}
+
+inline void trim_qws_back(std::string_view& s) {
+  while (!s.empty() && is_qws(s.back()))
+    s.remove_suffix(1);
+}
+
+inline void trim_qws(std::string_view& s) {
+  trim_qws_front(s);
+  trim_qws_back(s);
+}
+
+inline void unquote(std::string_view& s) {
+  if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
+    s.remove_prefix(1), s.remove_suffix(1);
+}
+
+static std::string_view eat_token(std::string_view& in) {
+  if (in.empty() || !is_tchar(in.front()))
+    throw validate_error("invalid http token `{}`", in);
+  const char* p = in.data();
+  size_t pos = 0;
+  while (!in.empty() && is_tchar(in.front())) {
+    ++pos;
+    in.remove_prefix(1);
+  }
+  return std::string_view(p, pos);
+}
+
+// https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
+inline constexpr bool is_cookie_octet(char c) noexcept {
+  switch (c) {
+    case '"':
+    case ',':
+    case ';':
+    case '\\':
+      return false;
+    default:
+      return c > 0x20 && c < 0x7F;  // печатаемый ASCII, не CTL, не SP
+  }
+}
+
+}  // namespace noexport
+
+[[nodiscard]] constexpr bool is_wildcard_content_type(std::string_view content_type) {
+  return noexport::count_star_segments(content_type) > 0;
+}
 
 constexpr std::string_view cut_path_segment(std::string_view& path) noexcept {
   if (path.empty()) [[unlikely]]
@@ -170,6 +277,62 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   return out;
 }
 
+// MEDIA TYPES (content types)
+
+enum struct content_type_e {
+  application_json,
+  application_problem_json,
+  multipart_related,  // TODO реально саппорт, а не просто тут
+  unknown,
+};
+
+// дефолтный используется при парсинге всяких хедеров, query/cookies и тд
+constexpr inline content_type_e default_content_type = content_type_e::application_json;
+
+inline constexpr std::string_view e2str(content_type_e c) noexcept {
+  switch (c) {
+    case content_type_e::application_json:
+      return "application/json";
+    case content_type_e::application_problem_json:
+      return "application/problem+json";
+    case content_type_e::multipart_related:
+      return "multipart/related";
+    case content_type_e::unknown:
+      return "unknown";
+  }
+  metel::unreachable();
+}
+
+inline constexpr bool efromstr(std::string_view str, content_type_e& out) noexcept {
+  std::optional c = ss::string_switch<content_type_e>(str)
+                        .case_("application/json", content_type_e::application_json)
+                        .case_("application/problem+json", content_type_e::application_problem_json)
+                        .case_("multipart/related", content_type_e::multipart_related)
+                        .or_nullopt();
+  if (!c) {
+    out = content_type_e::unknown;
+    return false;
+  }
+  out = *c;
+  return true;
+}
+
+// name -> value мапа параметров типа "boundary" -> "fdsfsdf" для multipart/form-data и так далее
+// ordered чтобы создавать одинаковые хедера на всех платформах
+using content_type_params = string_map_ci<std::string>;
+
+// преобразует content type и параметры в значение хедера content-type
+// не проверяет валидность параметров, имён и их значений для конкретного content_type
+std::string media_type_to_hdr_value(content_type_e, const content_type_params&);
+
+// TODO
+// TODO написать в доке про allof что там "наследование" зависит от порядка (TODO чтобы этот порядок был
+// сверху вниз)
+// TODO создать файл доки
+// из значения хедера content-type достаёт content_type и параметры
+// добавляет в out, а не заменяет
+content_type_e media_type_from_hdr_value(std::string_view content_type_value, content_type_params& out);
+
 // убирает различия в представлении для разных медиа типов и ренжей
 // например application/JSoN; ChaRset: "UtF-8" -> application/json; charset=utf-8
 std::string monomorph_media_type(std::string_view);
@@ -186,10 +349,17 @@ std::string monomorph_media_type(std::string_view);
 // они одного уровня специализированности)
 std::strong_ordering compare_media_types(std::string_view a, std::string_view b);
 
+// TODO match_content_type / match_status_range с cosntexpr аргументом
+
 // `content_type` может быть и медиа ренжом
 // precondition: monomorph_media_type(content_type) == content_type
 //            && without_media_type_parameters(content_type) == content_type
-[[nodiscard]] bool match_content_type(std::string_view candidate, std::string_view content_type);
+// `candidate` НЕ wildcard
+// TODO оптимизированная версия - в хедере, принимает content_type на компиляции, знает что оба lowercase
+// и проверяет что кандидат не wildcard
+// делает starts_with чтобы не сломаться на параметрах
+// TODO ещё пользователю или хотя бы реализации нужны параметры иногда. Для multipart и тд
+[[nodiscard]] bool match_content_type(std::string_view content_type, std::string_view candidate);
 
 [[nodiscard]] bool match_status_range(int status, status_range_e r) noexcept;
 
@@ -326,6 +496,15 @@ O query_decode(std::string_view s, O out) {
   return out;
 }
 
+// делит путь на сам путь и query (в которой возможно будет фрагмент)
+inline std::pair<std::string_view, std::string_view> path_and_query(std::string_view path_hdr) {
+  auto pos = path_hdr.find('?');
+  if (pos == std::string_view::npos)
+    return {path_hdr, std::string_view{}};
+  return {path_hdr.substr(0, pos), path_hdr.substr(pos + 1)};
+}
+
+// без фрагмента в конце
 inline std::string_view get_query(std::string_view path) {
   auto q = path.find('?');
   if (q == std::string_view::npos)
@@ -364,6 +543,55 @@ void visit_query(std::string_view query, auto&& vtor) {
 
     vtor(std::string_view{name_buf}, std::string_view{value_buf});
   }
+}
+
+// TODO test
+
+// cookie-string = cookie-pair *( ";" SP cookie-pair )
+// cookie-pair   = cookie-name "=" cookie-value
+// cookie-name   = token
+// cookie-value  = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
+// (RFC 6265, §4.2.1)
+[[nodiscard]] error_code visit_cookies(std::string_view header, auto&& vtor) {
+  noexport::trim_qws(header);
+
+  while (!header.empty()) {
+    size_t semi = header.find(';');
+    std::string_view pair = header.substr(0, semi);
+    noexport::trim_qws(pair);
+
+    if (pair.empty())
+      return parse_error("empty cookie-pair in cookie header");
+
+    std::string_view name;
+    try {
+      name = eat_token(pair);
+    } catch (validate_error& e) {
+      return std::move(e);
+    }
+    if (pair.empty() || pair.front() != '=')
+      return parse_error("expected '=' after cookie-name `{}`", name);
+    pair.remove_prefix(1);  // '='
+
+    std::string_view value = pair;
+    noexport::unquote(value);
+
+    for (char c : value) {
+      if (!noexport::is_cookie_octet(c)) [[unlikely]]
+        return parse_error("invalid cookie-octet in value of `{}`", name);
+    }
+
+    error_code ec = vtor(name, value);
+    if (ec)
+      return ec;
+
+    if (semi == std::string_view::npos)
+      break;
+    header.remove_prefix(semi + 1);
+    noexport::trim_qws_front(header);
+  }
+
+  return {};
 }
 
 }  // namespace svarg

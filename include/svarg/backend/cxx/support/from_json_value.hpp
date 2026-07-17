@@ -194,14 +194,14 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
     ec = parse_error(" object expected, got `{}`", e2str(v.kind()));
     return ec;
   }
-  std::bitset<fields_count<A>()> parsed = {};
+  std::bitset unparsed = cxx_support::get_required_bits_mask<A>();
 
   for (auto&& [key, value] : *obj) {
     std::optional<size_t> i = cxx_support::get_field_index<A>(key);
     if (i) {
       metel::visit_index<fields_count<A>()>([&]<size_t I>() {
         if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
-          parsed.set(I);
+          unparsed.set(I, false);
         ec = from_json(j, get_field<I>(v));
       });
       if (ec)
@@ -218,9 +218,9 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
       }
     }
   }
-  constexpr std::bitset required_bits_mask = cxx_support::get_required_bits_mask<A>();
-  if ((parsed & required_bits_mask) != required_bits_mask) {
-    ec = parse_error("not all required fields of type `{}` parsed", type_name<A>());
+  if (unparsed.any()) {
+    ec = parse_error("not all required fields of type `{}` parsed, unparsed: {}", type_name<A>(),
+                     unparsed.to_string());
     return ec;
   }
   return {};

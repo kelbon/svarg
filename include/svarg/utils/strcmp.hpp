@@ -30,14 +30,21 @@ inline char to_upper(char c) noexcept {
   return (c >= 'a' && c <= 'z') ? (c - ('a' - 'A')) : c;
 }
 
-inline std::string lowered(std::string_view input) {
+[[nodiscard]] inline bool is_lowered(std::string_view str) noexcept {
+  for (char c : str) {
+    if (c != to_lower_ascii(c))
+      return false;
+  }
+  return true;
+}
+[[nodiscard]] inline std::string lowered(std::string_view input) {
   std::string out(input);
   for (char& c : out)
     c = to_lower_ascii(c);
   return out;
 }
 
-inline std::string uppered(std::string_view input) {
+[[nodiscard]] inline std::string uppered(std::string_view input) {
   std::string out(input);
   for (char& c : out)
     c = to_upper_ascii(c);

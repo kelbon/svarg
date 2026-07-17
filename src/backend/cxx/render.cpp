@@ -657,6 +657,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   if (body.streaming && *body.streaming)
     result += "using is_streaming = int;\n";
   result += render_parse_tag(cxx_support::parse_tag_e::body);
+  assert(is_lowered(body.contentType.str()));
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
                         render_string(body.contentType));
   result += std::format("{} {};\n", render_schema_ref(body.schema, spec, jp).typeref, special_field_name);
@@ -723,9 +724,9 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     result +=
         "static constexpr decltype(auto) select_body_type(std::string_view content_type, auto&& vtor) {";
     for (auto&& [b, struct_name] : std::views::zip(bodies, struct_names))
-      result +=
-          std::format("if (match_content_type({}, content_type)) return vtor.template operator()<{}>();\n",
-                      render_string(b.contentType), struct_name);
+      result += std::format(
+          "if (cxx_support::match_content_type({}, content_type)) return vtor.template operator()<{}>();\n",
+          render_string(b.contentType.str()), struct_name);
     result += std::format("return vtor.template operator()<void>();\n");
     result += "}\n\n";
   } else {
@@ -763,6 +764,7 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
   if (rsp.headers) {
     std::vector<ir::operation_parameter> params;
     for (auto& h : *rsp.headers) {
+      h.validate();
       params.push_back(ir::operation_parameter{
           .location = parameter_location::header,
           .name = h.name,
