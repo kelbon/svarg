@@ -69,7 +69,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME OMO
   GIT_REPOSITORY https://github.com/kelbon/omo
-  GIT_TAG v0.0.5
+  GIT_TAG v0.0.7
   OPTIONS "omo_DOWNLOAD_BOOST OFF"
 )
 

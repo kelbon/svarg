@@ -6,6 +6,7 @@
 
 #include "svarg/common_types.hpp"
 #include "svarg/errors.hpp"
+#include "svarg/utils/constexpr_string.hpp"
 
 namespace svarg {
 
@@ -180,5 +181,42 @@ using content_type_params = string_map_ci<std::string>;
 // возвращает `true` если для медиа типа имеет смысл openapi encoding (кодирование разных частей в разных
 // форматах)
 [[nodiscard]] bool media_type_supports_encodings(std::string_view media_type);
+
+constexpr bool media_type_has_parameters(std::string_view content_type) {
+  return content_type.contains(';');
+}
+
+template <constexpr_string ContentType>
+constexpr bool match_content_type(std::string_view candidate) {
+  static_assert(!ContentType.empty() && !noexport::is_qws(ContentType.str().front()) &&
+                !noexport::is_qws(ContentType.str().back()));
+  static_assert(!media_type_has_parameters(ContentType.str()));
+  static_assert(is_lowered(ContentType.str()));
+
+  assert(!is_wildcard_content_type(candidate));
+
+  constexpr size_t starcount = noexport::count_star_segments(ContentType.str());
+  if constexpr (starcount == 2) {
+    // */*
+    return true;
+  } else if constexpr (starcount == 1) {
+    static_assert(ContentType.str().ends_with("/*"));
+    std::string_view prefix = ContentType.str();
+    prefix.remove_suffix(2);  // '/*'
+    // TODO что-то сделать для проверки что дальше либо ничего либо параметры
+    return starts_with_ci_prefix_lowered(candidate, prefix);
+  } else if constexpr (starcount == 0) {
+    auto ends_or_params = [&c = candidate] {
+      // проверка, что кандидат оканчивается сразу после content_type (либо идут параметры)
+      // лямбдой отложено после && чтобы не всегда проверять
+      // нужно чтобы "application/json" не матчилось с "application/json2" через starts_with
+      return c.size() == ContentType.size() ||
+             (noexport::is_qws(c[ContentType.size()]) || c[ContentType.size()] == ';');
+    };
+    return starts_with_ci_prefix_lowered(candidate, ContentType.str()) && ends_or_params();
+  } else {
+    static_assert(false, "invalid content type");
+  }
+}
 
 }  // namespace svarg

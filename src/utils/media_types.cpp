@@ -176,17 +176,22 @@ bool match_content_type(std::string_view content_type, std::string_view candidat
   assert(monomorph_media_type(content_type) == content_type);
   assert(without_media_type_parameters(content_type) == content_type);
   assert(!is_wildcard_content_type(candidate));
+  auto ends_or_params = [&c = candidate, &t = content_type] {
+    // проверка, что кандидат оканчивается сразу после content_type (либо идут параметры)
+    // лямбдой отложено после && чтобы не всегда проверять
+    // нужно чтобы "application/json" не матчилось с "application/json2" через starts_with
+    return c.size() == t.size() || (noexport::is_qws(c[t.size()]) || c[t.size()] == ';');
+  };
   switch (noexport::count_star_segments(content_type)) {
     case 2:
+      // */*
       return true;
     case 1:
       assert(content_type.ends_with("/*"));  // ренжи всегда заканчиваются только так
       content_type.remove_suffix(2);
       return starts_with_ci_prefix_lowered(candidate, content_type);
     case 0:
-      // здесь compare_ci делает то же самое, что monomorph_media_type
-      return compare_ci(without_media_type_parameters(candidate), content_type) ==
-             std::strong_ordering::equal;
+      return starts_with_ci_prefix_lowered(candidate, content_type) && ends_or_params();
   }
   metel::unreachable();
 }

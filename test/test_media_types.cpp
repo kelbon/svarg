@@ -1,6 +1,7 @@
 #include "svarg/utils/path_tools.hpp"
 
 #include <moko3/moko3.hpp>
+#include "svarg/utils/constexpr_string.hpp"
 
 #define TEST_MONO(IN, EXPECTED_OUT) REQUIRE(svarg::monomorph_media_type(IN) == EXPECTED_OUT)
 #define EXPECT_THROW_MONO(IN)              \
@@ -236,11 +237,72 @@ TEST("match content type") {
   REQUIRE(match_content_type("application/*", "application/vnd.api+json"));
   REQUIRE(!match_content_type("text/*", "application/vnd.api+json"));
 
+  REQUIRE(!match_content_type("application/json", "application/jsonba"));
+
   // x- типы
   REQUIRE(match_content_type("application/x-www-form-urlencoded", "application/x-www-form-urlencoded"));
   REQUIRE(match_content_type("application/*", "application/x-www-form-urlencoded"));
   REQUIRE(match_content_type("*/*", "application/x-www-form-urlencoded"));
   REQUIRE(!match_content_type("text/*", "application/x-www-form-urlencoded"));
+}
+
+TEST("match content type constexpr") {
+  using svarg::match_content_type;
+
+  // Точное совпадение
+  REQUIRE(match_content_type<"text/plain">("text/plain"));
+  REQUIRE(match_content_type<"application/json">("application/json"));
+  REQUIRE(match_content_type<"image/png">("image/png"));
+  REQUIRE(match_content_type<"multipart/form-data">("multipart/form-data"));
+
+  // Точное несовпадение
+  REQUIRE(!match_content_type<"text/plain">("text/html"));
+  REQUIRE(!match_content_type<"application/json">("application/xml"));
+  REQUIRE(!match_content_type<"image/png">("image/jpeg"));
+  REQUIRE(!match_content_type<"text/plain">("application/json"));
+
+  // Wildcard */* — совпадает со всем
+  REQUIRE(match_content_type<"*/*">("text/plain"));
+  REQUIRE(match_content_type<"*/*">("application/json"));
+  REQUIRE(match_content_type<"*/*">("image/png"));
+  REQUIRE(match_content_type<"*/*">("multipart/form-data"));
+
+  // Wildcard text/* — совпадает с подтипами text
+  REQUIRE(match_content_type<"text/*">("text/plain"));
+  REQUIRE(match_content_type<"text/*">("text/html"));
+  REQUIRE(!match_content_type<"text/*">("application/json"));
+  REQUIRE(!match_content_type<"text/*">("application/text"));
+
+  // Wildcard image/*
+  REQUIRE(match_content_type<"image/*">("image/png"));
+  REQUIRE(match_content_type<"image/*">("image/jpeg"));
+  REQUIRE(!match_content_type<"image/*">("text/plain"));
+  REQUIRE(!match_content_type<"image/*">("application/json"));
+
+  // Wildcard application/*
+  REQUIRE(match_content_type<"application/*">("application/json"));
+  REQUIRE(match_content_type<"application/*">("application/vnd.api+json"));
+  REQUIRE(!match_content_type<"application/*">("text/plain"));
+
+  // Регистр (RFC 2045: case-insensitive)
+  REQUIRE(match_content_type<"text/plain">("Text/Plain"));
+  REQUIRE(match_content_type<"text/plain">("TEXT/PLAIN"));
+  REQUIRE(match_content_type<"application/json">("application/JSON"));
+  REQUIRE(match_content_type<"text/*">("text/html"));
+  REQUIRE(match_content_type<"text/*">("TEXT/HTML"));
+
+  // Нестандартные / vendor типы
+  REQUIRE(match_content_type<"application/vnd.api+json">("application/vnd.api+json"));
+  REQUIRE(match_content_type<"application/*">("application/vnd.api+json"));
+  REQUIRE(!match_content_type<"text/*">("application/vnd.api+json"));
+
+  REQUIRE(!match_content_type<"application/json">("application/jsonba"));
+
+  // x- типы
+  REQUIRE(match_content_type<"application/x-www-form-urlencoded">("application/x-www-form-urlencoded"));
+  REQUIRE(match_content_type<"application/*">("application/x-www-form-urlencoded"));
+  REQUIRE(match_content_type<"*/*">("application/x-www-form-urlencoded"));
+  REQUIRE(!match_content_type<"text/*">("application/x-www-form-urlencoded"));
 }
 
 TEST("starts_with_ci") {
