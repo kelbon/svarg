@@ -3,11 +3,11 @@
 #include <moko3/moko3.hpp>
 
 #define TEST_MONO(IN, EXPECTED_OUT) REQUIRE(svarg::monomorph_media_type(IN) == EXPECTED_OUT)
-#define EXPECT_THROW_MONO(IN)        \
-  try {                              \
-    svarg::monomorph_media_type(IN); \
-    FAIL();                          \
-  } catch (svarg::validate_error&) { \
+#define EXPECT_THROW_MONO(IN)              \
+  try {                                    \
+    (void)svarg::monomorph_media_type(IN); \
+    FAIL();                                \
+  } catch (svarg::validate_error&) {       \
   }
 
 TEST("monomoprhing media types") {

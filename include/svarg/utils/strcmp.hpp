@@ -30,21 +30,21 @@ inline char to_upper(char c) noexcept {
   return (c >= 'a' && c <= 'z') ? (c - ('a' - 'A')) : c;
 }
 
-[[nodiscard]] inline bool is_lowered(std::string_view str) noexcept {
+[[nodiscard]] constexpr bool is_lowered(std::string_view str) noexcept {
   for (char c : str) {
     if (c != to_lower_ascii(c))
       return false;
   }
   return true;
 }
-[[nodiscard]] inline std::string lowered(std::string_view input) {
+[[nodiscard]] constexpr std::string lowered(std::string_view input) {
   std::string out(input);
   for (char& c : out)
     c = to_lower_ascii(c);
   return out;
 }
 
-[[nodiscard]] inline std::string uppered(std::string_view input) {
+[[nodiscard]] constexpr std::string uppered(std::string_view input) {
   std::string out(input);
   for (char& c : out)
     c = to_upper_ascii(c);
@@ -52,7 +52,7 @@ inline char to_upper(char c) noexcept {
 }
 
 // case insensitive
-inline std::strong_ordering compare_ci(std::string_view a, std::string_view b) {
+constexpr std::strong_ordering compare_ci(std::string_view a, std::string_view b) {
   size_t n = std::min(a.size(), b.size());
   for (size_t i = 0; i < n; ++i) {
     char ca = to_lower_ascii(a[i]);
@@ -63,7 +63,7 @@ inline std::strong_ordering compare_ci(std::string_view a, std::string_view b) {
   return a.size() <=> b.size();
 }
 
-inline bool starts_with_ci(std::string_view str, std::string_view prefix) noexcept {
+constexpr bool starts_with_ci(std::string_view str, std::string_view prefix) noexcept {
   if (prefix.size() > str.size())
     return false;
   for (size_t i = 0; i < prefix.size(); ++i) {
@@ -76,7 +76,7 @@ inline bool starts_with_ci(std::string_view str, std::string_view prefix) noexce
 }
 
 // precondition: prefix уже lowered
-inline bool starts_with_ci_prefix_lowered(std::string_view str, std::string_view prefix) noexcept {
+constexpr bool starts_with_ci_prefix_lowered(std::string_view str, std::string_view prefix) noexcept {
   if (prefix.size() > str.size())
     return false;
   for (size_t i = 0; i < prefix.size(); ++i) {
@@ -89,7 +89,7 @@ inline bool starts_with_ci_prefix_lowered(std::string_view str, std::string_view
   return true;
 }
 
-inline bool is_equal_ci(std::string_view a, std::string_view b) {
+constexpr bool is_equal_ci(std::string_view a, std::string_view b) {
   return compare_ci(a, b) == std::strong_ordering::equal;
 }
 

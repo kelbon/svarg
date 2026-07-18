@@ -725,7 +725,7 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
         "static constexpr decltype(auto) select_body_type(std::string_view content_type, auto&& vtor) {";
     for (auto&& [b, struct_name] : std::views::zip(bodies, struct_names))
       result += std::format(
-          "if (cxx_support::match_content_type({}, content_type)) return vtor.template operator()<{}>();\n",
+          "if (svarg::match_content_type<{}>(content_type)) return vtor.template operator()<{}>();\n",
           render_string(b.contentType.str()), struct_name);
     result += std::format("return vtor.template operator()<void>();\n");
     result += "}\n\n";
@@ -960,7 +960,8 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
       assert(!r.is_default());
       if (r.is_range()) {
         result += std::format(
-            "if (match_status_range(status, status_range_e::{})) return vtor.template operator()<{}>();\n",
+            "if (svarg::match_status_range<status_range_e::{}>(status)) return vtor.template "
+            "operator()<{}>();\n",
             r.status.to_string(), struct_name);
       }
     }

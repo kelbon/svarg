@@ -65,7 +65,7 @@ enum struct status_range_e {
   _5XX,
 };
 
-inline constexpr std::string_view e2str(status_range_e e) {
+constexpr std::string_view e2str(status_range_e e) {
   switch (e) {
     case status_range_e::_1XX:
       return "1XX";
@@ -81,7 +81,7 @@ inline constexpr std::string_view e2str(status_range_e e) {
   metel::unreachable();
 }
 
-[[nodiscard]] inline constexpr bool efromstr(std::string_view str, status_range_e& out) {
+[[nodiscard]] constexpr bool efromstr(std::string_view str, status_range_e& out) {
   using enum status_range_e;
   std::optional e = ss::string_switch<status_range_e>(str)
                         .case_("1XX", _1XX)
@@ -94,6 +94,23 @@ inline constexpr std::string_view e2str(status_range_e e) {
     return false;
   out = *e;
   return true;
+}
+
+template <status_range_e R>
+[[nodiscard]] constexpr bool match_status_range(int status) noexcept {
+  using enum status_range_e;
+  if constexpr (R == _1XX)
+    return status >= 100 && status < 200;
+  else if constexpr (R == _2XX)
+    return status >= 200 && status < 300;
+  else if constexpr (R == _3XX)
+    return status >= 300 && status < 400;
+  else if constexpr (R == _4XX)
+    return status >= 400 && status < 500;
+  else if constexpr (R == _5XX)
+    return status >= 500 && status < 600;
+  else
+    static_assert(false, "invalid status range value");
 }
 
 }  // namespace svarg
