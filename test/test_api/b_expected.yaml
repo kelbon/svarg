@@ -193,6 +193,8 @@
 "operations":
   - "id": "getItem"
     "spec": "api-b"
+    "servers":
+      - "url": "/"
     "path": "/items/{itemId}"
     "method": "get"
     "parameters":
@@ -221,6 +223,8 @@
           "required": true
   - "id": "getOrder"
     "spec": "api-b"
+    "servers":
+      - "url": "/"
     "path": "/orders/{orderId}"
     "method": "get"
     "parameters":

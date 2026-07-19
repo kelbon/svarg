@@ -4,6 +4,7 @@
 #include <boost/container_hash/hash.hpp>
 #include <set>  // используется для стабильности вывода вместо unordered_set
 
+#include "svarg/frontend/openapi/openapi_object.hpp"
 #include "svarg/frontend/parameter_location.hpp"
 #include "svarg/utils/algo.hpp"
 #include "svarg/utils/forward_like.hpp"
@@ -698,6 +699,10 @@ struct operation {
   string id;
   // .filename() спеки где объявлена операция без расширения
   string spec;
+  // к каким серверам прикреплена операция. Всегда хотя бы один сервер
+  // пусто если вебхук
+  std::optional<std::set<server_object>> servers;
+
   // путь относительно url сервера. Должен начинаться с / (если не пустой)
   // path + method + spec должны быть уникальны. Шаблонизированность не учитывается
   // если это callback/webhook, то путь пуст

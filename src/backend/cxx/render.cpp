@@ -5,6 +5,7 @@
 #include "svarg/ir/ir_visitor.hpp"
 
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
+#include "svarg/utils/parse_url.hpp"
 
 namespace svarg::cxx {
 
@@ -643,6 +644,43 @@ void renderer::render2cxx(fs::path output_dir) const {
     write_into(output_dir / spec / "all_operations.hpp", all.all_operations);
     write_into(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
   }
+
+  // servers.hpp только если есть операции
+
+  if (ir.operations) {
+    // spec -> (url -> [op*])
+    string_map<std::map<server_object, std::vector<const ir::operation*>>> servers;
+    for (auto& op : *ir.operations) {
+      assert(op.has_path() || !op.servers);  // у вебхуков не должно быть серверов
+      if (op.servers) {
+        for (auto& s : *op.servers)
+          servers[op.spec][s].push_back(&op);
+      }
+    }
+    // file -> rendered
+    string_map<std::string> server_files;
+    for (auto& [spec, srvs] : servers) {
+      for (auto& s : srvs) {
+        auto [it, emplaced] = server_files.try_emplace(spec);
+        if (emplaced) {
+          it->second += "#pragma once\n\n#include \"common_types.hpp\"\n\n";
+          it->second += std::format("namespace {}\n {{", make_namespace(spec, {}, options));
+        }
+        // TODO инклуды всех необходимых операций
+        for (auto* op : s.second) {
+          it->second += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
+        }
+        it->second += render_server(s.first, s.second, spec);
+        it->second += "\n\n";
+        // TODO клиент просто одна штука на каждую спеку с операциями. С возможностью указать base prefix куда
+        // отправлять и по умолчанию там стоит первый из серверов
+      }
+    }
+    for (auto& [spec, rendered] : server_files) {
+      rendered += "}\n\n";  // end namespace
+      write_into(spec + "/servers.hpp", rendered);
+    }
+  }
 }
 
 // ОПЕРАЦИИ
@@ -743,25 +781,33 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
   return result;
 }
 
-// если респонс не дефолтный генерирует
-// static constexpr int status = ...;
-// название структуры "response_{}" ("default_response" для дефолтного)
-// генерирует все структуры боди и само боди (если одно - просто, если много - options.variant_str)
-// при наличии хедеров структуру headers_t и поле headers
+// генерирует
+// struct default_response|response_{status} {
+//   int status = 0; // static constexpr если статус известен заранее
+//   struct headers_t { ... }
+//   headers_t headers; // если есть хедера
+//   body_A, body_B... // если есть боди
+//   body_t body;
+// };
 rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::string_view spec,
                                              const json_pointer& jp) const {
   std::string result;
+  result += render_parse_tag(cxx_support::parse_tag_e::response);
   std::string struct_name =
       rsp.is_default() ? "default_response" : std::format("response_{}", rsp.status.to_string());
   result += std::format("struct {} {{\n\n", struct_name);
+
   if (!rsp.is_default()) {
     if (!rsp.is_range())
+      // имя совпадает с полем, которое не генерируется когда есть чёткий статус
       result += std::format("static constexpr int status = {};\n\n", rsp.status.to_string());
     else
       result += std::format("static constexpr status_range_e status_range = status_range_e::{};\n\n",
                             rsp.status.to_string());
   }
-  if (rsp.headers) {
+  if (rsp.is_default() || rsp.is_range())
+    result += "int status = 0;\n";
+  if (rsp.headers && !rsp.headers->empty()) {
     std::vector<ir::operation_parameter> params;
     for (auto& h : *rsp.headers) {
       h.validate();
@@ -774,8 +820,10 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
           .meta = h.meta,
       });
     }
+    result += "struct headers_t {\n";
     result += render_parameters(params, spec, jp, *this);
-    result += '\n';
+    result += "};\n";
+    result += "headers_t headers;\n";
   }
   if (rsp.bodies)
     result += render_bodies(*rsp.bodies, spec, jp);
@@ -810,10 +858,12 @@ struct build_path_make_fn_visitor {
     out += std::format("vtor.substr({});\n", render_string(sv));
   }
   void param(std::string_view param_name) {
+    assert(param_name == params[param_index]->name);
     out += std::format("vtor.param(std::index_sequence<{}>{{}});\n", param_index);
     ++param_index;
   }
   void param(std::string_view param_name, std::string_view sep) {
+    assert(param_name == params[param_index]->name);
     out += std::format("vtor.param(std::index_sequence<{}>{{}}, {});\n", param_index, render_string(sep));
     ++param_index;
   }
@@ -865,7 +915,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   result += std::format("namespace {} {{\n\n", make_namespace(op.spec, paths, options));
 
   // id
-  result += std::format("struct {} {{\n", op.id);
+  result += std::format("struct {} {{\n", make_cxx_ident(op.id, options));
 
   // parse tag
   result += render_parse_tag(cxx_support::parse_tag_e::operation);
@@ -946,7 +996,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
       struct_names.push_back(std::move(struct_name));
     }
 
-    result += "constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {\n";
+    result += "static constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {\n";
     // сначала не ренжи (2ХХ)
     for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
       assert(!r.is_default());
@@ -973,9 +1023,35 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     if (op.defaultResponse)
       struct_names.push_back("default_response");
     remove_duplicates(struct_names);
-    auto names_rng = struct_names | std::views::join_with(',');
-    result += std::format("\nusing all_responses = {}<{}>;\n\n", typelist_str,
-                          std::string(names_rng.begin(), names_rng.end()));
+
+    if (struct_names.size() == 1) {
+      result += std::format("using result_t = {}", struct_names.front());
+    } else {
+      result += "struct result_t {\n";
+      auto names_rng = struct_names | std::views::join_with(',');
+      result +=
+          std::format("\n{}<{}> data;\n\n", variant_str, std::string(names_rng.begin(), names_rng.end()));
+      for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
+        if (!r.is_default()) {
+          result += std::format("const {}* get_if_{}() const noexcept {{", struct_name, r.status.to_string());
+          result += std::format("return std::get_if<{}>(&data);\n", struct_name);
+          result += "}\n";
+          // non-const
+          result += std::format("{}* get_if_{}() noexcept {{", struct_name, r.status.to_string());
+          result += std::format("return std::get_if<{}>(&data);\n", struct_name);
+          result += "}\n";
+        } else {
+          result +=
+              "const default_response* get_if_default() const noexcept { return "
+              "std::get_if<default_response>(&data); }\n";
+          // non-const
+          result +=
+              "default_response* get_if_default() noexcept { return "
+              "std::get_if<default_response>(&data); }\n";
+        }
+      }
+      result += "};\n";
+    }
   }
 
   result += "};\n\n}\n";  // struct / namespace
@@ -1010,4 +1086,94 @@ ir::schema_refs_t renderer::dealias(ir::schema_refs_t schemas) const {
   }
 }
 
+// CLIENT/SERVER
+
+struct build_make_url_visitor {
+  std::string& out;
+  const server_object& server;
+  const render_options& options;
+
+  explicit build_make_url_visitor(std::string& x, const server_object& srv, const render_options& options)
+      : out(x), server(srv), options(options) {
+    out += "std::string result;\n";
+  }
+
+  void substr(std::string_view sv) {
+    out += std::format("result += {};\n", render_string(sv));
+  }
+  void param(std::string_view param_name) {
+    out += std::format("result += {};\n", make_cxx_ident(param_name, options));
+  }
+  void param(std::string_view param_name, std::string_view sep) {
+    param(param_name);
+    substr(sep);
+  }
+
+  void pattern_end() {
+    out += "return result;\n";
+  }
+  void error(std::string_view msg) {
+    throw render_error("{}", msg);
+  }
+};
+
+std::string renderer::render_server(const server_object& s,
+                                    const std::vector<const ir::operation*>& operations,
+                                    std::string_view spec) const {
+  assert(!operations.empty());
+
+  std::string result;
+  if (is_relative_url(s.url))
+    emit_warn("relative url `{}` in server in something strange", s.url);
+  result += std::format("struct server_{} : http2::http2_server {{\n\n", make_cxx_ident(s.url, options));
+  result += "static std::string make_url(";
+  if (s.variables) {
+    bool first = true;
+    for (auto&& [name, var] : *s.variables) {
+      if (!first)
+        result += ',';
+      result += std::format("std::string_view {}", make_cxx_ident(name, options));
+      first = false;
+    }
+  }
+  result += ") {\n";  // start fn
+  if (s.variables)
+    // TODO тест что действительно работает
+    visit_templated_path_parts(s.url, build_make_url_visitor(result, s, options));
+  else
+    result += std::format("return {};\n", render_string(s.url));
+  result += "}\n";  // end fn
+  // TODO x-name для сервера поддержать ?
+
+  // виртуальные функции операций
+
+  for (auto* op : operations) {
+    assert(op);
+    // операция находится в том же неймспейсе (spec)
+    std::string opname = make_cxx_ident(op->id, options);
+    result += std::format(
+        "virtual dd::task<{}::result_t> handle_{}({}, http2::http_request, http2::request_context) = 0;\n\n",
+        opname, opname, opname);
+  }
+  // функция
+  // dd::task<http2::http_response> handle_request(http2::http_request req, http2::request_context) override;
+  // которая выбирает какую из handle вызывать на основании входного path
+  // сортировка по приоритетам путей (она у меня вообще есть?)
+  // TODO реализация handle requets с выбором по path что заматчилось + динамические хендлеры
+  result += "};\n\n";  // end struct
+  return result;
+}
+
 }  // namespace svarg::cxx
+#if 0
+// TODO rm
+  #include "http2/http2_client_options.hpp"
+  #include "http2/http2_server.hpp"
+void foo() {
+  http2::http2_server_options opts;
+}
+struct myserver : http2::http2_server {
+  dd::task<http2::http_response> handle_request(http2::http_request, http2::request_context) override;
+};
+//
+#endif

@@ -125,9 +125,10 @@ struct lowering_context {
   //    и поэтому стала новой операцией в том файле где написана ссылка
   // jp - путь до path item в объекте апи
   // Возвращает мапу METHOD => operation
-  string_map<ir::operation> path_item_object_lowering(std::string_view path, fs::path spec,
-                                                      fs::path resolve_ref_file, json_pointer jp,
-                                                      std::string_view name, path_item_object);
+  string_map<ir::operation> path_item_object_lowering(const openapi_object& api, std::string_view path,
+                                                      fs::path spec, fs::path resolve_ref_file,
+                                                      json_pointer jp, std::string_view name,
+                                                      const path_item_object&);
   // TODO как-то объединить везде file + jsonptr, везде прокидывается же абсолютно
 
   ir::operation_parameter parameter_lowering(const parameter_object& param, fs::path file, json_pointer,

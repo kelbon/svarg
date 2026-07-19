@@ -231,6 +231,8 @@
 "operations":
   - "id": "getUser"
     "spec": "api-a"
+    "servers":
+      - "url": "/"
     "path": "/users/{userId}"
     "method": "get"
     "parameters":
@@ -267,6 +269,8 @@
             "required": true
   - "id": "createOrder"
     "spec": "api-a"
+    "servers":
+      - "url": "/"
     "path": "/orders"
     "method": "post"
     "bodies":

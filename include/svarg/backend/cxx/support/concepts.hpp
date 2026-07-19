@@ -67,6 +67,7 @@ enum struct parse_tag_e {
   body,       // string_view content_type + <special_field_name> единственное поле с данными +
               // encoding_for(string_view)
   operation,  // вообще парсится из запроса и сериализуется в запрос
+  response,   // status/statusRange/нет статуса для дефолтного + хедера параметрами + боди
 };
 
 constexpr std::string_view e2str(parse_tag_e e) noexcept {
@@ -93,6 +94,8 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
       return "body";
     case parse_tag_e::operation:
       return "operation";
+    case parse_tag_e::response:
+      return "response";
   }
   metel::unreachable();
 }
@@ -110,6 +113,7 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
                         .case_("string_enum", parse_tag_e::string_enum)
                         .case_("body", parse_tag_e::body)
                         .case_("operation", parse_tag_e::operation)
+                        .case_("response", parse_tag_e::response)
                         .or_nullopt();
   if (!t)
     return false;
@@ -199,6 +203,9 @@ concept a_body = tagged_as<T>(parse_tag_e::body);
 template <typename T>
 concept an_operation = tagged_as<T>(parse_tag_e::operation);
 
+template <typename T>
+concept a_response = tagged_as<T>(parse_tag_e::response);
+
 template <a_body T>
 consteval std::string_view get_content_type() {
   static_assert(is_lowered(std::decay_t<T>::content_type));
@@ -243,7 +250,7 @@ constexpr bool has_cookie_params = requires {
 template <an_operation Op>
 using cookies_t = typename std::decay_t<Op>::cookies_t;
 
-template <an_operation O>
+template <typename O>
 constexpr bool has_header_params = requires {
   typename O::headers_t;
   O::headers;
@@ -252,35 +259,35 @@ constexpr bool has_header_params = requires {
 template <an_operation Op>
 using headers_t = typename std::decay_t<Op>::headers_t;
 
-template <an_operation Op>
-constexpr bool has_body = requires { Op::body; };
+template <typename T>
+constexpr bool has_body = requires { std::decay_t<T>::body; };
 
-template <an_operation Op>
-using body_t = decltype(std::declval<Op>().body);
+template <typename T>
+using body_t = decltype(std::declval<T>().body);
 
-template <an_operation Op>
+template <typename T>
 constexpr bool has_single_body() noexcept {
-  if constexpr (!has_body<Op>)
+  if constexpr (!has_body<T>)
     return false;
   else  // у variant/box_union не будет .body
-    return has_parse_tag<svarg::noexport::deoptional_type_t<body_t<Op>>>;
+    return has_parse_tag<svarg::noexport::deoptional_type_t<body_t<T>>>;
 }
 
-template <an_operation Op>
+template <typename T>
 constexpr bool has_many_bodies() noexcept {
-  if constexpr (!has_body<Op>)
+  if constexpr (!has_body<T>)
     return false;
   else
-    return !has_single_body<Op>();
+    return !has_single_body<std::decay_t<T>>();
 }
 
-template <an_operation Op>
+template <typename T>
 [[nodiscard]] constexpr bool is_body_required() noexcept {
-  if constexpr (!has_body<Op>)
+  if constexpr (!has_body<T>)
     return false;
   else {
-    if constexpr (has_single_body<Op>())
-      return svarg::noexport::deoptional_type_t<body_t<Op>>::is_required;  // TODO обработать опшнл
+    if constexpr (has_single_body<T>())
+      return svarg::noexport::deoptional_type_t<body_t<T>>::is_required;  // TODO обработать опшнл
     else {
       return []<template <typename...> typename X, typename... Bodies>(X<std::monostate, Bodies...>) {
         return (Bodies::is_required && ...);
@@ -289,12 +296,12 @@ template <an_operation Op>
   }
 }
 
-template <an_operation Op>
-[[nodiscard]] constexpr bool is_body_present(const Op& op) noexcept {
-  if constexpr (!has_body<Op>)
+template <typename T>
+[[nodiscard]] constexpr bool is_body_present(const T& op) noexcept {
+  if constexpr (!has_body<T>)
     return false;
-  else if constexpr (has_single_body<Op>()) {
-    if constexpr (is_body_required<Op>())
+  else if constexpr (has_single_body<T>()) {
+    if constexpr (is_body_required<T>())
       return true;
     else
       return !!op.body;
@@ -304,29 +311,29 @@ template <an_operation Op>
 }
 
 // ожидает что is_body_present(op) == true
-template <an_operation Op, typename Vtor>
-constexpr void visit_body(Op&& op, Vtor&& vtor) noexcept {
-  static_assert(has_body<Op>);
-  if constexpr (has_single_body<Op>()) {
-    if constexpr (is_body_required<Op>()) {
-      std::forward<Vtor>(vtor)(noadl::forwardLike<Op>(op.body));
+template <typename T, typename Vtor>
+constexpr void visit_body(T&& op, Vtor&& vtor) noexcept {
+  static_assert(has_body<T>);
+  if constexpr (has_single_body<T>()) {
+    if constexpr (is_body_required<T>()) {
+      std::forward<Vtor>(vtor)(noadl::forwardLike<T>(op.body));
       return;
     } else {
       if (!is_body_present(op))
-        throw serialize_error("body for operation `{}` is required, but not present", type_name<Op>());
-      std::forward<Vtor>(vtor)(*noadl::forwardLike<Op>(op.body));
+        throw serialize_error("body for operation `{}` is required, but not present", type_name<T>());
+      std::forward<Vtor>(vtor)(*noadl::forwardLike<T>(op.body));
       return;
     }
   } else {
-    if constexpr (is_body_required<Op>()) {
+    if constexpr (is_body_required<T>()) {
       if (!is_body_present(op))
-        throw serialize_error("body for operation `{}` is required, but not present", type_name<Op>());
+        throw serialize_error("body for operation `{}` is required, but not present", type_name<T>());
     }
     std::visit(metel::matcher{
                    [](std::monostate) { metel::unreachable(); },
-                   [&]<typename B>(B&& b) { std::forward<Vtor>(vtor)(noadl::forwardLike<Op>(b)); },
+                   [&]<typename B>(B&& b) { std::forward<Vtor>(vtor)(noadl::forwardLike<T>(b)); },
                },
-               std::forward_like<Op>(op.body));
+               std::forward_like<T>(op.body));
     return;
   }
 }
@@ -334,21 +341,21 @@ constexpr void visit_body(Op&& op, Vtor&& vtor) noexcept {
 // pre: `content_type` в нижнем регистре
 // вызывает `vtor` передавая тип body которому соответствует `content_type`
 // если такого нет - передаёт void
-template <an_operation Op, typename Vtor>
+template <typename T, typename Vtor>
 constexpr decltype(auto) select_body_type(std::string_view content_type, Vtor&& vtor) {
-  static_assert(has_body<Op>);
+  static_assert(has_body<T>);
 
   assert(is_lowered(content_type));
 
-  if constexpr (has_single_body<Op>()) {
-    using body_type = svarg::noexport::deoptional_type_t<body_t<Op>>;
+  if constexpr (has_single_body<T>()) {
+    using body_type = svarg::noexport::deoptional_type_t<body_t<T>>;
 
     if (get_content_type<body_type>() == content_type)
       return vtor.template operator()<body_type>();
     else
       return vtor.template operator()<void>();
   } else {
-    return std::decay_t<Op>::select_body_type(content_type, std::forward<Vtor>(vtor));
+    return std::decay_t<T>::select_body_type(content_type, std::forward<Vtor>(vtor));
   }
 }
 
@@ -413,7 +420,7 @@ inline void serialize_impl(auto& s, boost::json::serializer& sr) {
     s.append(sv.data(), sv.size());
     return;
   }
-  std::size_t len = sv.size();
+  size_t len = sv.size();
   s.reserve(len * 2);
   s.resize(s.capacity());
   BOOST_ASSERT(s.size() >= len * 2);
@@ -435,8 +442,9 @@ inline void serialize_impl(auto& s, boost::json::serializer& sr) {
 
 }  // namespace noexport
 
-template <content_type_e C, a_body B>
+template <a_body B>
 [[nodiscard]] http2::http_body_bytes serialize_body(const B& body, const content_type_params&) {
+  constexpr content_type_e C = get_content_type<B>();
   if constexpr (C == content_type_e::application_json) {
     // калька кода из boost json serialize, но не для строки, а для http_body_bytes
     boost::json::value v = to_json(body);

@@ -3,7 +3,7 @@
 #include <boost/json/parse.hpp>
 
 #include "svarg/frontend/openapi/openapi.hpp"
-#include "svarg/utils/parse_uri.hpp"
+#include "svarg/utils/parse_url.hpp"
 
 #include <http2/http2_client.hpp>
 
@@ -18,7 +18,7 @@ namespace svarg {
 static std::string fixup_path(fs::path p) {
   std::string gs = p.generic_string();
   if (is_net_ref(gs)) {
-    parsed_uri u = parse_uri(gs);
+    url_ref u = parse_absolute_url(gs);
     std::string newpath = fs::path(u.path).lexically_normal().generic_string();
     u.path = newpath;
     return u.to_string();
@@ -27,7 +27,7 @@ static std::string fixup_path(fs::path p) {
   }
 }
 
-static dd::task<void> do_load_refered_object(http2::http2_client& client, parsed_uri uri, auto success,
+static dd::task<void> do_load_refered_object(http2::http2_client& client, url_ref uri, auto success,
                                              auto fail) try {
   http2::http_request req{.path = std::string(uri.path), .method = http2::http_method_e::GET};
   req.authority = uri.host;
@@ -48,7 +48,7 @@ static dd::task<void> do_load_refered_object(http2::http2_client& client, parsed
 std::string do_get_request_to(std::string_view uri) {
   std::string fixed = fixup_path(uri);
   uri = fixed;
-  parsed_uri u = parse_uri(uri);
+  url_ref u = parse_absolute_url(uri);
   std::optional<http2::http2_client> client;
   http2::http2_client_options opts{.allow_requests_before_server_settings = true};
   if (uri.starts_with("http://")) {

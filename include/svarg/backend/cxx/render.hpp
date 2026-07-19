@@ -133,6 +133,9 @@ struct renderer {
   friend std::string render_parameters(const auto& params, std::string_view spec, const json_pointer& jp,
                                        const renderer&);
 
+  std::string render_server(const server_object&, const std::vector<const ir::operation*>& operations,
+                            std::string_view spec) const;
+
   // убирает из схем все ссылки на алиасы или фундаменталы, заменяя их их зависимостями
   [[nodiscard]] ir::schema_refs_t dealias(ir::schema_refs_t) const;
 };

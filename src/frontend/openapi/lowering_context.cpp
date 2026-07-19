@@ -874,15 +874,28 @@ std::set<ir::body> lowering_context::request_body_lowering(request_body_object o
   return result;
 }
 
-string_map<ir::operation> lowering_context::path_item_object_lowering(std::string_view path, fs::path spec,
+string_map<ir::operation> lowering_context::path_item_object_lowering(const openapi_object& api,
+                                                                      std::string_view path, fs::path spec,
                                                                       fs::path resolve_ref_file,
                                                                       json_pointer jp, std::string_view name,
-                                                                      path_item_object item) {
+                                                                      const path_item_object& item) {
   assert(parsable_as<path_item_object>(jp.access(load_as_json(spec))) && "no such path item");
   string_map<ir::operation> result;
 
   for (auto [methodstr, o] : item.all_operations_with_method()) {
     ir::operation op;
+    // не закрепляем вебхуки за серверами
+    if (!path.empty()) {
+      auto srvs = [&] {
+        if (o.servers && !o.servers->empty())
+          return *o.servers;
+        if (item.servers && !item.servers->empty())
+          return *item.servers;
+        assert(api.servers && !api.servers->empty());  // должен быть хотя бы один дефолтный '/'
+        return *api.servers;
+      }();
+      op.servers = std::set(srvs.begin(), srvs.end());
+    }
     op.spec = spec.filename().replace_extension().generic_string();
     if (o.operationId)
       op.id = *o.operationId;
@@ -956,8 +969,9 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
                                 resolve_ref_and_ret(pathItem, cbpath, cbjp / expr, *this);
                             // используется путь откуда операция взялась, но она всё ещё декларирована в
                             // obj_file и является операцией этого апи
-                            auto ops = path_item_object_lowering(
-                                /*path=*/"", obj_file, rpipath, std::move(rpijp), name, std::move(rpi));
+                            auto ops = path_item_object_lowering(api,
+                                                                 /*path=*/"", obj_file, rpipath,
+                                                                 std::move(rpijp), name, std::move(rpi));
                             for (auto& [method, op] : ops)
                               result.webhooks->insert(std::move(op));
                           }
@@ -973,9 +987,10 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
         // string_map<std::string> name2path;
         // string_map<std::string> path2name;
         // std::string generatedname = path_to_name(path, name2path, path2name);
-
+        if (!validate_maybe_templated_path(path))
+          throw validate_error("invalid path `{}`, do not passes validation", path);
         std::string generatedname(cxx::to_cxx_ident(path));
-        auto ops = path_item_object_lowering(path, obj_file, file, std::move(item_jp), generatedname,
+        auto ops = path_item_object_lowering(api, path, obj_file, file, std::move(item_jp), generatedname,
                                              std::move(ritem));
         for (auto& [method, op] : ops)
           result.operations->insert(op);

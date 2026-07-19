@@ -55,6 +55,12 @@ struct server_object {
   string url;
   std::optional<string> description;
   std::optional<string_map<variable>> variables;
+
+  std::strong_ordering operator<=>(const server_object& other) const {
+    // без сложностей типа не учитывать {} и тд, так как логическое сравнение там куда сложнее, столь же
+    // "идеально" будет сравнить по url
+    return url <=> other.url;
+  }
 };
 
 struct external_documentation_object {

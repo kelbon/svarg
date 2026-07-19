@@ -67,8 +67,8 @@ void visit_path_segments(std::string_view path, F&& callback) {
 }
 
 // сравниваем так что users/{id} == users/{name}
-[[nodiscard]] constexpr inline std::strong_ordering compare_paths_template_insensitve(
-    std::string_view a, std::string_view b) noexcept {
+[[nodiscard]] constexpr std::strong_ordering compare_paths_template_insensitve(std::string_view a,
+                                                                               std::string_view b) noexcept {
   while (!a.empty() && !b.empty()) {
     std::string_view sega = cut_path_segment(a);
     std::string_view segb = cut_path_segment(b);
@@ -200,7 +200,7 @@ concept templated_path_vtor = requires(V v, std::string_view param_name, std::st
 };
 
 template <templated_path_vtor V>
-void visit_templated_path_parts(std::string_view path, V&& visitor) {
+constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
   while (!path.empty()) {
     auto open = path.find('{');
 
@@ -236,6 +236,52 @@ void visit_templated_path_parts(std::string_view path, V&& visitor) {
   }
 
   visitor.pattern_end();
+}
+
+// TODO test
+[[nodiscard]] constexpr size_t count_in_str(std::string_view str, std::string_view needle) {
+  assert(!needle.empty());
+  size_t count = 0;
+  do {
+    auto pos = str.find(needle);
+    if (pos == str.npos)
+      return count;
+    ++count;
+    str.remove_prefix(pos + needle.size());
+  } while (!str.empty());
+  return count;
+}
+// TODO test
+[[nodiscard]] constexpr bool validate_maybe_templated_path(std::string_view path) {
+  struct vtor_t {
+    std::string_view p;
+    bool failed = false;
+
+    constexpr void substr(std::string_view) const {
+    }
+    constexpr void pattern_end() const {
+    }
+    constexpr void param(std::string_view name) {
+      if (failed)
+        return;
+      if (name.empty()) {
+        failed = true;
+        return;
+      }
+      failed = count_in_str(p, '{' + std::string(name) + '}') != 1;
+    }
+    constexpr void param(std::string_view name, std::string_view sep) {
+      param(name);
+      substr(sep);
+    }
+
+    constexpr void error(std::string_view) {
+      failed = true;
+    }
+  };
+  vtor_t vtor{path};
+  visit_templated_path_parts(path, vtor);
+  return !vtor.failed;
 }
 
 // QUERY

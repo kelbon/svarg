@@ -8,6 +8,7 @@
 #include "svarg/utils/path_tools.hpp"
 
 #include <http2/http_base.hpp>
+#include <http2/http2_client.hpp>
 
 namespace svarg::cxx_support {
 
@@ -156,6 +157,17 @@ template <an_operation Op>
   }
 }
 
+template <typename T>
+void serialize_headers_of(T&& v, http2::http_headers_t& out) {
+  if constexpr (has_header_params<T>) {
+    FOR_EACH_FIELD_INDEX_OF(headers_t<T>) {
+      if (is_field_present<I>(v.headers))
+        out.emplace_back(get_field_name<I, headers_t<T>>(),
+                         serialize_nonbody_field<I>(std::forward<T>(v).headers));
+    };
+  }
+}
+
 // не заполняет req.path, если у операции нет пути (вебхук...)
 // складывает content_type не в headers, а в req.body.content_type
 // не выставляет req.scheme и req.authority, это должно заполняться уже клиентом при отправке
@@ -188,15 +200,7 @@ http2::http_request make_request(const Op& op, const content_type_params& ctpara
 
   req.method = get_operation_method<Op>();
 
-  if constexpr (has_header_params<Op>) {
-    FOR_EACH_FIELD_INDEX_OF(headers_t<Op>) {
-      // cookies хедер должен быть только из cookie параметров
-      static_assert(!is_equal_ci(get_field_name<I, headers_t<Op>>(), cookie_hdr));
-      if (is_field_present<I>(op.headers)) {
-        req.headers.emplace_back(get_field_name<I, headers_t<Op>>(), serialize_nonbody_field<I>(op.headers));
-      }
-    };
-  }
+  serialize_headers_of(op, req.headers);
 
   if constexpr (has_cookie_params<Op>) {
     std::string cookie_header;
@@ -220,7 +224,7 @@ http2::http_request make_request(const Op& op, const content_type_params& ctpara
     if (is_body_present(op)) {
       visit_body(op, [&]<typename B>(const B& x) {
         // а парсить нужно не включая параметры
-        req.body.data = serialize_body<get_content_type<body_t<Op>>()>(op.body, ctparams);
+        req.body.data = serialize_body(op.body, ctparams);
       });
     }
     // если боди обязательно, то is_body_present вернёт true
@@ -229,16 +233,19 @@ http2::http_request make_request(const Op& op, const content_type_params& ctpara
   return req;
 }
 
+namespace noexport {
+
+parse_error unparsed_error(const auto& unparsed, std::string_view what) {
+  assert(unparsed.any());
+  return parse_error("not all required {} args are present, unparsed fields: {}", what, unparsed.to_string());
+};
+
+}  // namespace noexport
+
 // content-type берётся не из headers, а из req.body.content_type
 template <an_operation Op>
 [[nodiscard]] error_code from_request(const http2::http_request& req, Op& op) {
   assert(req.method == get_operation_method<Op>());
-
-  auto unparsed_error = [](const auto& unparsed, std::string_view what) {
-    assert(unparsed.any());
-    return parse_error("not all required {} args are present, unparsed fields: {}", what,
-                       unparsed.to_string());
-  };
 
   error_code ec;
 
@@ -258,7 +265,7 @@ template <an_operation Op>
     if (ec)
       return ec;
     if (unparsed.any())
-      return unparsed_error(unparsed, "query");
+      return noexport::unparsed_error(unparsed, "query");
   }
 
   auto unparsed_cookies = [] {
@@ -312,36 +319,143 @@ template <an_operation Op>
   }
   if constexpr (has_cookie_params<Op>) {
     if (unparsed_cookies.any())
-      return unparsed_error(unparsed_cookies, "cookies");
+      return noexport::unparsed_error(unparsed_cookies, "cookies");
   }
   if constexpr (has_header_params<Op>) {
     if (unparsed_headers.any())
-      return unparsed_error(unparsed_headers, "header");
+      return noexport::unparsed_error(unparsed_headers, "header");
   }
 
   if constexpr (has_body<Op>) {
     std::string_view content_type = req.body.content_type;
-    if (content_type.empty()) {
-      if constexpr (has_single_body<Op>()) {
-        content_type = get_content_type<::svarg::noexport::deoptional_type_t<body_t<Op>>>();
-      } else {
-        return parse_error("`content_type` header not present, body is ambiguous");
-      }
-    }
     auto do_parse_body = [&]<typename B>() -> error_code {
       if constexpr (std::is_void_v<B>) {
         return parse_error("content type `{}` not matched any body in operation `{}`", content_type,
                            type_name<Op>());
       } else {
-        return parse_from<get_content_type<B>()>(req.body, op.body.template emplace<B>());
+        return parse_from<get_content_type<B>()>(req.body.strview(), op.body.template emplace<B>());
       }
     };
-    ec = select_body_type<Op>(req.body.content_type, do_parse_body);
+    ec = select_body_type<Op>(content_type, do_parse_body);
     if (ec)
       return ec;
   }
 
   return ec;
+}
+
+template <a_response R>
+[[nodiscard]] http2::http_response make_response(R&& rsp, const content_type_params& ctparams = {}) {
+  http2::http_response rawrsp;
+  assert(rsp.status != 0);  // unset
+  rawrsp.status = rsp.status;
+  serialize_headers_of(std::forward<R>(rsp), rawrsp.headers);
+
+  if constexpr (has_body<R>) {
+    rawrsp.body = serialize_body(rsp.body, ctparams);
+  }
+  return rawrsp;
+}
+
+template <a_response R>
+error_code from_response(const http2::http_response& rawrsp, R& rsp) {
+  static_assert(metel::is_decayed_v<R>);
+
+  error_code ec;
+
+  if constexpr (requires { rsp.status = 0; }) {  // не static constexpr status
+    if constexpr (requires { R::status_range; }) {
+      if (!match_status_range<R::status_range>(rawrsp.status)) {
+        return parse_error("status `{}` do not match status range `{}`", rawrsp.status,
+                           e2str(R::status_range));
+      }
+    }
+    rsp.status = rawrsp.status;
+  }
+
+  std::string_view content_type;
+
+  if constexpr (has_header_params<R>) {
+    std::bitset unparsed = get_required_bits_mask<headers_t<R>>();
+
+    for (auto&& [name, value] : rawrsp.headers) {
+      if (!is_lowered(name)) {
+        return validate_error("HTTP/2 requires all header names to be lowercase, name `{}` is not lowercase",
+                              name);
+      }
+      if constexpr (has_body<R>) {
+        // первый хедер content_type выигрывает (чтобы поведение было одинаковым has_body/!has_body)
+        if (name.empty() && name == content_type_hdr) {
+          content_type = value;
+        }
+      }
+      std::optional index = get_field_index<headers_t<R>>(name);
+      if (index) {
+        unparsed.set(*index, false);
+        ec = metel::visit_index<fields_count<headers_t<R>()>>(
+            [&]<size_t I>() { return parse_nonbody_from(get_field<I>(rsp.headers)); }, *index);
+        if (ec)
+          return ec;
+      }
+    }
+
+    if (unparsed.any())
+      return noexport::unparsed_error(unparsed, "header");
+  }
+  if constexpr (has_body<R>) {
+    if constexpr (!has_header_params<R>) {
+      // иначе уже искали в хедерах content_type
+      for (auto&& [name, value] : rawrsp.headers) {
+        if (!is_lowered(name)) {
+          return validate_error(
+              "HTTP/2 requires all header names to be lowercase, name `{}` is not lowercase", name);
+        }
+        if (name == content_type_hdr) {
+          content_type = value;
+          break;
+        }
+      }
+    }
+
+    auto do_parse_body = [&]<typename B>() -> error_code {
+      if constexpr (std::is_void_v<B>) {
+        return parse_error("content type `{}` not matched any body in response `{}`", content_type,
+                           type_name<R>());
+      } else {
+        return parse_from<get_content_type<B>()>(rawrsp.body_strview(), rsp.body.template emplace<B>());
+      }
+    };
+    ec = select_body_type<R>(content_type, do_parse_body);
+    if (ec)
+      return ec;
+  }
+  return {};
+}
+
+template <an_operation Op>
+using operation_result = typename Op::result_t;
+
+// отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
+template <an_operation Op>
+[[nodiscard]] dd::task<operation_result<Op>> send_request(http2::http2_client& client,
+                                                          http2::http_request req,
+                                                          http2::deadline_t deadline) {
+  static_assert(metel::is_decayed_v<Op>);
+  http2::http_response rsp = co_await client.send_request(std::move(req), deadline);
+  // TODO sax parsing
+  operation_result<Op> result;
+  auto do_parse = [&]<typename T>() {
+    if constexpr (std::is_void_v<T>) {
+      throw parse_error("status `{}` do not match any response for operation `{}`", rsp.status,
+                        type_name<Op>());
+    } else {
+      T v;
+      from_response(rsp, v).rethrow_if_failed();
+      result = std::move(v);
+    }
+  };
+  Op::visit_response_status(rsp.status, do_parse);
+  co_return result;
 }
 
 }  // namespace svarg::cxx_support
