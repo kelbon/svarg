@@ -221,6 +221,7 @@
           "schema":
             "spec": "@any@"
           "required": true
+    "priority": 0
   - "id": "getOrder"
     "spec": "api-b"
     "servers":
@@ -240,3 +241,4 @@
             "schema":
               "spec": "@string@"
             "required": true
+    "priority": 1

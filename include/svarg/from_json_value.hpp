@@ -234,7 +234,7 @@ struct from_json_value<std::map<K, V, Types...>> {
     return {};
   }
 };
-#if false
+
 template <typename T>
 struct from_json_value<ordered_string_map<T>> {
   error_code operator()(const boost::json::value& v, ordered_string_map<T>& out) {
@@ -245,21 +245,21 @@ struct from_json_value<ordered_string_map<T>> {
     if (!obj)
       return parse_error(" object expected, got `{}`", e2str(v.kind()));
     out.clear();
-    for (const auto& [key, val] : *obj) {
+    for (const auto& [_key, val] : *obj) {
+      std::string_view key = _key;
       T elem{};
       error_code ec = try_from_json(val, elem);
       if (ec) {
-        ec.reformat("/`{}`{}", std::string_view(key), old_message);
+        ec.reformat("/`{}`{}", key, old_message);
         return ec;
       }
       if (out.contains(key))
-        return parse_error(" {} contains duplicated key `{}`", type_name<T>(), std::string_view(key));
-      out.emplace(key, std::move(elem));
+        return parse_error(" {} contains duplicated key `{}`", type_name<T>(), key);
+      out.try_emplace(key, std::move(elem));
     }
     return {};
   }
 };
-#endif
 
 template <typename T, typename... Types>
 struct from_json_value<std::unordered_set<T, Types...>> {

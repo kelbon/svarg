@@ -126,7 +126,7 @@ struct to_json_value<std::map<Types...>> {
     return out;
   }
 };
-#if false
+
 template <typename T>
 struct to_json_value<ordered_string_map<T>> {
   static boost::json::value operator()(const ordered_string_map<T>& map) {
@@ -137,7 +137,7 @@ struct to_json_value<ordered_string_map<T>> {
     return out;
   }
 };
-#endif
+
 template <typename T>
 struct to_json_value<optional<T>> {
   // возвращает null если пусто, иначе сериализует значение

@@ -577,11 +577,7 @@ struct path_item_object {
 // /pets/{name} == /pets/{id}
 // ordered_string_map используется для сохранения порядка вставки, который важен для генератора
 // т.е. от этого зависит порядок выбора хендлера операции
-#if false
 using paths_object = ordered_string_map<reference_or<path_item_object>>;
-#endif
-// TODO rm
-using paths_object = string_map<reference_or<path_item_object>>;
 
 struct components_object {
   SVARG_FRONTEND_TYPE;

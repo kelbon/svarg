@@ -110,11 +110,7 @@ void postprocess_openapi_object(openapi_object& obj) {
 
   if (obj.paths)
     for (auto& [_, pi] : *obj.paths)
-#if false
       detail::postprocess_path_item_object(pi.value);
-#endif
-      // TODO rm
-      detail::postprocess_path_item_object(pi);
   if (obj.webhooks)
     for (auto& [_, pi] : *obj.webhooks)
       detail::postprocess_path_item_object(pi);

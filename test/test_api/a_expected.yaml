@@ -267,6 +267,7 @@
             "schema":
               "spec": "@number@"
             "required": true
+    "priority": 0
   - "id": "createOrder"
     "spec": "api-a"
     "servers":
@@ -296,6 +297,7 @@
               "spec": "api-b"
               "jsonptr": "/components/schemas/Error"
             "required": true
+    "priority": 1
 "webhooks":
   - "id": "postOrderStatus"
     "spec": "api-a"
