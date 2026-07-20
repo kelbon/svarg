@@ -2,10 +2,10 @@
 
 #include <moko3/moko3.hpp>
 
-bool test_parse_uri(std::string_view uri, bool invalid = false) {
+bool test_parse_uri(std::string_view url, bool invalid = false) {
   try {
-    svarg::url_ref p = svarg::parse_absolute_url(uri);
-    return p.to_string() == uri;
+    svarg::url_ref p = svarg::parse_absolute_url(url);
+    return p.to_string() == url;
   } catch (const std::exception&) {
     return invalid;
   }
@@ -15,18 +15,18 @@ TEST("parse_absolute_url") {
   // валидные
   REQUIRE(test_parse_uri("https://api.example.com/v2"));
   {
-    svarg::url_ref uri = svarg::parse_absolute_url("https://api.example.com/v2");
-    REQUIRE(uri.scheme == "https");
-    REQUIRE(uri.host == "api.example.com");
-    REQUIRE(uri.path == "/v2");
+    svarg::url_ref url = svarg::parse_absolute_url("https://api.example.com/v2");
+    REQUIRE(url.scheme == "https");
+    REQUIRE(url.host == "api.example.com");
+    REQUIRE(url.path == "/v2");
   }
   {
-    svarg::url_ref uri = svarg::parse_absolute_url("https://user:pass@example.com:8080/path");
-    REQUIRE(uri.scheme == "https");
-    REQUIRE(uri.host == "example.com");
-    REQUIRE(uri.userinfo == "user:pass");
-    REQUIRE(uri.get_port() == 8080);
-    REQUIRE(uri.path == "/path");
+    svarg::url_ref url = svarg::parse_absolute_url("https://user:pass@example.com:8080/path");
+    REQUIRE(url.scheme == "https");
+    REQUIRE(url.host == "example.com");
+    REQUIRE(url.userinfo == "user:pass");
+    REQUIRE(url.get_port() == 8080);
+    REQUIRE(url.path == "/path");
   }
   REQUIRE(test_parse_uri("http://example.com/"));
   REQUIRE(test_parse_uri("https://example.com:8443/v2"));
@@ -43,10 +43,10 @@ TEST("parse_absolute_url") {
   REQUIRE(test_parse_uri("file:///etc/passwd"));
   REQUIRE(test_parse_uri("coap+tcp://example.com/v2"));
   {
-    svarg::url_ref uri = svarg::parse_absolute_url("coap+tcp://example.com/v2");
-    REQUIRE(uri.scheme == "coap+tcp");
-    REQUIRE(uri.host == "example.com");
-    REQUIRE(uri.path == "/v2");
+    svarg::url_ref url = svarg::parse_absolute_url("coap+tcp://example.com/v2");
+    REQUIRE(url.scheme == "coap+tcp");
+    REQUIRE(url.host == "example.com");
+    REQUIRE(url.path == "/v2");
   }
   REQUIRE(test_parse_uri("h2c://example.com/"));
   // TODO relative проверить и написать is_relative

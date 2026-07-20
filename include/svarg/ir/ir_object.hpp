@@ -720,7 +720,14 @@ struct operation {
   std::optional<std::set<response_desc>> responses;
   std::optional<response_desc> defaultResponse;
   std::optional<meta_t> meta;
-
+#if false
+  // меньше - больше приоритет
+  // используется при выборе сервером обработчика
+  // так как не смотря ни на что могут возникать неоднозначности и порядок проверки path может повлиять на
+  // выбор обработчика эту неоднозначность приоритет разрешает.
+  // Для openapi используется порядок операций в ямле
+  size_t priority = size_t(-1);
+#endif
   // у вебхуков и калбеков не указан path
   bool has_path() const noexcept {
     return !path.empty();

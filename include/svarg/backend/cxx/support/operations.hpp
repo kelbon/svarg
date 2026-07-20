@@ -13,8 +13,8 @@
 namespace svarg::cxx_support {
 
 template <an_operation Op>
-consteval http2::http_method_e get_operation_method() {
-  http2::http_method_e method;
+consteval http_method_e get_operation_method() {
+  http_method_e method;
   if (!efromstr(Op::method, method))
     throw "invalid method";
   return method;

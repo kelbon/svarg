@@ -27,10 +27,10 @@ static std::string fixup_path(fs::path p) {
   }
 }
 
-static dd::task<void> do_load_refered_object(http2::http2_client& client, url_ref uri, auto success,
+static dd::task<void> do_load_refered_object(http2::http2_client& client, url_ref url, auto success,
                                              auto fail) try {
-  http2::http_request req{.path = std::string(uri.path), .method = http2::http_method_e::GET};
-  req.authority = uri.host;
+  http2::http_request req{.path = std::string(url.path), .method = http2::http_method_e::GET};
+  req.authority = url.host;
   http2::http_response rsp =
       co_await client.send_request(req, http2::deadline_after(std::chrono::seconds(5)));
   // редирект не обрабатывается
@@ -45,19 +45,19 @@ static dd::task<void> do_load_refered_object(http2::http2_client& client, url_re
 
 // загруженное body иди исключение
 // никаких кешей, плевать на перф здесь +- совсем, просто на случай если кому-то очень надо
-std::string do_get_request_to(std::string_view uri) {
-  std::string fixed = fixup_path(uri);
-  uri = fixed;
-  url_ref u = parse_absolute_url(uri);
+std::string do_get_request_to(std::string_view url) {
+  std::string fixed = fixup_path(url);
+  url = fixed;
+  url_ref u = parse_absolute_url(url);
   std::optional<http2::http2_client> client;
   http2::http2_client_options opts{.allow_requests_before_server_settings = true};
-  if (uri.starts_with("http://")) {
+  if (u.scheme == "http") {
     client.emplace(http2::endpoint(std::string(u.host), u.get_port()), opts);
-  } else if (uri.starts_with("https://")) {
+  } else if (u.scheme == "https") {
     client.emplace(http2::endpoint(std::string(u.host), u.get_port()), opts,
                    [](boost::asio::io_context& ctx) { return http2::default_tls_transport_factory(ctx); });
   } else
-    throw parse_error("invalid $ref, network ref must start with http:// or https://, ref: `{}`", uri);
+    throw parse_error("invalid $ref, network ref must start with http:// or https://, ref: `{}`", url);
 
   std::optional<std::string> body;
   std::optional<std::string> err;
@@ -67,7 +67,7 @@ std::string do_get_request_to(std::string_view uri) {
   while (!body && !err)
     client->ioctx().poll();
   if (err)
-    throw parse_error("cannot load uri(`{}`), err: {}", uri, *err);
+    throw parse_error("cannot load url(`{}`), err: {}", url, *err);
   assert(body);
   return std::move(*body);
 }
@@ -75,9 +75,9 @@ std::string do_get_request_to(std::string_view uri) {
 // если в ref нет # (разделителя на путь до файла и json поинтер) это означает include json/yaml по URI
 // делает блокирующий GET запрос по URL с/без SSL (url должно начинаться с http:// или https://)
 // а затем парсит ответ как json
-static boost::json::value request_refered_object(std::string_view uri) {
-  std::string body = do_get_request_to(uri);
-  if (uri.ends_with(".yaml") || uri.ends_with(".yml"))
+static boost::json::value request_refered_object(std::string_view url) {
+  std::string body = do_get_request_to(url);
+  if (url.ends_with(".yaml") || url.ends_with(".yml"))
     return boost::json::parse(yaml2json(body));
   else  // пробуем как json в любом случае
     return boost::json::parse(body);

@@ -104,6 +104,6 @@ constexpr bool is_scheme_char(char c, bool first) {
   return !is_valid_scheme(s);
 }
 
-[[nodiscard]] url_ref parse_absolute_url(std::string_view uri);
+[[nodiscard]] url_ref parse_absolute_url(std::string_view url);
 
 }  // namespace svarg

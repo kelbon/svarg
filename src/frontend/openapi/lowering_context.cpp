@@ -721,6 +721,10 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
   // paths -> operations -> callbacks
   if (api.paths) {
     for (auto& [path, item] : *api.paths) {
+#if false
+      auto [ritem, reffile, refjp] = resolve_ref_and_ret(item.value, file, "/paths"_jp / path, ctx);
+#endif
+      // TODO rm
       auto [ritem, reffile, refjp] = resolve_ref_and_ret(item, file, "/paths"_jp / path, ctx);
       visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjp));
     }
@@ -981,7 +985,12 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
       // если были pathItems и на них ссылались и в paths и в webhooks, то они продублируются на уровне IR
       // но это нормально
       for (auto& [path, item] : *api.paths) {
+#if false
+        auto [ritem, file, item_jp] = resolve_ref_and_ret(item.value, obj_file, "/paths"_jp / path, *this);
+#endif
+        // TODO rm
         auto [ritem, file, item_jp] = resolve_ref_and_ret(item, obj_file, "/paths"_jp / path, *this);
+
         // отключено ради упрощения генерации и предсказуемости имён
         //
         // string_map<std::string> name2path;
@@ -992,8 +1001,15 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
         std::string generatedname(cxx::to_cxx_ident(path));
         auto ops = path_item_object_lowering(api, path, obj_file, file, std::move(item_jp), generatedname,
                                              std::move(ritem));
-        for (auto& [method, op] : ops)
-          result.operations->insert(op);
+        for (auto& [method, op] : ops) {
+#if false
+          // у многих операций одного path с разными методами может быть один и тот же приоритет - это
+          // нормально, так приоритет используется для выбора хендлера, а метод разделяет их
+          // приоритет больше у тех, кто раньше в файле спецификации написан
+          op.priority = item.insertion_index;
+#endif
+          result.operations->insert(std::move(op));
+        }
       }
     }
   }

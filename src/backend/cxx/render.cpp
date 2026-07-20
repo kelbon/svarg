@@ -929,22 +929,22 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   // маленькими буквами). Игнорируем что какой-то кастомный метод зачем быть GeT
   result += std::format("static constexpr inline std::string_view method = {};\n",
                         render_string(uppered(op.method)));
-
+  std::string path = deescape_path(op.path);
   // parameters
   if (op.has_path()) {
     // static constexpr void visit_path(auto&& vtor)
-    visit_templated_path_parts(op.path, build_path_make_fn_visitor{result, path_params, options});
-    result += std::format("static constexpr std::string_view path_expr = {};\n\n", render_string(op.path));
+    visit_templated_path_parts(path, build_path_make_fn_visitor{result, path_params, options});
+    result += std::format("static constexpr std::string_view path_expr = {};\n\n", render_string(path));
   }
   auto deref = std::views::transform([](auto* p) -> auto& { return *p; });
   if (!path_params.empty()) {
     if (!op.has_path())
       throw render_error("operation have path parameters while not having path");
     for (const ir::operation_parameter& p : path_params | deref) {
-      if (!op.path.contains("{" + p.name + "}")) {
+      if (!path.contains("{" + p.name + "}")) {
         throw render_error(
             "operation `{}` contains parameter `{}` which is not present in path expression `{}`", op.id,
-            p.name, op.path);
+            p.name, path);
       }
     }
     result += "struct path_t {\n";
@@ -1151,12 +1151,28 @@ std::string renderer::render_server(const server_object& s,
     assert(op);
     // операция находится в том же неймспейсе (spec)
     std::string opname = make_cxx_ident(op->id, options);
+    // возвращает http_response чтобы пользователь мог гибче назначить всякие параметры content type
+    // или сделать что-то неподдерживаемое библиотекой
     result += std::format(
-        "virtual dd::task<{}::result_t> handle_{}({}, http2::http_request, http2::request_context) = 0;\n\n",
-        opname, opname, opname);
+        "virtual dd::task<http_response> handle_{}({}, http_request, request_context) = "
+        "0;\n\n",
+        opname, opname);
   }
+  // TODO
+  result +=
+      "dd::task<http2::http_response> handle_request(http2::http_request req, http2::request_context) "
+      "override {\n";
+  // TODO - проверка пути. Сначала не шаблонизированные, затем шаблонизированные по в порядке каком-то
+  std::vector ops = operations;
+  // TODO виртуальную функцию что делать на хендлере который нахер не сдался
+  // TODO нужно в HTTP/2 опцию сделать ничего не отправлять получается... Прямо ничего, даже ошибку не
+  // отправлять
+  // TODO ещё по методам разделить нужно же сначала
+  // std::ranges::sort(ops, [](const ir::operation* a, const ir::operation* b) {
+  //   return compare_paths_specialized(*a, *b) == std::strong_ordering::greater;
+  // });
+  result += "}\n";  // end fn
   // функция
-  // dd::task<http2::http_response> handle_request(http2::http_request req, http2::request_context) override;
   // которая выбирает какую из handle вызывать на основании входного path
   // сортировка по приоритетам путей (она у меня вообще есть?)
   // TODO реализация handle requets с выбором по path что заматчилось + динамические хендлеры

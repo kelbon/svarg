@@ -19,7 +19,7 @@
 #include "svarg/utils/from_chars.hpp"
 #include "svarg/utils/path_tools.hpp"
 
-#include <http2/http_body.hpp>
+#include "svarg/backend/cxx/support/http_base.hpp"
 
 // эти 2 макроса только для генерируемых типов
 #define APPLY_FIELD_INDEXES(T) APPLY_INDEXES(::svarg::cxx_support::fields_count<T>())
@@ -443,14 +443,14 @@ inline void serialize_impl(auto& s, boost::json::serializer& sr) {
 }  // namespace noexport
 
 template <a_body B>
-[[nodiscard]] http2::http_body_bytes serialize_body(const B& body, const content_type_params&) {
+[[nodiscard]] http_body_bytes serialize_body(const B& body, const content_type_params&) {
   constexpr content_type_e C = get_content_type<B>();
   if constexpr (C == content_type_e::application_json) {
     // калька кода из boost json serialize, но не для строки, а для http_body_bytes
     boost::json::value v = to_json(body);
     unsigned char tmpbuf[256];
     boost::json::serializer sr(boost::json::storage_ptr{}, +tmpbuf, sizeof(tmpbuf));
-    http2::http_body_bytes bytes;
+    http_body_bytes bytes;
     sr.reset(&v);
     noexport::serialize_impl(bytes, sr);
     return bytes;

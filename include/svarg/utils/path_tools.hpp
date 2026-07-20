@@ -67,6 +67,7 @@ void visit_path_segments(std::string_view path, F&& callback) {
 }
 
 // сравниваем так что users/{id} == users/{name}
+// игнорирует возможный % енкодинг путей
 [[nodiscard]] constexpr std::strong_ordering compare_paths_template_insensitve(std::string_view a,
                                                                                std::string_view b) noexcept {
   while (!a.empty() && !b.empty()) {
@@ -87,6 +88,173 @@ void visit_path_segments(std::string_view path, F&& callback) {
     }
   }
   return a.empty() <=> b.empty();
+}
+
+template <class V>
+concept templated_path_vtor = requires(V v, std::string_view param_name, std::string_view error_msg,
+                                       std::string_view sv, std::string_view separator) {
+  // `sv` может быть пустым
+  v.substr(sv);
+  // `param_name` никогда не пустое
+  v.param(param_name);             // параметр без разделителя (до конца строки)
+  v.param(param_name, separator);  // параметр с разделителем (разделитель уже "съеден")
+  v.pattern_end();
+  v.error(error_msg);
+};
+
+template <templated_path_vtor V>
+constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
+  while (!path.empty()) {
+    auto open = path.find('{');
+
+    if (open != 0) {
+      visitor.substr(path.substr(0, open));  // open==npos -> substr(0, npos) == вся строка
+      if (open == std::string_view::npos)
+        return visitor.pattern_end();
+      path.remove_prefix(open);
+    }
+
+    auto close = path.find('}');
+    if (close == std::string_view::npos)
+      return visitor.error("unterminated parameter: missing '}'");
+
+    std::string_view name = path.substr(1, close - 1);
+    if (name.empty())
+      return visitor.error("empty parameter name '{}'");
+
+    path.remove_prefix(close + 1);
+
+    auto next_open = path.find('{');
+    std::string_view sep = path.substr(0, next_open);
+
+    if (sep.empty() && next_open == 0)
+      return visitor.error("two parameters in a row without a separator");
+
+    if (sep.empty())
+      visitor.param(name);  // конец строки — терминатор не нужен
+    else {
+      visitor.param(name, sep);
+      path.remove_prefix(sep.size());
+    }
+  }
+
+  visitor.pattern_end();
+}
+
+// предполагает что путь валидный. Возвращает true для шаблонизированных путей типа /v1/{name}
+// игнорирует возможный % энкодинг, в том числе { или } в виде %xy (нормальные люди так не делают)
+[[nodiscard]] constexpr bool is_template_path(std::string_view p) noexcept {
+  return p.contains('{');
+}
+
+namespace noexport {
+
+[[nodiscard]] constexpr std::strong_ordering compare_templated_paths(std::string_view a, std::string_view b) {
+  struct vtor_t {
+    std::string_view a;  // идём по этому пути
+    std::string_view b;
+    // a более специализировано чем b?
+    std::optional<std::strong_ordering> result;
+
+    constexpr void substr(std::string_view s) {
+      if (result)
+        return;
+      assert(a.starts_with(s));
+      if (!b.starts_with(s)) {
+        // если у меня ещё есть шаблоны, а у 'b' их нет - я более специализирован
+        // например {x}-{y} более специализировано чем {x}
+        result = is_template_path(a) <=> is_template_path(b);
+        return;
+      }
+      a.remove_prefix(s.size());
+      b.remove_prefix(s.size());
+    }
+    constexpr void pattern_end() {
+      if (result)
+        return;
+      assert(a.empty());
+      result = is_template_path(a) <=> is_template_path(b);
+    }
+    constexpr void param(std::string_view name) {
+      if (result)
+        return;
+      assert(a.starts_with('{'));
+      if (!b.starts_with('{')) {
+        result = std::strong_ordering::less;  // 'a' шаблон, 'b' не шаблон
+        return;
+      }
+      a.remove_prefix(name.size() + 2 /*{ и }*/);
+      auto pos = b.find('}');
+      if (pos == b.npos)
+        throw validate_error("invalid path '{}'", b);
+      b.remove_prefix(pos + 1);
+    }
+    constexpr void param(std::string_view name, std::string_view sep) {
+      param(name);
+      substr(sep);
+    }
+
+    constexpr void error(std::string_view msg) {
+      throw validate_error("{}", msg);
+    }
+  };
+  vtor_t vtor{a, b};
+  visit_templated_path_parts(a, vtor);
+  return *vtor.result;
+}
+
+}  // namespace noexport
+
+// TODO тестирование этого, рефакторинг и убирание всех комментариев и тд
+// TODO рантайм и constexpr версия, алгоритм который выбирает среди рантайм диспатчеров. На вход path,
+// выбирает из какой-то специальной структуры динамических хендлеров какой вызвать
+//
+// Сравнивает два (возможно шаблонизированных) пути по тому какой из них более специализирован
+// если одинаково специализированы - возвращается compare_paths_template_insensitve(l, r)
+// TODO видимо для лучшего тестирования и меньшего количества кода имеет смысл написать всё же функцию которая
+// на компиляции строит таблицу путь -> указатель на функцию что делать а затем рантайм функция просто
+// проходит по этому и последовательно проверяет. также с рантайм хендлерами. Но рантайм хендлеры отдельно от
+// компайл тайм, так что нужно проверять и там и тут и затем выбирать более специализированный из статического
+// и динамического
+// TODO посмотреть что на работе делают для этого
+// TODO короче структуры static_handlers / dynamic_handlers
+// less - 'l' менее специализирован чем 'r'. 'greater' - более специализирован
+// equal - нет более специализированного
+[[nodiscard]] constexpr std::optional<std::strong_ordering> compare_paths_specialized(std::string_view l,
+                                                                                      std::string_view r) {
+  bool tl = is_template_path(l);
+  bool tr = is_template_path(r);
+  if (!tl && !tr)
+    return std::strong_ordering::equivalent;
+  if (tl && tr)
+    return noexport::compare_templated_paths(l, r);
+  if (tl)
+    return std::strong_ordering::less;
+  assert(tr);
+  return std::strong_ordering::greater;
+  // TODO
+  // шаблонизированный всегда менее специализирован чем не шаблонизированный
+  // если оба без шаблонов - можно по длине расставить, т.к. разницы нет, а можно по < >
+  // если оба с шаблонами - идём по сегментам, если сегменты оба не шаблоны, если равны - идём дальше.
+  // если не равны и один начинается с другого - более специализирован более длинный. И наконец если ничего не
+  // начинается, сравниваем по длине
+  // если равны сегменты, идём дальше - если шаблонизированный сегмент, то он
+  // проигрывает не шаблонизированному если оба сегмента шаблонизированы, пропускаем идём дальше например:
+  // /v2/{str}.json   VS   /v2/{name}.yaml /v2 == /v2 {str} == {name} (без учёта имён) .json != .yaml хотя по
+  // итогу они никогда не совпадут же /v2/{str}.json   VS   /v2/{name} отсутствие сегмента или пустой сегмент
+  // - проигрывают чему угодно /v2/{x}-{y}  VS  /v2/{name} - тут должен выиграть первый /v2 == /v2 {x} ==
+  // {name}
+  // "-" выигрывает у отсутствующего сегмента
+  // /v2/{x}-{y}  VS  /v2/{name}- - тут должен выиграть первый
+  // /v2 == /v2
+  // {x} == {name}
+  // "-" == "-"
+  // {y} выигрывает у отсутствующего сегмента
+  // /v2/{x}-{y}  VS  /v2/{name}-/ - тут должен выиграть второй
+  // /v2 == /v2
+  // {x} == {name}
+  // "-" == "-/"   -- ЕСЛИ ОДИН СЕГМЕНТ НАЧИНАЕТСЯ СО ВТОРОГО, ТО НУЖНО ВОЗВРАЩАТЬ СРАВНЕНИЕ ПО ДЛИНЕ
+  return {};  // TODO
 }
 
 [[nodiscard]] constexpr inline bool is_equal_paths_template_insensitve(std::string_view a,
@@ -187,57 +355,6 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   return out;
 }
 
-template <class V>
-concept templated_path_vtor = requires(V v, std::string_view param_name, std::string_view error_msg,
-                                       std::string_view sv, std::string_view separator) {
-  // `sv` может быть пустым
-  v.substr(sv);
-  // `param_name` никогда не пустое
-  v.param(param_name);             // параметр без разделителя (до конца строки)
-  v.param(param_name, separator);  // параметр с разделителем (разделитель уже "съеден")
-  v.pattern_end();
-  v.error(error_msg);
-};
-
-template <templated_path_vtor V>
-constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
-  while (!path.empty()) {
-    auto open = path.find('{');
-
-    if (open != 0) {
-      visitor.substr(path.substr(0, open));  // open==npos -> substr(0, npos) == вся строка
-      if (open == std::string_view::npos)
-        return visitor.pattern_end();
-      path.remove_prefix(open);
-    }
-
-    auto close = path.find('}');
-    if (close == std::string_view::npos)
-      return visitor.error("unterminated parameter: missing '}'");
-
-    std::string_view name = path.substr(1, close - 1);
-    if (name.empty())
-      return visitor.error("empty parameter name '{}'");
-
-    path.remove_prefix(close + 1);
-
-    auto next_open = path.find('{');
-    std::string_view sep = path.substr(0, next_open);
-
-    if (sep.empty() && next_open == 0)
-      return visitor.error("two parameters in a row without a separator");
-
-    if (sep.empty())
-      visitor.param(name);  // конец строки — терминатор не нужен
-    else {
-      visitor.param(name, sep);
-      path.remove_prefix(sep.size());
-    }
-  }
-
-  visitor.pattern_end();
-}
-
 // TODO test
 [[nodiscard]] constexpr size_t count_in_str(std::string_view str, std::string_view needle) {
   assert(!needle.empty());
@@ -252,6 +369,8 @@ constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
   return count;
 }
 // TODO test
+
+// проверяет что все переменные в пути не пустые и упоминаются ровно один раз
 [[nodiscard]] constexpr bool validate_maybe_templated_path(std::string_view path) {
   struct vtor_t {
     std::string_view p;
@@ -320,26 +439,31 @@ O query_encode(std::string_view s, O out) {
   return out;
 }
 
+// pre: is_hex_char(c) == true
+[[nodiscard]] constexpr unsigned hex2digit(char c) noexcept {
+  if (c >= '0' && c <= '9')
+    return unsigned(c - '0');
+  if (c >= 'a' && c <= 'f')
+    return unsigned(c - 'a' + 10);
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  metel::unreachable();
+}
+
+// символ который может быть частью шестнадцатеричного числа
+[[nodiscard]] constexpr bool is_hex_char(char c) noexcept {
+  switch (c) {
+    case '0' ... '9':
+    case 'a' ... 'f':
+    case 'A' ... 'F':
+      return true;
+    default:
+      return false;
+  }
+}
+
 template <bool WwwUrlencoded, typename O>
 O query_decode(std::string_view s, O out) {
-  static constexpr auto is_hex = [](char c) {
-    switch (c) {
-      case '0' ... '9':
-      case 'a' ... 'f':
-      case 'A' ... 'F':
-        return true;
-      default:
-        return false;
-    }
-  };
-  static constexpr auto hex_val = [](char c) -> unsigned {
-    if (c >= '0' && c <= '9')
-      return unsigned(c - '0');
-    if (c >= 'a' && c <= 'f')
-      return unsigned(c - 'a' + 10);
-    return unsigned(c - 'A' + 10);
-  };
-
   for (size_t i = 0; i < s.size(); ++i) {
     char c = s[i];
     if constexpr (WwwUrlencoded) {
@@ -349,8 +473,8 @@ O query_decode(std::string_view s, O out) {
         continue;
       }
     }
-    if (c == '%' && i + 2 < s.size() && is_hex(s[i + 1]) && is_hex(s[i + 2])) {
-      *out = static_cast<char>((hex_val(s[i + 1]) << 4) | hex_val(s[i + 2]));
+    if (c == '%' && i + 2 < s.size() && is_hex_char(s[i + 1]) && is_hex_char(s[i + 2])) {
+      *out = static_cast<char>((hex2digit(s[i + 1]) << 4) | hex2digit(s[i + 2]));
       ++out;
       i += 2;
     } else {
@@ -458,6 +582,29 @@ void visit_query(std::string_view query, auto&& vtor) {
   }
 
   return {};
+}
+
+// убирает escape последовательности из сегмента пути
+// заменяет %ab на соответствующий символ
+// возвращает false на некорректном енкодинге или если за %xy скрывалось '/'
+// (это неоднозначность для опенапи пути)
+[[nodiscard]] bool deescape_percent_encoding(std::string& inout);
+// TODO? какое-то оптимизированное сравнение, чтобы сравнивать хендлеры?..
+
+[[nodiscard]] inline std::string deescape_percent_encoding_str(std::string_view in) {
+  std::string out{in};
+  if (!deescape_percent_encoding(out))
+    throw validate_error("invalid percent encoding");
+  return out;
+}
+
+inline std::string deescape_path(std::string_view path) {
+  std::string out;
+  visit_path_segments(path, [&](std::string_view v) {
+    out += '/';
+    out += deescape_percent_encoding_str(v);
+  });
+  return out;
 }
 
 }  // namespace svarg

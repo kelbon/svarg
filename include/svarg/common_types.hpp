@@ -46,7 +46,40 @@ template <typename T>
 using unordered_string_map = std::map<string, T, str_hash, str_equal_to>;
 template <typename T>
 using unordered_string_map_ci = std::unordered_map<string, T, str_hash_ci, str_equal_to_ci>;
+#if false
+template <typename T>
+struct value_and_index {
+  T value;
+  size_t insertion_index = 0;
 
+  std::strong_ordering operator<=>(const value_and_index& other) const noexcept {
+    return value <=> other.value;
+  }
+};
+
+// string_map, но дополнительно сохраняет порядковый номер вставки элемента
+template <typename T>
+struct ordered_string_map : string_map<value_and_index<T>> {
+ private:
+  size_t insertion_index = 0;
+
+  using base_t = string_map<value_and_index<T>>;
+
+ public:
+  template <typename... Args>
+  T& try_emplace(std::string&& s, Args&&... args) {
+    value_and_index<T>& vi =
+        base_t::try_emplace(std::move(s), T(std::forward<Args>(args)...), insertion_index);
+    ++insertion_index;
+    return vi.value;
+  }
+
+  template <typename... Args>
+  T& try_emplace(std::string_view s, Args&&... args) {
+    return try_emplace(std::string(s), std::forward<Args>(args)...);
+  }
+};
+#endif
 // тег для парсинга
 template <typename T>
 struct one_or_array {

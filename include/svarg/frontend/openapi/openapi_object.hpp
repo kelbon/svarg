@@ -569,17 +569,18 @@ struct path_item_object {
   }
 };
 
-// TODO здесь надо специальную мапу со сравнением без учёта шаблонизирования?
-
 // хранит пути относительно url сервера
 // все пути должны начинаться с '/'
 // при поиске подходящего пути приоритет у тех
 // которые НЕ шаблонизированы
 // пути должны быть уникальны не учитывая имена в шаблонах, т.е.
 // /pets/{name} == /pets/{id}
-// Note: формально в спеке не написано что это reference object | path item object
-// а просто указано path item object, непонятно почему так (в отличие от других мест)
-// но в path item object ссылка просто включена в сам объект, поэтому так
+// ordered_string_map используется для сохранения порядка вставки, который важен для генератора
+// т.е. от этого зависит порядок выбора хендлера операции
+#if false
+using paths_object = ordered_string_map<reference_or<path_item_object>>;
+#endif
+// TODO rm
 using paths_object = string_map<reference_or<path_item_object>>;
 
 struct components_object {

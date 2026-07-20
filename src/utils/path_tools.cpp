@@ -53,4 +53,33 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   }
 }
 
+bool deescape_percent_encoding(std::string& inout) {
+  size_t i = 0;         // позиция текущего анализируемого символа
+  size_t writepos = 0;  // позиция куда записывать этот символ
+  for (size_t i = 0; i < inout.size();) {
+    char c = inout[i];
+
+    if (c != '%') {
+      inout[writepos] = inout[i];
+      ++writepos;
+      ++i;
+      continue;
+    }
+
+    if (i + 2 >= inout.size()) [[unlikely]]
+      return false;
+    if (!is_hex_char(inout[i + 1]) || !is_hex_char(inout[i + 2])) [[unlikely]]
+      return false;
+    unsigned hi = hex2digit(inout[i + 1]);
+    unsigned lo = hex2digit(inout[i + 2]);
+    inout[i] = static_cast<char>((hi << 4) | lo);
+    writepos += 3;
+    i += 3;
+    if (inout[i] == '/') [[unlikely]]
+      return false;
+  }
+  inout.resize(writepos);
+  return true;
+}
+
 }  // namespace svarg
