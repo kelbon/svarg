@@ -196,7 +196,7 @@
     "servers":
       - "url": "/"
     "path": "/items/{itemId}"
-    "method": "get"
+    "method": "GET"
     "parameters":
       - "location": "path"
         "name": "itemId"
@@ -227,7 +227,7 @@
     "servers":
       - "url": "/"
     "path": "/orders/{orderId}"
-    "method": "get"
+    "method": "GET"
     "parameters":
       - "location": "path"
         "name": "orderId"

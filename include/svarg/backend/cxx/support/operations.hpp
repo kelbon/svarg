@@ -7,8 +7,8 @@
 
 #include "svarg/utils/path_tools.hpp"
 
-#include <http2/http_base.hpp>
-#include <http2/http2_client.hpp>
+#include <hidi/http_base.hpp>
+#include <hidi/h2client.hpp>
 
 namespace svarg::cxx_support {
 
@@ -108,8 +108,6 @@ struct parse_path_visitor {
   error_code ec;
 
   void substr(std::string_view s) {
-    if (ec) [[unlikely]]
-      return;
     if (!path.starts_with(s)) [[unlikely]] {
       ec = parse_error("");
       return;
@@ -119,16 +117,12 @@ struct parse_path_visitor {
   template <size_t I>
   void param(std::index_sequence<I> field_index) {
     static_assert(has_path_params<Op>);
-    if (ec) [[unlikely]]
-      return;
     parse_nonbody_from(path, get_field<I>(op.path));
     path = {};
   }
   template <size_t I>
   void param(std::index_sequence<I> field_index, std::string_view separator) {
     static_assert(has_path_params<Op>);
-    if (ec) [[unlikely]]
-      return;
     auto pos = path.find(separator);
     if (pos == path.npos) {
       ec = parse_error("");
@@ -137,6 +131,13 @@ struct parse_path_visitor {
     std::string_view arg = path.substr(0, pos);
     path.remove_prefix(pos + separator.size());
     ec = parse_nonbody_from(arg, get_field<I>(op.path));
+  }
+
+  bool is_done() const {
+    return ec.failed();
+  }
+  void error(std::string_view msg) {
+    ec = parse_error("{}", msg);
   }
 };
 
@@ -158,7 +159,7 @@ template <an_operation Op>
 }
 
 template <typename T>
-void serialize_headers_of(T&& v, http2::http_headers_t& out) {
+void serialize_headers_of(T&& v, http_headers_t& out) {
   if constexpr (has_header_params<T>) {
     FOR_EACH_FIELD_INDEX_OF(headers_t<T>) {
       if (is_field_present<I>(v.headers))
@@ -172,8 +173,8 @@ void serialize_headers_of(T&& v, http2::http_headers_t& out) {
 // складывает content_type не в headers, а в req.body.content_type
 // не выставляет req.scheme и req.authority, это должно заполняться уже клиентом при отправке
 template <an_operation Op>
-http2::http_request make_request(const Op& op, const content_type_params& ctparams = {}) {
-  http2::http_request req;
+http_request make_request(const Op& op, const content_type_params& ctparams = {}) {
+  http_request req;
 
   if constexpr (has_body<Op>) {
     if (is_body_present(op)) {
@@ -238,13 +239,13 @@ namespace noexport {
 parse_error unparsed_error(const auto& unparsed, std::string_view what) {
   assert(unparsed.any());
   return parse_error("not all required {} args are present, unparsed fields: {}", what, unparsed.to_string());
-};
+}
 
 }  // namespace noexport
 
 // content-type берётся не из headers, а из req.body.content_type
 template <an_operation Op>
-[[nodiscard]] error_code from_request(const http2::http_request& req, Op& op) {
+[[nodiscard]] error_code from_request(const http_request& req, Op& op) {
   assert(req.method == get_operation_method<Op>());
 
   error_code ec;
@@ -345,8 +346,8 @@ template <an_operation Op>
 }
 
 template <a_response R>
-[[nodiscard]] http2::http_response make_response(R&& rsp, const content_type_params& ctparams = {}) {
-  http2::http_response rawrsp;
+[[nodiscard]] http_response make_response(R&& rsp, const content_type_params& ctparams = {}) {
+  http_response rawrsp;
   assert(rsp.status != 0);  // unset
   rawrsp.status = rsp.status;
   serialize_headers_of(std::forward<R>(rsp), rawrsp.headers);
@@ -358,7 +359,7 @@ template <a_response R>
 }
 
 template <a_response R>
-error_code from_response(const http2::http_response& rawrsp, R& rsp) {
+error_code from_response(const http_response& rawrsp, R& rsp) {
   static_assert(metel::is_decayed_v<R>);
 
   error_code ec;
@@ -437,11 +438,10 @@ using operation_result = typename Op::result_t;
 
 // отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
 template <an_operation Op>
-[[nodiscard]] dd::task<operation_result<Op>> send_request(http2::http2_client& client,
-                                                          http2::http_request req,
-                                                          http2::deadline_t deadline) {
+[[nodiscard]] dd::task<operation_result<Op>> send_request(h2client& client, http_request req,
+                                                          deadline_t deadline) {
   static_assert(metel::is_decayed_v<Op>);
-  http2::http_response rsp = co_await client.send_request(std::move(req), deadline);
+  http_response rsp = co_await client.send_request(std::move(req), deadline);
   // TODO sax parsing
   operation_result<Op> result;
   auto do_parse = [&]<typename T>() {

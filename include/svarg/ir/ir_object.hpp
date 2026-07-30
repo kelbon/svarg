@@ -711,7 +711,8 @@ struct operation {
   // TODO использовать правила валидации из openapie 3.2
   // https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.2.0.md#path-templating
   string path;
-  // get/post и тд. Всегда маленькие буквы
+  // GET/POST/...
+  // Всегда в верхнем регистре
   // строкой для поддержки кастомных методов (openapi 3.2)
   string method;
   std::optional<arrayof<operation_parameter>> parameters;
@@ -731,6 +732,15 @@ struct operation {
   // у вебхуков и калбеков не указан path
   bool has_path() const noexcept {
     return !path.empty();
+  }
+  bool has_parameter(std::string_view name) const noexcept {
+    if (!parameters)
+      return false;
+    for (auto& p : *parameters) {
+      if (p.name == name)
+        return true;
+    }
+    return false;
   }
   bool operator==(const operation& r) const noexcept {
     // имя не участвует в сравнении, так как при отправлении на тот же путь с тем же методом

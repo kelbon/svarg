@@ -65,6 +65,9 @@ struct trace_visitor {
   void error(std::string_view msg) {
     log.push_back("error " + std::string(msg));
   }
+  bool is_done() const noexcept {
+    return false;
+  }
 };
 
 [[nodiscard]] bool test_path_template(std::string_view path, std::vector<std::string> expected_output) {

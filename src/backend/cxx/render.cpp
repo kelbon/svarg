@@ -60,7 +60,7 @@ static std::string make_namespace(std::string_view spec, json_pointer jp, const 
     jp.rm_last_segment();
   std::string ns = options.simple_cxx_identifiers ? jsonptr2namespace_simple(jp) : jsonptr2namespace(jp);
   if (ns.empty())
-    return std::string(spec);
+    return make_cxx_ident(spec, options);
   return std::format("{}::{}", make_cxx_ident(spec, options), ns);
 }
 
@@ -664,21 +664,44 @@ void renderer::render2cxx(fs::path output_dir) const {
         auto [it, emplaced] = server_files.try_emplace(spec);
         if (emplaced) {
           it->second += "#pragma once\n\n#include \"common_types.hpp\"\n\n";
+          // include необходимых операций
+          for (auto* op : s.second) {
+            it->second +=
+                std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
+          }
           it->second += std::format("namespace {}\n {{", make_namespace(spec, {}, options));
         }
-        // TODO инклуды всех необходимых операций
-        for (auto* op : s.second) {
-          it->second += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
-        }
+
         it->second += render_server(s.first, s.second, spec);
         it->second += "\n\n";
-        // TODO клиент просто одна штука на каждую спеку с операциями. С возможностью указать base prefix куда
-        // отправлять и по умолчанию там стоит первый из серверов
       }
     }
     for (auto& [spec, rendered] : server_files) {
       rendered += "}\n\n";  // end namespace
-      write_into(spec + "/servers.hpp", rendered);
+      write_into(output_dir / spec / "servers.hpp", rendered);
+    }
+  }
+
+  if (ir.operations) {
+    // по одному клиенту на каждую спеку
+
+    // spec -> all operations
+    string_map<std::vector<const ir::operation*>> clients;
+    for (auto& op : *ir.operations) {
+      assert(op.has_path() || !op.servers);  // у вебхуков не должно быть серверов
+      if (op.servers) {
+        for (auto& s : *op.servers)
+          clients[op.spec].push_back(&op);
+      }
+    }
+    // file -> rendered
+    string_map<std::string> client_files;
+
+    for (auto& [spec, ops] : clients)
+      client_files[spec] = render_client(ops, spec);
+
+    for (auto& [spec, rendered] : client_files) {
+      write_into(output_dir / spec / "client.hpp", rendered);
     }
   }
 }
@@ -873,6 +896,10 @@ struct build_path_make_fn_visitor {
   }
   void error(std::string_view msg) {
     throw render_error("{}", msg);
+  }
+
+  static consteval bool is_done() {
+    return false;
   }
 };
 
@@ -1115,7 +1142,55 @@ struct build_make_url_visitor {
   void error(std::string_view msg) {
     throw render_error("{}", msg);
   }
+
+  static consteval bool is_done() {
+    return false;
+  }
 };
+
+// TODO test
+// возвращает сортированных набор операций такой, что по нему можно идти сверху вниз при матче path
+// и первый сматченный будет наиболее специализированным
+// возвращает мапу метод -> операции (сначала не шаблонные пути, затем шаблонные сортированные по приоритету)
+static string_map<std::vector<const ir::operation*>> order_operations_right_for_path_matching(
+    const std::vector<const ir::operation*>& operations) {
+  auto is_not_templated = [](const ir::operation* o) {
+    assert(o->has_path());
+    return !is_template_path(o->path);
+  };
+  // приоритет важен для предсказуемости выбора в неоднозначных ситуациях
+  // /v1/{a} и /{version}/x могут сматчить одну и ту же строку "/v1/x"
+  // хотя среди них нет более специализированного
+  // для разрешения этой ситуации используется приоритет,
+  // в опенапи приоритет выше если операция написана выше в спеке
+  auto by_priority = [](const ir::operation* a, const ir::operation* b) {
+    // меньше приоритет - выше в списке. У всех должен быть назначен приоритет, так как вебхуки не должны
+    // быть присоединены к серверу
+    return (a->priority.value() <=> b->priority.value()) == std::strong_ordering::less;
+  };
+  auto by_specialization = [by_priority](const ir::operation* a, const ir::operation* b) {
+    auto order = compare_paths_specialized(a->path, b->path);
+    if (order != std::strong_ordering::equivalent)
+      // в начале самые приоритетные
+      return order == std::strong_ordering::greater;
+    return by_priority(a, b);
+  };
+
+  // метод -> операции
+  string_map<std::vector<const ir::operation*>> operations_ordered;
+  // раскладываем по методам
+  for (auto& op : operations)
+    operations_ordered[op->method].push_back(op);
+  // сортируем внутри вектора по специализации и приоритету
+  for (auto& [method, ops] : operations_ordered) {
+    // сначала не шаблонизированные пути
+    auto templated = std::ranges::partition(ops, is_not_templated);
+    std::ranges::stable_sort(ops.begin(), templated.begin(), by_priority);
+    std::ranges::stable_sort(templated, by_specialization);
+  }
+
+  return operations_ordered;
+}
 
 std::string renderer::render_server(const server_object& s,
                                     const std::vector<const ir::operation*>& operations,
@@ -1123,9 +1198,10 @@ std::string renderer::render_server(const server_object& s,
   assert(!operations.empty());
 
   std::string result;
+
   if (is_relative_url(s.url))
     emit_warn("relative url `{}` in server in something strange", s.url);
-  result += std::format("struct server_{} : http2::http2_server {{\n\n", make_cxx_ident(s.url, options));
+  result += std::format("struct server_{} : svarg::http2_server {{\n\n", make_cxx_ident(s.url, options));
   result += "static std::string make_url(";
   if (s.variables) {
     bool first = true;
@@ -1145,51 +1221,85 @@ std::string renderer::render_server(const server_object& s,
   result += "}\n";  // end fn
   // TODO x-name для сервера поддержать ?
 
+  auto make_handler_method_name = [&](const ir::operation& op) {
+    return std::format("do_{}", make_cxx_ident(op.id, options));
+  };
+
   // виртуальные функции операций
 
   for (auto* op : operations) {
     assert(op);
-    // операция находится в том же неймспейсе (spec)
-    std::string opname = make_cxx_ident(op->id, options);
     // возвращает http_response чтобы пользователь мог гибче назначить всякие параметры content type
     // или сделать что-то неподдерживаемое библиотекой
     result += std::format(
-        "virtual dd::task<http_response> handle_{}({}, http_request, request_context) = "
+        "virtual dd::task<svarg::http_response> {}({}, svarg::http_request, svarg::request_context) = "
         "0;\n\n",
-        opname, opname);
+        make_handler_method_name(*op), make_cxx_ident(op->id, options));
   }
-  // TODO
+
   result +=
-      "dd::task<http2::http_response> handle_request(http2::http_request req, http2::request_context) "
+      "virtual dd::task<svarg::http_response> on_unknown_operation(svarg::http_request req, "
+      "svarg::request_context) { throw "
+      "svarg::parse_error(\"cannot find handler for path `{}`\", req.path);\n}\n";
+
+  result +=
+      "dd::task<http_response> handle_request(svarg::http_request req, svarg::request_context ctx) "
       "override {\n";
-  // TODO - проверка пути. Сначала не шаблонизированные, затем шаблонизированные по в порядке каком-то
-  std::vector ops = operations;
-  // TODO виртуальную функцию что делать на хендлере который нахер не сдался
-  // TODO нужно в HTTP/2 опцию сделать ничего не отправлять получается... Прямо ничего, даже ошибку не
-  // отправлять
-  // TODO ещё по методам разделить нужно же сначала
-  // std::ranges::sort(ops, [](const ir::operation* a, const ir::operation* b) {
-  //   return compare_paths_specialized(*a, *b) == std::strong_ordering::greater;
-  // });
-  result += "}\n";  // end fn
-  // функция
-  // которая выбирает какую из handle вызывать на основании входного path
-  // сортировка по приоритетам путей (она у меня вообще есть?)
-  // TODO реализация handle requets с выбором по path что заматчилось + динамические хендлеры
+
+  string_map ordered_operations = order_operations_right_for_path_matching(operations);
+
+  result += "switch(req.method) {";
+  for (auto& [method, ops] : ordered_operations) {
+    result += std::format("case svarg::http_method_e::{}:", method);
+    for (auto& op : ops) {
+      result += std::format(
+          "if (svarg::match_path_pattern<{}>(svarg::path_and_query(req.path).first)) {{\n"
+          "{} op;\nerror_code ec = from_request(req, op);\nif (ec) return svarg::make_bad_request_rsp();\n"
+          "return {}(std::move(op), std::move(req), std::move(ctx));\n"
+          "}}\n",
+          render_string(deescape_path(op->path)), make_cxx_ident(op->id, options),
+          make_handler_method_name(*op));
+    }
+  }
+  result +=
+      "default: return on_unknown_operation(std::move(req), std::move(ctx)); break;\n}\n";  // end switch
+
+  result += "}\n";     // end fn
   result += "};\n\n";  // end struct
   return result;
 }
 
-}  // namespace svarg::cxx
-#if 0
-// TODO rm
-  #include "http2/http2_client_options.hpp"
-  #include "http2/http2_server.hpp"
-void foo() {
-  http2::http2_server_options opts;
+std::string renderer::render_client(const std::vector<const ir::operation*>& operations,
+                                    std::string_view spec) const {
+  assert(!operations.empty());
+  std::string res;
+
+  res += "#pragma once\n\n#include \"common_types.hpp\"\n\n";
+  // include необходимых операций
+  for (auto* op : operations)
+    res += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
+
+  res += std::format("namespace {}\n {{", make_namespace(spec, {}, options));
+
+  // клиент один и он в неймспейсе спеки
+  res += "struct client {";
+  res += "cxx_support::h2clients_pool& pool;\n";
+
+  for (auto* op : operations) {
+    auto name = make_cxx_ident(op->id, options);
+    // TODO нормальный url + дефолтное значение
+    std::string get_addr = std::format("{{ hidi::endpoint(host), {{}} }}");
+    res += std::format(
+        "operation_result<{}> send_{}({} op, std::string host, deadline_t deadline, content_type_params ctp "
+        "= {{}}) const {{\n return "
+        "send_request(*pool.get_connection_to({}), cxx_support::make_request(op, ctp), deadline); }}\n",
+        name, name, name, get_addr);
+  }
+
+  res += "};\n\n";  // end struct
+
+  res += "}\n";  // end namespace
+  return res;
 }
-struct myserver : http2::http2_server {
-  dd::task<http2::http_response> handle_request(http2::http_request, http2::request_context) override;
-};
-//
-#endif
+
+}  // namespace svarg::cxx

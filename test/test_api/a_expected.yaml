@@ -234,8 +234,13 @@
     "servers":
       - "url": "/"
     "path": "/users/{userId}"
-    "method": "get"
+    "method": "GET"
     "parameters":
+      - "location": "path"
+        "name": "userId"
+        "schema":
+          "spec": "@string@"
+        "required": true
       - "location": "query"
         "name": "expand"
         "schema":
@@ -273,7 +278,7 @@
     "servers":
       - "url": "/"
     "path": "/orders"
-    "method": "post"
+    "method": "POST"
     "bodies":
       - "contentType": "application/json"
         "schema":
@@ -302,7 +307,7 @@
   - "id": "postOrderStatus"
     "spec": "api-a"
     "path": ""
-    "method": "post"
+    "method": "POST"
     "bodies":
       - "contentType": "application/json"
         "schema":

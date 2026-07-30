@@ -96,7 +96,7 @@ constexpr bool is_scheme_char(char c, bool first) {
   }
   return true;
 }
-
+// TODO что-то тут не так, "/" не должен быть relative url
 [[nodiscard]] constexpr bool is_relative_url(std::string_view s) noexcept {
   auto pos = s.find("://");
   if (pos == std::string_view::npos)

@@ -28,7 +28,7 @@ target_link_libraries(svarglib PUBLIC
     ryml
     Boost::iostreams # mapped file
     strswitchlib
-    http2lib
+    hidilib
     omolib
     metellib
 )

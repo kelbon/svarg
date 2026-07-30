@@ -893,6 +893,17 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
                                                                       const path_item_object& item) {
   assert(parsable_as<path_item_object>(jp.access(load_as_json(spec))) && "no such path item");
   string_map<ir::operation> result;
+  std::vector<ir::operation_parameter> common_params;
+  if (item.parameters) {
+    size_t i = 0;
+    for (auto& param : *item.parameters) {
+      auto [rparam, reffile, refjp] =
+          resolve_ref_and_ret(param, resolve_ref_file, jp / "parameters" / i, *this);
+      ir::operation_parameter p = parameter_lowering(rparam, std::move(reffile), std::move(refjp), path);
+      common_params.push_back(std::move(p));
+      ++i;
+    }
+  }
 
   for (auto [methodstr, o] : item.all_operations_with_method()) {
     ir::operation op;
@@ -916,7 +927,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
         throw validate_error("path item name cannot be empty");
       op.id = std::format("{}{}{}", methodstr, to_upper_ascii(name[0]), name.substr(1));
     }
-    op.method = methodstr;
+    op.method = uppered(methodstr);
     op.path = path;
     if (o.responses) {
       if (o.responses->default_) {
@@ -949,7 +960,13 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
           resolve_ref_and_ret(*o.requestBody, resolve_ref_file, jp / methodstr / "requestBody", *this);
       op.bodies = request_body_lowering(rbody, std::move(reffile), std::move(refjp));
     }
-
+    {
+      auto _ = guard_array(op.parameters);
+      for (const auto& p : common_params) {
+        if (!op.has_parameter(p.name))
+          op.parameters->push_back(p);
+      }
+    }
     // не зависит от порядка если чё
     result.try_emplace(op.method, std::move(op));
   }
@@ -1000,7 +1017,7 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
         // string_map<std::string> name2path;
         // string_map<std::string> path2name;
         // std::string generatedname = path_to_name(path, name2path, path2name);
-        if (!validate_maybe_templated_path(path))
+        if (!validate_maybe_templated_path_parameters(path))
           throw validate_error("invalid path `{}`, do not passes validation", path);
         std::string generatedname(cxx::to_cxx_ident(path));
         auto ops = path_item_object_lowering(api, path, obj_file, file, std::move(item_jp), generatedname,

@@ -100,6 +100,8 @@ concept templated_path_vtor = requires(V v, std::string_view param_name, std::st
   v.param(param_name, separator);  // параметр с разделителем (разделитель уже "съеден")
   v.pattern_end();
   v.error(error_msg);
+  // позволяет оборвать парсинг раньше, если уже всё готово
+  { v.is_done() } -> std::same_as<bool>;
 };
 
 template <templated_path_vtor V>
@@ -109,6 +111,8 @@ constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
 
     if (open != 0) {
       visitor.substr(path.substr(0, open));  // open==npos -> substr(0, npos) == вся строка
+      if (visitor.is_done())
+        return;
       if (open == std::string_view::npos)
         return visitor.pattern_end();
       path.remove_prefix(open);
@@ -136,6 +140,8 @@ constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
       visitor.param(name, sep);
       path.remove_prefix(sep.size());
     }
+    if (visitor.is_done())
+      return;
   }
 
   visitor.pattern_end();
@@ -147,115 +153,11 @@ constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
   return p.contains('{');
 }
 
-namespace noexport {
-
-[[nodiscard]] constexpr std::strong_ordering compare_templated_paths(std::string_view a, std::string_view b) {
-  struct vtor_t {
-    std::string_view a;  // идём по этому пути
-    std::string_view b;
-    // a более специализировано чем b?
-    std::optional<std::strong_ordering> result;
-
-    constexpr void substr(std::string_view s) {
-      if (result)
-        return;
-      assert(a.starts_with(s));
-      if (!b.starts_with(s)) {
-        // если у меня ещё есть шаблоны, а у 'b' их нет - я более специализирован
-        // например {x}-{y} более специализировано чем {x}
-        result = is_template_path(a) <=> is_template_path(b);
-        return;
-      }
-      a.remove_prefix(s.size());
-      b.remove_prefix(s.size());
-    }
-    constexpr void pattern_end() {
-      if (result)
-        return;
-      assert(a.empty());
-      result = is_template_path(a) <=> is_template_path(b);
-    }
-    constexpr void param(std::string_view name) {
-      if (result)
-        return;
-      assert(a.starts_with('{'));
-      if (!b.starts_with('{')) {
-        result = std::strong_ordering::less;  // 'a' шаблон, 'b' не шаблон
-        return;
-      }
-      a.remove_prefix(name.size() + 2 /*{ и }*/);
-      auto pos = b.find('}');
-      if (pos == b.npos)
-        throw validate_error("invalid path '{}'", b);
-      b.remove_prefix(pos + 1);
-    }
-    constexpr void param(std::string_view name, std::string_view sep) {
-      param(name);
-      substr(sep);
-    }
-
-    constexpr void error(std::string_view msg) {
-      throw validate_error("{}", msg);
-    }
-  };
-  vtor_t vtor{a, b};
-  visit_templated_path_parts(a, vtor);
-  return *vtor.result;
-}
-
-}  // namespace noexport
-
-// TODO тестирование этого, рефакторинг и убирание всех комментариев и тд
-// TODO рантайм и constexpr версия, алгоритм который выбирает среди рантайм диспатчеров. На вход path,
-// выбирает из какой-то специальной структуры динамических хендлеров какой вызвать
-//
 // Сравнивает два (возможно шаблонизированных) пути по тому какой из них более специализирован
 // если одинаково специализированы - возвращается compare_paths_template_insensitve(l, r)
-// TODO видимо для лучшего тестирования и меньшего количества кода имеет смысл написать всё же функцию которая
-// на компиляции строит таблицу путь -> указатель на функцию что делать а затем рантайм функция просто
-// проходит по этому и последовательно проверяет. также с рантайм хендлерами. Но рантайм хендлеры отдельно от
-// компайл тайм, так что нужно проверять и там и тут и затем выбирать более специализированный из статического
-// и динамического
-// TODO посмотреть что на работе делают для этого
-// TODO короче структуры static_handlers / dynamic_handlers
 // less - 'l' менее специализирован чем 'r'. 'greater' - более специализирован
-// equal - нет более специализированного
-[[nodiscard]] constexpr std::optional<std::strong_ordering> compare_paths_specialized(std::string_view l,
-                                                                                      std::string_view r) {
-  bool tl = is_template_path(l);
-  bool tr = is_template_path(r);
-  if (!tl && !tr)
-    return std::strong_ordering::equivalent;
-  if (tl && tr)
-    return noexport::compare_templated_paths(l, r);
-  if (tl)
-    return std::strong_ordering::less;
-  assert(tr);
-  return std::strong_ordering::greater;
-  // TODO
-  // шаблонизированный всегда менее специализирован чем не шаблонизированный
-  // если оба без шаблонов - можно по длине расставить, т.к. разницы нет, а можно по < >
-  // если оба с шаблонами - идём по сегментам, если сегменты оба не шаблоны, если равны - идём дальше.
-  // если не равны и один начинается с другого - более специализирован более длинный. И наконец если ничего не
-  // начинается, сравниваем по длине
-  // если равны сегменты, идём дальше - если шаблонизированный сегмент, то он
-  // проигрывает не шаблонизированному если оба сегмента шаблонизированы, пропускаем идём дальше например:
-  // /v2/{str}.json   VS   /v2/{name}.yaml /v2 == /v2 {str} == {name} (без учёта имён) .json != .yaml хотя по
-  // итогу они никогда не совпадут же /v2/{str}.json   VS   /v2/{name} отсутствие сегмента или пустой сегмент
-  // - проигрывают чему угодно /v2/{x}-{y}  VS  /v2/{name} - тут должен выиграть первый /v2 == /v2 {x} ==
-  // {name}
-  // "-" выигрывает у отсутствующего сегмента
-  // /v2/{x}-{y}  VS  /v2/{name}- - тут должен выиграть первый
-  // /v2 == /v2
-  // {x} == {name}
-  // "-" == "-"
-  // {y} выигрывает у отсутствующего сегмента
-  // /v2/{x}-{y}  VS  /v2/{name}-/ - тут должен выиграть второй
-  // /v2 == /v2
-  // {x} == {name}
-  // "-" == "-/"   -- ЕСЛИ ОДИН СЕГМЕНТ НАЧИНАЕТСЯ СО ВТОРОГО, ТО НУЖНО ВОЗВРАЩАТЬ СРАВНЕНИЕ ПО ДЛИНЕ
-  return {};  // TODO
-}
+// equivalent - нет более специализированного
+[[nodiscard]] std::strong_ordering compare_paths_specialized(std::string_view l, std::string_view r);
 
 [[nodiscard]] constexpr inline bool is_equal_paths_template_insensitve(std::string_view a,
                                                                        std::string_view b) noexcept {
@@ -371,7 +273,7 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
 // TODO test
 
 // проверяет что все переменные в пути не пустые и упоминаются ровно один раз
-[[nodiscard]] constexpr bool validate_maybe_templated_path(std::string_view path) {
+[[nodiscard]] constexpr bool validate_maybe_templated_path_parameters(std::string_view path) {
   struct vtor_t {
     std::string_view p;
     bool failed = false;
@@ -381,12 +283,8 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
     constexpr void pattern_end() const {
     }
     constexpr void param(std::string_view name) {
-      if (failed)
-        return;
-      if (name.empty()) {
-        failed = true;
-        return;
-      }
+      assert(!failed);
+      assert(!name.empty());
       failed = count_in_str(p, '{' + std::string(name) + '}') != 1;
     }
     constexpr void param(std::string_view name, std::string_view sep) {
@@ -394,6 +292,9 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
       substr(sep);
     }
 
+    bool is_done() const {
+      return failed;
+    }
     constexpr void error(std::string_view) {
       failed = true;
     }
@@ -401,6 +302,57 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   vtor_t vtor{path};
   visit_templated_path_parts(path, vtor);
   return !vtor.failed;
+}
+
+// TODO совместить с парсингом path параметров?
+// игнорирует возможный % енкодинг путей
+constexpr bool match_path_pattern(std::string_view path_pattern, std::string_view path) {
+  struct vtor_t {
+    std::string_view p;
+    bool matches = true;
+
+    constexpr void substr(std::string_view str) {
+      if (!p.starts_with(str)) {
+        matches = false;
+        return;
+      }
+      p.remove_prefix(str.size());
+    }
+    constexpr void pattern_end() const {
+    }
+    constexpr void param(std::string_view name) {
+      assert(matches);
+      assert(!name.empty());
+    }
+    constexpr void param(std::string_view name, std::string_view sep) {
+      auto pos = p.find(sep);
+      if (pos == p.npos) {
+        matches = false;
+        return;
+      }
+      p.remove_prefix(pos + sep.size());
+    }
+
+    constexpr void error(std::string_view) {
+      matches = false;
+    }
+
+    bool is_done() const {
+      return !matches;
+    }
+  };
+  vtor_t vtor{path};
+  visit_templated_path_parts(path_pattern, vtor);
+  return vtor.matches;
+}
+
+// игнорирует возможный % енкодинг путей
+template <constexpr_string PathPattern>
+constexpr bool match_path_pattern(std::string_view path) {
+  if constexpr (!is_template_path(PathPattern))
+    return PathPattern == path;
+  else
+    return match_path_pattern(PathPattern, path);
 }
 
 // QUERY

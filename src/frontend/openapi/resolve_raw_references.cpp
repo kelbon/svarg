@@ -5,7 +5,8 @@
 #include "svarg/frontend/openapi/openapi.hpp"
 #include "svarg/utils/parse_url.hpp"
 
-#include <http2/http2_client.hpp>
+#include <hidi/h2client.hpp>
+#include <hidi/asio/io_impl.hpp>
 
 namespace svarg {
 
@@ -27,12 +28,11 @@ static std::string fixup_path(fs::path p) {
   }
 }
 
-static dd::task<void> do_load_refered_object(http2::http2_client& client, url_ref url, auto success,
+static dd::task<void> do_load_refered_object(hidi::h2client& client, url_ref url, auto success,
                                              auto fail) try {
-  http2::http_request req{.path = std::string(url.path), .method = http2::http_method_e::GET};
+  hidi::http_request req{.path = std::string(url.path), .method = hidi::http_method_e::GET};
   req.authority = url.host;
-  http2::http_response rsp =
-      co_await client.send_request(req, http2::deadline_after(std::chrono::seconds(5)));
+  hidi::http_response rsp = co_await client.send_request(req, hidi::deadline_after(std::chrono::seconds(5)));
   // редирект не обрабатывается
   if (rsp.status < 200 || rsp.status >= 300) {
     fail(std::format("invalid rsp with status={}", rsp.status).c_str());
@@ -49,13 +49,13 @@ std::string do_get_request_to(std::string_view url) {
   std::string fixed = fixup_path(url);
   url = fixed;
   url_ref u = parse_absolute_url(url);
-  std::optional<http2::http2_client> client;
-  http2::http2_client_options opts{.allow_requests_before_server_settings = true};
+  std::optional<hidi::h2client> client;
+  hidi::h2client_options opts{.allow_requests_before_server_settings = true};
   if (u.scheme == "http") {
-    client.emplace(http2::endpoint(std::string(u.host), u.get_port()), opts);
+    client.emplace(hidi::endpoint(std::string(u.host), u.get_port()), opts);
   } else if (u.scheme == "https") {
-    client.emplace(http2::endpoint(std::string(u.host), u.get_port()), opts,
-                   [](boost::asio::io_context& ctx) { return http2::default_tls_transport_factory(ctx); });
+    aa::inplaced io{[&] { return hidi::asio_tls_io(hidi::make_ssl_context_for_client({})); }};
+    client.emplace(hidi::endpoint(std::string(u.host), u.get_port()), opts, io);
   } else
     throw parse_error("invalid $ref, network ref must start with http:// or https://, ref: `{}`", url);
 

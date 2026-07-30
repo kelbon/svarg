@@ -1,6 +1,6 @@
 include(cmake/get_cpm.cmake)
 
-set(BOOST_INCLUDE_LIBRARIES system asio pfr json iostreams process)
+set(BOOST_INCLUDE_LIBRARIES system asio pfr json iostreams process stacktrace)
 CPMAddPackage(
   NAME BOOST
   VERSION 1.87.0
@@ -42,7 +42,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME ANYANY
   GITHUB_REPOSITORY kelbon/AnyAny
-  GIT_TAG v1.1.0
+  GIT_TAG v1.2.1
 )
 
 # on_scope_exit / on_scope_failure (zallib)
@@ -60,10 +60,10 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
-  NAME HTTP2
-  GIT_REPOSITORY https://github.com/kelbon/http2
-  GIT_TAG v0.10.0
-  OPTIONS "KELHTTP2_USE_CPM ON"
+  NAME HIDI
+  GIT_REPOSITORY https://github.com/kelbon/hidi
+  GIT_TAG v0.11.0
+  OPTIONS "HIDI_USE_CPM ON"
 )
 
 CPMAddPackage(
@@ -76,7 +76,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME METEL
   GIT_REPOSITORY https://github.com/kelbon/metel
-  GIT_TAG v0.0.3
+  GIT_TAG v0.0.5
 )
 
 if (svarg_ENABLE_TESTING)
