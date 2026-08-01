@@ -17,7 +17,7 @@ static constexpr std::string_view special_field_name = "_dATA";
 
 template <typename T>
 [[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
-  static_assert(fields_count<T> == 1);
+  static_assert(fields_count<T>() == 1);
   // <special_field_name>
   return in._dATA;
 }

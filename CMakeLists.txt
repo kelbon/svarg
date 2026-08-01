@@ -7,6 +7,7 @@ option(svarg_ENABLE_TESTING "enables testing" OFF)
 option(svarg_ENABLE_ASAN "build ASAN (for CI)" OFF)
 option(svarg_ENABLE_UBSAN "build UNSAN (for CI)" OFF)
 option(svarg_CI "marks that building on CI (for testing)" OFF)
+option(svarg_ENABLE_EXAMPLES "enables examples" OFF)
 
 file(GLOB_RECURSE svarg_SRCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
@@ -53,6 +54,15 @@ set_target_properties(svarg svarg-ir svarg-ir-cxx svarglib PROPERTIES
 )
 
 add_subdirectory(include/svarg/backend/cxx/support)
+
+set(SVARG_SCRIPT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/svarg_generate.cmake)
+
+if(svarg_ENABLE_EXAMPLES)
+    add_subdirectory(examples/cxx)
+endif()
+
+# `svarg_generate_cxx` fn
+include(cmake/svarg_generate.cmake)
 
 # generates launch.json, places compile_commands.json correctly for clangd
 ccozy_on_configuration_end_vscode()

@@ -723,7 +723,7 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
   }
 
   // components/pathItems
-  if (api.components->pathItems) {
+  if (api.components && api.components->pathItems) {
     for (auto& [name, item] : *api.components->pathItems) {
       auto [ritem, reffile, refjp] = resolve_ref_and_ret(item, file, "/components/pathItems"_jp, ctx);
       visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjp));

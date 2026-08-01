@@ -131,16 +131,27 @@ int main(int argc, char* argv[]) try {
   }
 
   cxx::render_options renoptions;
+  renoptions.dry_run = cliopts.dry_run;
   renoptions.simple_cxx_identifiers = cliopts.simple_identifiers;
   cxx::renderer r(ir, renoptions);
-  r.render2cxx(cliopts.out);
-  auto onfile = [](const fs::path& p, bool success) {
-    if (success)
-      std::println("file `{}` formatted", p.generic_string());
-    else
-      std::println("cannot format file `{}", p.generic_string());
-  };
-  clang_format_dir(cliopts.out, onfile);
+  std::vector generated = r.render2cxx(cliopts.out);
+  if (cliopts.dry_run) {
+    std::string filelist;
+    for (const fs::path& p : generated) {
+      filelist += fs::relative(p, cliopts.out).generic_string();
+      filelist += '\n';
+    }
+    fs::create_directories(cliopts.out);
+    write_into(fs::path(cliopts.out) / "generated_files.txt", filelist);
+  } else {
+    auto onfile = [](const fs::path& p, bool success) {
+      if (success)
+        std::println("file `{}` formatted", p.generic_string());
+      else
+        std::println("cannot format file `{}", p.generic_string());
+    };
+    clang_format_dir(cliopts.out, onfile);
+  }
   std::println("output written to {} directory", fs::absolute(cliopts.out).generic_string());
   return 0;
 } catch (std::exception& e) {

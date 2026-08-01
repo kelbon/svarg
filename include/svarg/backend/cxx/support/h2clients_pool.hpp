@@ -144,7 +144,7 @@ struct h2clients_pool {
 
   // Возвращает клиент с запрошенным адресом назначения (не обязательно уже соединённый)
   // pre: addr.dest.port != 0
-  dd::task<std::shared_ptr<hidi::h2client>> get_connection_to(dest_and_src addr, hidi::deadline_t deadline);
+  std::shared_ptr<hidi::h2client> get_connection_to(dest_and_src addr);
 
  private:
   void resolve_addr(dest_and_src&);

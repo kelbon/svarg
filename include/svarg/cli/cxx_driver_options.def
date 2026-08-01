@@ -8,10 +8,15 @@ OPTION(std::string, specs_dir, "specs directory", default_value(std::filesystem:
 RENAME(specs_dir, "specs-dir")
 ALIAS(s, specs-dir)
 
+// file format: one path at one line, all pathes relative to out dir, all paths are generic (/)
+TAG(dry_run, "do not generate, instead write file 'generated_files.txt' into output dir")
+RENAME(dry_run, "dry-run")
+
 BOOLEAN(optimize, "optimizes IR before generate", default_value(true))
 ALIAS(O2, optimize)
 
-OPTION(clinok::multiarg<std::string>, include_dirs, "include directories", default_value(clinok::multiarg<std::string>{}))
+OPTION(clinok::multiarg<std::string>, include_dirs, "include directories. If not absolute, relative to CWD",
+    default_value(clinok::multiarg<std::string>{}))
 RENAME(include_dirs, "include-dirs")
 ALIAS(I, include-dirs)
 

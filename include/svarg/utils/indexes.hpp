@@ -9,12 +9,12 @@ namespace svarg::noexport {
 template <size_t Max>
 struct for_all_indexes_impl {
   template <typename F>
-  decltype(auto) operator*(F&& fn) {
+  constexpr decltype(auto) operator*(F&& fn) {
     return std::forward<F>(fn)(std::make_index_sequence<Max>{});
   }
 
   template <typename F>
-  void operator/(F&& fn) {
+  constexpr void operator/(F&& fn) {
     auto helper = [&]<size_t... Is>(std::index_sequence<Is...>) {
       (fn.template operator()<Is>(), ...);  //
     };

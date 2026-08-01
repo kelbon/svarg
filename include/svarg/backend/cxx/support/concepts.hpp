@@ -100,7 +100,7 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
   metel::unreachable();
 }
 
-[[nodiscard]] inline bool efromstr(std::string_view s, parse_tag_e& out) {
+[[nodiscard]] constexpr bool efromstr(std::string_view s, parse_tag_e& out) {
   std::optional t = ss::string_switch<parse_tag_e>(s)
                         .case_("fundamental", parse_tag_e::fundamental)
                         .case_("array", parse_tag_e::array)
@@ -510,8 +510,15 @@ template <size_t I, typename T>
 
 template <typename T>
 consteval size_t fields_count() {
-  constexpr bool ignore_last_field = cxx_support::an_object<T> && cxx_support::has_additional_properties<T>();
-  return std::decay_t<T>::field_names.size() - size_t(ignore_last_field);
+  static_assert(metel::is_decayed_v<T>);
+  if constexpr (cxx_support::an_object<T>) {
+    constexpr bool ignore_last_field = cxx_support::an_object<T> && cxx_support::has_additional_properties<T>;
+    return std::decay_t<T>::field_names.size() - size_t(ignore_last_field);
+  } else if constexpr (std::is_aggregate_v<T>) {
+    return boost::pfr::tuple_size_v<T>;
+  } else {
+    static_assert(false);
+  }
 }
 
 template <size_t I, typename T>

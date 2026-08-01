@@ -143,7 +143,8 @@ static std::string render_string(std::string_view s) {
 
 static std::string render_parse_tag(cxx_support::parse_tag_e tag) {
   return std::format(
-      "\nstatic constexpr cxx_support::parse_tag_e parse_tag = cxx_support::parse_tag_e::{};\n\n",
+      "\nstatic constexpr svarg::cxx_support::parse_tag_e parse_tag = "
+      "svarg::cxx_support::parse_tag_e::{};\n\n",
       e2str(tag));
 }
 
@@ -230,6 +231,8 @@ std::vector<std::string> renderer::collect_mentioned_first_layer_specs(const ir:
 }
 
 schema_ref_result renderer::render_fundamental_type(const ir::fundamental_e f) const {
+  if (f == ir::fundamental_e::string)
+    return {.typeref = "std::string", .is_alias = true};
   return {.typeref = std::string(e2str(f)), .is_alias = true};
 }
 
@@ -568,7 +571,7 @@ std::vector<fs::path> renderer::render_all(fs::path output_dir, dd::generator<re
     if (ec)
       throw render_error("filesystem error, message: {}, path: {}", ec.message(), path.generic_string());
     // заменяет файл если он уже есть
-    write_into(path, rendered);
+    write_file(path, rendered);
   }
   rm_written.no_longer_needed();
   return std::vector(written.begin(), written.end());
@@ -599,7 +602,7 @@ std::vector<fs::path> renderer::render_all_operations(fs::path output_dir, const
   return render_all(std::move(output_dir), foo());
 }
 
-void renderer::render2cxx(fs::path output_dir) const {
+std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
   if (ir.schemas && !ir.schemas->empty())
     render_all_schemas(output_dir);
   if (ir.operations && !ir.operations->empty())
@@ -640,9 +643,9 @@ void renderer::render2cxx(fs::path output_dir) const {
     }
   }
   for (auto& [spec, all] : spec2rendered) {
-    write_into(output_dir / spec / "all_schemas.hpp", all.all_schemas);
-    write_into(output_dir / spec / "all_operations.hpp", all.all_operations);
-    write_into(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
+    write_file(output_dir / spec / "all_schemas.hpp", all.all_schemas);
+    write_file(output_dir / spec / "all_operations.hpp", all.all_operations);
+    write_file(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
   }
 
   // servers.hpp только если есть операции
@@ -678,7 +681,7 @@ void renderer::render2cxx(fs::path output_dir) const {
     }
     for (auto& [spec, rendered] : server_files) {
       rendered += "}\n\n";  // end namespace
-      write_into(output_dir / spec / "servers.hpp", rendered);
+      write_file(output_dir / spec / "servers.hpp", rendered);
     }
   }
 
@@ -700,10 +703,13 @@ void renderer::render2cxx(fs::path output_dir) const {
     for (auto& [spec, ops] : clients)
       client_files[spec] = render_client(ops, spec);
 
-    for (auto& [spec, rendered] : client_files) {
-      write_into(output_dir / spec / "client.hpp", rendered);
-    }
+    for (auto& [spec, rendered] : client_files)
+      write_file(output_dir / spec / "client.hpp", rendered);
   }
+  remove_duplicates(generated);
+  std::stable_sort(generated.begin(), generated.end(),
+                   [](const fs::path& a, const fs::path& b) { return a.extension() < b.extension(); });
+  return std::move(generated);
 }
 
 // ОПЕРАЦИИ
@@ -714,7 +720,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   std::string name = std::format("{}_body", make_cxx_ident(body.contentType, options));
   std::string result;
   result += std::format("struct {} {{\n", name);
-  result += std::format("static constexpr bool is_required = {}", body.required);
+  result += std::format("static constexpr bool is_required = {};\n", body.required);
   if (body.streaming && *body.streaming)
     result += "using is_streaming = int;\n";
   result += render_parse_tag(cxx_support::parse_tag_e::body);
@@ -815,10 +821,12 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
 rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::string_view spec,
                                              const json_pointer& jp) const {
   std::string result;
-  result += render_parse_tag(cxx_support::parse_tag_e::response);
   std::string struct_name =
       rsp.is_default() ? "default_response" : std::format("response_{}", rsp.status.to_string());
+
   result += std::format("struct {} {{\n\n", struct_name);
+
+  result += render_parse_tag(cxx_support::parse_tag_e::response);
 
   if (!rsp.is_default()) {
     if (!rsp.is_range())
@@ -1052,7 +1060,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     remove_duplicates(struct_names);
 
     if (struct_names.size() == 1) {
-      result += std::format("using result_t = {}", struct_names.front());
+      result += std::format("using result_t = {};\n", struct_names.front());
     } else {
       result += "struct result_t {\n";
       auto names_rng = struct_names | std::views::join_with(',');
@@ -1283,17 +1291,23 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
 
   // клиент один и он в неймспейсе спеки
   res += "struct client {";
-  res += "cxx_support::h2clients_pool& pool;\n";
+  res += "svarg::cxx_support::h2clients_pool& pool;\n";
 
   for (auto* op : operations) {
     auto name = make_cxx_ident(op->id, options);
     // TODO нормальный url + дефолтное значение
     std::string get_addr = std::format("{{ hidi::endpoint(host), {{}} }}");
     res += std::format(
-        "operation_result<{}> send_{}({} op, std::string host, deadline_t deadline, content_type_params ctp "
+        "dd::task<svarg::cxx_support::operation_result<{}>> send_{}({} op, std::string host, "
+        "hidi::deadline_t "
+        "deadline, "
+        "svarg::content_type_params ctp "
         "= {{}}) const {{\n return "
-        "send_request(*pool.get_connection_to({}), cxx_support::make_request(op, ctp), deadline); }}\n",
-        name, name, name, get_addr);
+        "svarg::cxx_support::send_request<{}>(*pool.get_connection_to({}), "
+        "svarg::cxx_support::make_request(op, "
+        "ctp), deadline); "
+        "}}\n",
+        name, name, name, name, get_addr);
   }
 
   res += "};\n\n";  // end struct

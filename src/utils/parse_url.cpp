@@ -2,10 +2,10 @@
 
 namespace svarg {
 
-static std::size_t scheme_length(std::string_view url) {
+static size_t scheme_length(std::string_view url) {
   if (url.empty() || !is_scheme_char(url[0], /*first=*/true))
     return 0;
-  for (std::size_t i = 1; i < url.size(); ++i) {
+  for (size_t i = 1; i < url.size(); ++i) {
     if (url[i] == ':')
       return i;
     if (!is_scheme_char(url[i], /*first=*/false))

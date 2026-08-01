@@ -51,14 +51,13 @@ void h2clients_pool::stop() {
   assert(m_gc_coro.handle == nullptr);
 }
 
-dd::task<std::shared_ptr<h2client>> h2clients_pool::get_connection_to(dest_and_src addr,
-                                                                      deadline_t deadline) {
+std::shared_ptr<h2client> h2clients_pool::get_connection_to(dest_and_src addr) {
   resolve_addr(addr);
   if (auto it = m_clients.find(addr); it != m_clients.end()) {
     // нашли клиента в кеше, возможно он ещё в процессе соединения
     it->second->used = true;
     // ассоциированный shared_ptr
-    co_return std::shared_ptr<h2client>(it->second, &it->second->client);
+    return std::shared_ptr<h2client>(it->second, &it->second->client);
   }
   // создаём нового клиента ссылающегося на 'io'
   hidi::client_ssl_context_ptr ssl = m_make_ssl_fn ? m_make_ssl_fn(addr) : nullptr;
@@ -66,7 +65,7 @@ dd::task<std::shared_ptr<h2client>> h2clients_pool::get_connection_to(dest_and_s
   std::shared_ptr desc =
       std::make_shared<client_desc>(addr, m_options, hidi::make_asio_tls_io_context(io, ssl));
   m_clients.try_emplace(addr, desc);
-  co_return std::shared_ptr<h2client>(desc, &desc->client);
+  return std::shared_ptr<h2client>(desc, &desc->client);
 }
 
 void h2clients_pool::resolve_addr(dest_and_src& addr) {

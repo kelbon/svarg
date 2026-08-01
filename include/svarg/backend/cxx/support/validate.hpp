@@ -29,7 +29,7 @@ error_code validate_required_schemas(const boost::json::value& json, const T& re
     return !ec.failed();
   };
   auto do_validate = [&]<typename... Schemas>(metel::typelist<Schemas...>) {
-    (validate_one(metel::typelist<Schemas>{}) && ...);
+    (void)(validate_one(metel::typelist<Schemas>{}) && ...);
   };
   do_validate(required_schemas_t<T>{});
 

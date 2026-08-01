@@ -12,8 +12,9 @@
 
 namespace svarg::cxx_support {
 
+// TODO consteval (efromstr in HTTP/2)
 template <an_operation Op>
-consteval http_method_e get_operation_method() {
+constexpr http_method_e get_operation_method() {
   http_method_e method;
   if (!efromstr(Op::method, method))
     throw "invalid method";
@@ -182,7 +183,7 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
       req.body.content_type = media_type_to_hdr_value(get_content_type(op), ctparams);
     }
   }
-  req.path = make_path<Op::path_t>(op);
+  req.path = make_path<Op>(op);
   if constexpr (has_query_params<Op>) {
     application_x_www_form_urlencoded query;
     FOR_EACH_FIELD_INDEX_OF(query_t<Op>) {
@@ -259,7 +260,7 @@ template <an_operation Op>
       if (!index)
         return;  // игнорируем дополнительные аргументы
       unparsed.set(*index, false);
-      return metel::visit_index<fields_count<query_t<Op>()>>(
+      return metel::visit_index<fields_count<query_t<Op>>() - 1>(
           [&]<size_t I>() { return parse_nonbody_from(get_field<I>(op.query)); }, *index);
     };
     ec = visit_query</*WwwUrlEncoded=*/false>(get_query(query), on_query_arg);
@@ -297,7 +298,7 @@ template <an_operation Op>
           if (!index)
             return error_code{};  // игнорируем дополнительные аргументы
           unparsed_cookies.set(*index, false);
-          return metel::visit_index<fields_count<cookies_t<Op>()>>(
+          return metel::visit_index<fields_count<cookies_t<Op>>() - 1>(
               [&]<size_t I>() { return parse_nonbody_from(get_field<I>(op.cookies)); }, *index);
         };
         ec = visit_cookies(value, on_cookie_arg);
@@ -310,7 +311,7 @@ template <an_operation Op>
       std::optional index = get_field_index<headers_t<Op>>(name);
       if (index) {
         unparsed_headers.set(*index, false);
-        ec = metel::visit_index<fields_count<headers_t<Op>()>>(
+        ec = metel::visit_index<fields_count<headers_t<Op>>() - 1>(
             [&]<size_t I>() { return parse_nonbody_from(get_field<I>(op.headers)); }, *index);
         if (ec)
           return ec;
@@ -393,7 +394,7 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
       std::optional index = get_field_index<headers_t<R>>(name);
       if (index) {
         unparsed.set(*index, false);
-        ec = metel::visit_index<fields_count<headers_t<R>()>>(
+        ec = metel::visit_index<fields_count<headers_t<R>>() - 1>(
             [&]<size_t I>() { return parse_nonbody_from(get_field<I>(rsp.headers)); }, *index);
         if (ec)
           return ec;
@@ -423,7 +424,19 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
         return parse_error("content type `{}` not matched any body in response `{}`", content_type,
                            type_name<R>());
       } else {
-        return parse_from<get_content_type<B>()>(rawrsp.body_strview(), rsp.body.template emplace<B>());
+        auto get_ct = [](std::string_view ct) {
+          content_type_e c;
+          if (!efromstr(ct, c))
+            throw "error";
+          return c;
+        };
+        if constexpr (has_single_body<R>()) {
+          return parse_from<get_ct(get_content_type<B>())>(rawrsp.body_strview(),
+                                                           get_special_field(rsp.body));
+        } else {
+          return parse_from<get_ct(get_content_type<B>())>(rawrsp.body_strview(),
+                                                           get_special_field(rsp.body).template emplace<B>());
+        }
       }
     };
     ec = select_body_type<R>(content_type, do_parse_body);

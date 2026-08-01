@@ -18,8 +18,8 @@ using cxx_support::get_special_field;
 
 template <cxx_support::an_fundamental T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
-    error_code ec = try_from_json(get_special_field(v), j);
+  static error_code operator()(const boost::json::value& j, T& v) {
+    error_code ec = try_from_json(j, get_special_field(v));
     if (ec)
       return ec;
     return cxx_support::validate_required_schemas(j, v);
@@ -28,8 +28,8 @@ struct from_json_value<T> {
 
 template <cxx_support::an_array T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
-    error_code ec = try_from_json(get_special_field(v), j);
+  static error_code operator()(const boost::json::value& j, T& v) {
+    error_code ec = try_from_json(j, get_special_field(v));
     if (ec)
       return ec;
     return cxx_support::validate_required_schemas(j, v);
@@ -38,8 +38,8 @@ struct from_json_value<T> {
 
 template <cxx_support::a_not_a T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
-    error_code ec = try_from_json(get_special_field(v), j);
+  static error_code operator()(const boost::json::value& j, T& v) {
+    error_code ec = try_from_json(j, get_special_field(v));
     if (ec)
       return ec;
     return cxx_support::validate_required_schemas(j, v);
@@ -48,7 +48,7 @@ struct from_json_value<T> {
 
 template <cxx_support::a_string_enum T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
+  static error_code operator()(const boost::json::value& j, T& v) {
     // по сути парсер для строки + встроенная валидация
     if (!j.is_string())
       return parse_error("expected string, got `{}`", e2str(j.kind()));
@@ -64,7 +64,7 @@ struct from_json_value<T> {
 
 template <cxx_support::an_enum T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
+  static error_code operator()(const boost::json::value& j, T& v) {
     using underlying = std::decay_t<decltype(get_special_field(v))>;
 
     auto invalid_value = [](auto&& v) {
@@ -116,12 +116,12 @@ struct from_json_value<T> {
 
 template <cxx_support::an_anyof T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
+  static error_code operator()(const boost::json::value& j, T& v) {
     if constexpr (cxx_support::has_discriminator<T>) {
       if (!j.is_object()) {
         // игнорируем дискриминатор на случай если фундаментальный тип
         // TODO пытаться парсить только фундаментальные типы из anyOf
-        error_code ec = try_from_json(get_special_field(v), j);
+        error_code ec = try_from_json(j, get_special_field(v));
         if (ec)
           return ec;
         return cxx_support::validate_required_schemas(j, v);
@@ -133,11 +133,11 @@ struct from_json_value<T> {
           return parse_error("invalid discriminator value `{}` for anyOf `{}`",
                              std::string_view(*discriminator), type_name<X>());
         } else {
-          return try_from_json(v, j);
+          return try_from_json(j, v);
         }
       });
     } else {
-      error_code ec = try_from_json(get_special_field(v), j);
+      error_code ec = try_from_json(j, get_special_field(v));
       if (ec)
         return ec;
       return cxx_support::validate_required_schemas(j, v);
@@ -147,12 +147,12 @@ struct from_json_value<T> {
 
 template <cxx_support::a_oneof T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
+  static error_code operator()(const boost::json::value& j, T& v) {
     if constexpr (cxx_support::has_discriminator<T>) {
       if (!j.is_object()) {
         // игнорируем дискриминатор на случай если фундаментальный тип
         // TODO пытаться парсить только фундаментальные типы из oneOf
-        error_code ec = try_from_json(get_special_field(v), j);
+        error_code ec = try_from_json(j, get_special_field(v));
         if (ec)
           return ec;
         return cxx_support::validate_required_schemas(j, v);
@@ -164,11 +164,11 @@ struct from_json_value<T> {
           return parse_error("invalid discriminator value `{}` for oneOf `{}`",
                              std::string_view(*discriminator), type_name<X>());
         } else {
-          return try_from_json(v, j);
+          return try_from_json(j, v);
         }
       });
     } else {
-      error_code ec = try_from_json(get_special_field(v), j);
+      error_code ec = try_from_json(j, get_special_field(v));
       if (ec)
         return ec;
       return cxx_support::validate_required_schemas(j, v);
@@ -178,8 +178,8 @@ struct from_json_value<T> {
 
 template <cxx_support::an_allof T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
-    error_code ec = try_from_json(get_special_field(v), j);
+  static error_code operator()(const boost::json::value& j, T& v) {
+    error_code ec = try_from_json(j, get_special_field(v));
     if (ec)
       return ec;
     return cxx_support::validate_required_schemas(j, v);
@@ -188,10 +188,10 @@ struct from_json_value<T> {
 
 template <cxx_support::an_object A>
 error_code aggregate_from_json(A& v, const boost::json::value& j) {
-  const auto* obj = v.if_object();
+  const auto* obj = j.if_object();
   error_code ec;
   if (!obj) {
-    ec = parse_error(" object expected, got `{}`", e2str(v.kind()));
+    ec = parse_error(" object expected, got `{}`", e2str(j.kind()));
     return ec;
   }
   std::bitset unparsed = cxx_support::get_required_bits_mask<A>();
@@ -199,11 +199,13 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
   for (auto&& [key, value] : *obj) {
     std::optional<size_t> i = cxx_support::get_field_index<A>(key);
     if (i) {
-      metel::visit_index<fields_count<A>()>([&]<size_t I>() {
-        if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
-          unparsed.set(I, false);
-        ec = from_json(j, get_field<I>(v));
-      });
+      metel::visit_index<fields_count<A>() - 1>(
+          [&]<size_t I>() {
+            if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
+              unparsed.set(I, false);
+            ec = from_json(j, cxx_support::get_field<I>(v));
+          },
+          *i);
       if (ec)
         return ec;
     } else {
@@ -228,7 +230,7 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
 
 template <cxx_support::an_object T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
+  static error_code operator()(const boost::json::value& j, T& v) {
     static_assert(cxx_support::valid_generated_object<T>());
     error_code ec = aggregate_from_json(v, j);
     if (ec)
@@ -239,9 +241,17 @@ struct from_json_value<T> {
 
 template <cxx_support::a_body T>
 struct from_json_value<T> {
-  static error_code operator()(T& v, const boost::json::value& j) {
+  static error_code operator()(const boost::json::value& j, T& v) {
     // encoding игнорируется, так как для application/json не имеет смысла
-    return try_from_json(cxx_support::get_special_field(v), j);
+    return try_from_json(j, cxx_support::get_special_field(v));
+  }
+};
+
+template <cxx_support::a_response T>
+struct from_json_value<T> {
+  static error_code operator()(const boost::json::value& j, T& v) {
+    // encoding игнорируется, так как для application/json не имеет смысла
+    return try_from_json(j, cxx_support::get_special_field(v));
   }
 };
 

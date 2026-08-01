@@ -11,6 +11,9 @@ struct render_options {
   // если `false`, то алгоритм преобразования строк в cxx идентификаторы
   // будет гарантировать несовпадение имён, но имена будут иногда более сложные
   bool simple_cxx_identifiers = true;
+  // не генерирует ничего, только возвращает список путей сгенерированных файлов
+  // сортированных по именам + раширениям
+  bool dry_run = false;
 };
 
 struct schema_ref_result {
@@ -28,11 +31,6 @@ struct rendered_with_name {
   std::string render;
 };
 
-// TODO вызов этих операций чтобы рендерить все схемы + инструмент для превращения IR в С++.
-// может быть функцию которая напрямую делает всё в одном процессе дополнительно
-// но уже сейчас почти можно сделать IR -> CXX + driver openapi2cxx (хотя там можно общий интерфейс
-// использовать бекенда и фронтенда и только дефолт сделать openapi/c++)
-// TODO операции!
 // TODO написать ридми IR с полным его описанием
 
 struct renderer {
@@ -40,11 +38,14 @@ struct renderer {
       : options(std::move(opts)), ir(ir) {
   }
 
-  void render2cxx(fs::path output_dir) const;
+  // возвращает список сгенерированных путей без дубликатов, сортированный по пути,
+  // а затем по расширению файла
+  std::vector<fs::path> render2cxx(fs::path output_dir) const;
 
  private:
   render_options options;
   const ir::ir_object& ir;
+  mutable std::vector<fs::path> generated;
 
   const ir::schemas_t& schemas() const {
     return *ir.schemas;
@@ -140,6 +141,13 @@ struct renderer {
 
   // убирает из схем все ссылки на алиасы или фундаменталы, заменяя их их зависимостями
   [[nodiscard]] ir::schema_refs_t dealias(ir::schema_refs_t) const;
+
+  void write_file(const fs::path& path, std::string_view content) const {
+    generated.push_back(path);
+    if (options.dry_run)
+      return;
+    write_into(path, content);
+  }
 };
 
 }  // namespace svarg::cxx
