@@ -7,6 +7,7 @@
 #include "svarg/utils/guard_array.hpp"
 #include "svarg/utils/for_each_field.hpp"
 #include "svarg/backend/cxx/cxx_ident.hpp"  // to_cxx_ident
+#include "svarg/x_meta_keys.hpp"
 
 #include <boost/pfr.hpp>
 
@@ -886,6 +887,100 @@ std::set<ir::body> lowering_context::request_body_lowering(request_body_object o
   return result;
 }
 
+static std::optional<ir::operation_parameter> auth_parameter(const security_scheme_object& sec) {
+  auto make_string_param = [](std::string_view name, parameter_location in = parameter_location::header) {
+    ir::operation_parameter param;
+    param.name = name;
+    param.location = in;
+    param.required = true;  // позже станет optional если есть другие параметры
+    param.schema = ir::make_fundamental_ref(ir::fundamental_e::string);
+    param.auth_related = true;
+    return param;
+  };
+  constexpr std::string_view authhdr = "Authorization";
+  if (sec.type == "apiKey") {
+    assert(sec.in && sec.name);  // validate должен был проверить
+    parameter_location in;
+    if (!efromstr(*sec.in, in))
+      throw validate_error("cannot parse parameter location from `{}`", *sec.in);
+    return make_string_param(*sec.name, in);
+  } else if (sec.type == "mutualTLS") {
+    return std::nullopt;  // ничего не происходит на уровне апи, только на уровне tls
+  } else if (sec.type == "http") {
+    return make_string_param(authhdr);
+  } else if (sec.type == "oauth2") {
+    assert(sec.flows);
+    return make_string_param(authhdr);
+  } else if (sec.type == "openIdConnect") {
+    assert(sec.openIdConnectUrl);
+    return make_string_param(authhdr);
+  } else {
+    throw validate_error("unknown auth type `{}`", sec.type);
+  }
+}
+
+static std::vector<ir::operation_parameter> make_auth_parameters(
+    const std::vector<std::vector<security_scheme_object>>& requirement_groups) {
+  // несколько групп авторизаций с ||, значит каждая из них становится опциональной
+  bool is_optional = requirement_groups.size() > 1;
+  std::vector<ir::operation_parameter> result;
+  for (auto& group : requirement_groups) {
+    for (const security_scheme_object& sec : group) {
+      std::optional p = auth_parameter(sec);
+      // если такого name + location ещё нет
+      if (p && !std::ranges::contains(result, *p)) {
+        result.push_back(std::move(*p));
+        result.back().required = !is_optional;
+      }
+    }
+  }
+  return result;
+}
+
+std::vector<std::vector<security_scheme_object>> lowering_context::resolve_security(
+    fs::path file, const openapi_object& api, const operation_object& op, ir::meta_t& operation_meta) {
+  // внутри security_requirement_object это && для требований, а в массивах security это  ||
+  using span_t = std::span<const security_requirement_object>;
+  span_t requirements;
+  if (op.security) {
+    requirements = *op.security;
+  } else if (api.security) {
+    requirements = *api.security;
+  } else
+    return {};
+  std::vector<std::vector<security_scheme_object>> result;
+
+  for (auto&& sec : requirements) {
+    // пустые требования (security: {}) не должны пропускаться
+    std::vector<security_scheme_object> group;
+    for (auto& [name, scopes] : sec) {
+      auto& schemas = api.components->securitySchemes;
+      if (!schemas || !schemas->contains(name))
+        throw validate_error("unknown security scheme `{}`", name);
+      auto [obj, path, refjp] =
+          resolve_ref_and_ret(schemas->at(name), file, "/components"_jp / "securitySchemes" / name, *this);
+      if (obj.type != "oauth2" && obj.type != "openIdConnect" && !scopes.empty())
+        throw validate_error("scopes must be empty for this auth type (`{}`)", obj.type);
+
+      if (obj.type == "http") {
+        if (obj.bearerFormat)
+          operation_meta[std::string(x_bearer_format)] = Any(boost::json::value(*obj.bearerFormat));
+      } else if (obj.type == "oauth2") {
+        assert(obj.flows);
+        operation_meta[std::string(x_auth_flows)] = Any(to_json(*obj.flows));
+        operation_meta[std::string(x_auth_scopes_oauth2)] = Any(to_json(scopes));
+      } else if (obj.type == "openIdConnect") {
+        assert(obj.openIdConnectUrl);  // должно быть проверено в validate
+        operation_meta[std::string(x_openid_connect_url)] = Any(boost::json::value(*obj.openIdConnectUrl));
+        operation_meta[std::string(x_auth_scopes_openIdConnect)] = Any(to_json(scopes));
+      }
+      group.push_back(std::move(obj));
+    }
+    result.push_back(std::move(group));
+  }
+  return result;
+}
+
 string_map<ir::operation> lowering_context::path_item_object_lowering(const openapi_object& api,
                                                                       std::string_view path, fs::path spec,
                                                                       fs::path resolve_ref_file,
@@ -963,14 +1058,30 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
     {
       auto _ = guard_array(op.parameters);
       for (const auto& p : common_params) {
-        if (!op.has_parameter(p.name))
+        if (!op.has_parameter(p.name, p.location))
           op.parameters->push_back(p);
+      }
+    }
+    {
+      auto _g = guard_array(op.parameters);
+      auto _ = guard_array(op.meta);
+      std::vector op_sec = resolve_security(path, api, o, *op.meta);
+      for (auto& ap : make_auth_parameters(op_sec)) {
+        assert(ap.is_auth_related());
+        if (auto* pp = op.find_parameter(ap.name, ap.location)) {
+          if (!pp->is_auth_related()) {
+            throw validate_error(
+                "conflicting parameters: one named `{}` in `{}` and auth related param named `{}` in `{}`",
+                pp->name, e2str(pp->location), ap.name, e2str(ap.location));
+          }
+        } else {
+          op.parameters->push_back(std::move(ap));
+        }
       }
     }
     // не зависит от порядка если чё
     result.try_emplace(op.method, std::move(op));
   }
-  // TODO op.meta
 
   return result;
 }

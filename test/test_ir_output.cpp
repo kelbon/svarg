@@ -232,6 +232,13 @@ TEST("json repr") {
     auto ir2 = from_json<ir::ir_object>(j);
     REQUIRE(ir2 == ir);
   });
+  ir = openapi2ir("./test_api", {"d.yaml"}, opts);
+  pass_as_json("./test_api/d_expected.yaml", [&](std::string_view data) {
+    boost::json::value j = boost::json::parse(data);
+    REQUIRE(j == to_json(ir));
+    auto ir2 = from_json<ir::ir_object>(j);
+    REQUIRE(ir2 == ir);
+  });
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

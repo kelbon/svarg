@@ -1,0 +1,41 @@
+openapi: 3.1.0
+info:
+  title: complex security test
+  version: "1.0"
+components:
+  securitySchemes:
+    queryApiKey:
+      type: apiKey
+      in: query
+      name: api_key
+    bearerAuth:
+      type: http
+      scheme: bearer
+    oauth2ClientCreds:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://example.com/oauth/token
+          scopes:
+            read: "read access"
+            write: "write access"
+paths:
+  /mandatory-and:
+    get:
+      operationId: mandatoryAnd
+      security:
+        - queryApiKey: []
+          bearerAuth: []
+      responses:
+        "200":
+          description: ok
+  /optional-variant:
+    get:
+      operationId: optionalVariant
+      security:
+        - {}
+        - queryApiKey: []
+          oauth2ClientCreds: [read]
+      responses:
+        "200":
+          description: ok

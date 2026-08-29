@@ -207,6 +207,12 @@
         "name": "limit"
         "schema":
           "spec": "@integer@"
+      - "location": "header"
+        "name": "X-Api-Key"
+        "schema":
+          "spec": "@string@"
+        "required": true
+        "auth_related": true
     "responses":
       - "status": "200"
         "bodies":
@@ -234,6 +240,12 @@
         "schema":
           "spec": "@string@"
         "required": true
+      - "location": "header"
+        "name": "X-Api-Key"
+        "schema":
+          "spec": "@string@"
+        "required": true
+        "auth_related": true
     "responses":
       - "status": "200"
         "bodies":

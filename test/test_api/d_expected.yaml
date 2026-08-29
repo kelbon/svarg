@@ -1,0 +1,54 @@
+"operations":
+  - "id": "mandatoryAnd"
+    "spec": "d"
+    "servers":
+      - "url": "/"
+    "path": "/mandatory-and"
+    "method": "GET"
+    "parameters":
+      - "location": "query"
+        "name": "api_key"
+        "schema":
+          "spec": "@string@"
+        "required": true
+        "auth_related": true
+      - "location": "header"
+        "name": "Authorization"
+        "schema":
+          "spec": "@string@"
+        "required": true
+        "auth_related": true
+    "responses":
+      - "status": "200"
+    "priority": 0
+  - "id": "optionalVariant"
+    "spec": "d"
+    "servers":
+      - "url": "/"
+    "path": "/optional-variant"
+    "method": "GET"
+    "parameters":
+      - "location": "query"
+        "name": "api_key"
+        "schema":
+          "spec": "@string@"
+        "required": false
+        "auth_related": true
+      - "location": "header"
+        "name": "Authorization"
+        "schema":
+          "spec": "@string@"
+        "required": false
+        "auth_related": true
+    "responses":
+      - "status": "200"
+    "meta":
+      "x-authFlows":
+        "clientCredentials":
+          "tokenUrl": "https://example.com/oauth/token"
+          "scopes":
+            "read": "read access"
+            "write": "write access"
+      "x-authScopesOauth2":
+        - "read"
+    "priority": 1

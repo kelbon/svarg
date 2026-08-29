@@ -481,7 +481,12 @@ struct operation_parameter {
   // говорит как отправлять этот параметр, н-р application/json
   // по умолчанию такой же как у тела запроса
   std::optional<content_type_t> encoding;
-  std::optional<meta_t> meta;
+  // default - false
+  optional<bool> auth_related;
+
+  [[nodiscard]] bool is_auth_related() const noexcept {
+    return auth_related ? *auth_related : false;
+  }
 
   bool operator==(const operation_parameter& r) const noexcept {
     return location == r.location && name == r.name;
@@ -502,7 +507,6 @@ struct header {
   // по умолчанию false
   std::optional<bool> required;
   std::optional<content_type_t> encoding;
-  std::optional<meta_t> meta;
 
   void validate() const {
     // чтобы не ломать агрегатность, проверяет валидность
@@ -733,11 +737,20 @@ struct operation {
   bool has_path() const noexcept {
     return !path.empty();
   }
-  bool has_parameter(std::string_view name) const noexcept {
+  ir::operation_parameter* find_parameter(std::string_view name, parameter_location in) noexcept {
+    if (!parameters)
+      return nullptr;
+    for (auto& p : *parameters) {
+      if (p.name == name && p.location == in)
+        return &p;
+    }
+    return nullptr;
+  }
+  bool has_parameter(std::string_view name, parameter_location in) const noexcept {
     if (!parameters)
       return false;
     for (auto& p : *parameters) {
-      if (p.name == name)
+      if (p.name == name && p.location == in)
         return true;
     }
     return false;

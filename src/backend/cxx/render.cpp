@@ -848,7 +848,6 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
           .schema = h.schema ? *h.schema : ir::make_fundamental_ref(ir::fundamental_e::string),
           .required = h.required,
           .encoding = h.encoding,
-          .meta = h.meta,
       });
     }
     result += "struct headers_t {\n";
