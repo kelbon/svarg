@@ -25,6 +25,7 @@
       "object":
         "fields":
           - "type":
+              "name": "orderStatusEvent_e"
               "spec": "api-a"
               "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
             "name": "status"
@@ -33,6 +34,7 @@
           "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
+    "name": "orderStatusEvent_e"
     "type":
       "enum":
         "type":
@@ -272,6 +274,8 @@
             "schema":
               "spec": "@number@"
             "required": true
+    "meta":
+      "x-svarg-test-field": "abc"
     "priority": 0
   - "id": "createOrder"
     "spec": "api-a"

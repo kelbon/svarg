@@ -126,6 +126,25 @@ struct from_json_value<reference_or<T>> {
   }
 };
 
+template <>
+struct to_json_value<reference_object> {
+  boost::json::value operator()(const reference_object& r) const {
+    boost::json::object obj;
+    obj["$ref"] = r.ref_;
+    if (r.description)
+      obj["description"] = *r.description;
+    if (r.summary)
+      obj["summary"] = *r.summary;
+    for (auto& [key, value] : r._keyfield_override_fields) {
+      assert(key != "$ref");
+      assert(key != "description");
+      assert(key != "summary");
+      obj[key] = value.value;
+    }
+    return obj;
+  }
+};
+
 template <typename T>
 struct to_json_value<reference_or<T>> {
   boost::json::value operator()(const reference_or<T>& v) const {

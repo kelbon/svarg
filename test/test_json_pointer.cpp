@@ -1,3 +1,5 @@
+#include "svarg/frontend/openapi/openapi_object.hpp"
+#include "svarg/frontend/openapi/reference.hpp"
 #include "svarg/utils/json_pointer.hpp"
 
 #include <moko3/moko3.hpp>
@@ -106,6 +108,53 @@ TEST("json_pointer: iterator dereference is idempotent") {
   auto it = s.segments().begin();
   REQUIRE(*it == "foo");
   REQUIRE(*it == "foo");
+}
+
+TEST("json encode/decode") {
+  std::string_view input = R"(
+  {
+    "$ref": "/components/abc",
+    "description": "my description",
+    "x-some-field": 0,
+    "something2": "nothing"
+  })";
+  svarg::reference_object expected;
+  expected.ref_ = "/components/abc";
+  expected.description = "my description";
+  expected._keyfield_override_fields = {
+      {"x-some-field", svarg::Any(0)},
+      {"something2", svarg::Any("nothing")},
+  };
+  auto ref = svarg::from_json<svarg::reference_object>(input);
+
+  REQUIRE(ref == expected);
+  boost::json::value json = svarg::to_json(ref);
+  auto ref2 = svarg::from_json<svarg::reference_object>(json);
+  REQUIRE(ref2 == expected);
+  REQUIRE(ref2 == ref);
+}
+
+template <typename T>
+void test_json_encode_decode(std::string_view input, T expected) {
+  auto ref = svarg::from_json<T>(input);
+  REQUIRE(to_json(ref) == to_json(expected));
+}
+
+TEST("json encode/decode schema and meta") {
+  {
+    svarg::schema_object expected_schema;
+    expected_schema._keyfield_boolean_schema = true;
+    test_json_encode_decode("true", expected_schema);
+    expected_schema._keyfield_boolean_schema = false;
+    test_json_encode_decode("false", expected_schema);
+  }
+  {
+    svarg::schema_object expected_schema;
+    expected_schema.type.emplace().values.push_back("sometype");
+    test_json_encode_decode("{ \"type\": \"sometype\" }", expected_schema);
+    expected_schema.SVARG_META_KEYFIELD["x-key"] = svarg::Any("string1");
+    test_json_encode_decode("{ \"type\": \"sometype\", \"x-key\": \"string1\" }", expected_schema);
+  }
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

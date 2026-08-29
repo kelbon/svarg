@@ -370,6 +370,7 @@ struct schema {
   // н-р type: string enum: ... это означает что пользователь увидит строку, но она провалидируется по тому
   // что написано в enum
   std::optional<arrayof<schema_ref>> required;
+  std::optional<meta_t> meta;
 
   std::string scope() const {
     return std::format("{}#{}", spec, jsonptr.escaped());
@@ -428,15 +429,6 @@ struct schema {
     }
   };
 };
-
-[[nodiscard]] inline bool is_meta_key(std::string_view key) noexcept {
-  return key.starts_with("x-");
-}
-
-// все ключи должны быть is_meta_key(key)
-// хранилище разных вспомогательных тегов, которые фронтенд хочет прокинуть бекенду
-// н-р deprecated или формат query и тд
-using meta_t = string_map<Any>;
 
 struct content_type_t {
   SVARG_IR_TYPE;

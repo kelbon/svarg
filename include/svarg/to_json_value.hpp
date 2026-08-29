@@ -223,11 +223,16 @@ struct to_json_value<T> {
       if (in._keyfield_boolean_schema.has_value())
         return *in._keyfield_boolean_schema;
     }
-
     boost::json::object out;
     APPLY_INDEXES(boost::pfr::tuple_size_v<T>) {
       (noexport::frontent_type_serialize_field<T, Is>(in, out), ...);
     };
+    if constexpr (allows_meta_fields<std::decay_t<T>>) {
+      for (auto& [key, value] : in.SVARG_META_KEYFIELD) {
+        assert(is_meta_key(std::string_view(key)));
+        out[key] = value.value;
+      }
+    }
     return out;
   }
 };

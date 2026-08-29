@@ -17,6 +17,7 @@ paths:
           format: uuid
           minLength: 1
     get:
+      x-svarg-test-field: abc
       operationId: getUser
       parameters:
         - name: expand
@@ -132,6 +133,7 @@ components:
         status:
           type: string
           enum: [pending, shipped, delivered]
+          x-name-hint: orderStatusEvent_e
 
   responses:
     NotFound:

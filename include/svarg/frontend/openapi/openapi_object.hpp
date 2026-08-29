@@ -271,6 +271,7 @@ struct schema_object {
   // если есть и false - другие поля неважны, всех НЕ пускаем
   // "_keyfield" специальный префикс для таких костылей
   std::optional<bool> _keyfield_boolean_schema;
+  SVARG_ALLOW_META;
 
   [[nodiscard]] bool is_write_only() const noexcept {
     return writeOnly && *writeOnly;
@@ -530,6 +531,7 @@ struct operation_object {
   optional<bool> deprecated;
   optional<arrayof<security_requirement_object>> security;
   optional<arrayof<server_object>> servers;
+  SVARG_ALLOW_META;
 };
 
 struct path_item_object {

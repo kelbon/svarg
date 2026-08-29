@@ -161,7 +161,7 @@ struct lowering_context {
   // возвращает список требований через ||, внутри одного внутреннего вектора &&
   std::vector<std::vector<security_scheme_object>> resolve_security(fs::path file, const openapi_object& api,
                                                                     const operation_object& op,
-                                                                    ir::meta_t& operation_meta);
+                                                                    meta_t& operation_meta);
 
  private:
   template <typename T>

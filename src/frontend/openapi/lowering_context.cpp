@@ -351,6 +351,14 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     res.name = *name;
   else
     res.name = std::nullopt;
+  if (!schema.SVARG_META_KEYFIELD.empty()) {
+    res.meta = schema.SVARG_META_KEYFIELD;
+    if (!res.name && res.meta->contains(x_name_hint))
+      res.name = from_json<std::string>((*res.meta)[std::string(x_name_hint)].value);
+    res.meta->erase(x_name_hint);
+    if (res.meta->empty())
+      res.meta.reset();
+  }
   if (auto it = result_ir.schemas->find(res); it != result_ir.schemas->end())
     return schema_or_ref{*it};
   // избегаем хранения jsonptr.view() (без escape возможно что совпадут пути "/" + "name" и "/name" одним
@@ -938,7 +946,7 @@ static std::vector<ir::operation_parameter> make_auth_parameters(
 }
 
 std::vector<std::vector<security_scheme_object>> lowering_context::resolve_security(
-    fs::path file, const openapi_object& api, const operation_object& op, ir::meta_t& operation_meta) {
+    fs::path file, const openapi_object& api, const operation_object& op, meta_t& operation_meta) {
   // внутри security_requirement_object это && для требований, а в массивах security это  ||
   using span_t = std::span<const security_requirement_object>;
   span_t requirements;
@@ -1002,6 +1010,8 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
 
   for (auto [methodstr, o] : item.all_operations_with_method()) {
     ir::operation op;
+    if (!o.SVARG_META_KEYFIELD.empty())
+      op.meta = o.SVARG_META_KEYFIELD;
     // не закрепляем вебхуки за серверами
     if (!path.empty()) {
       auto srvs = [&] {

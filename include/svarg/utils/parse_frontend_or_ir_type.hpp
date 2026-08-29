@@ -29,9 +29,12 @@ constexpr bool svarg_object_has_field(std::string_view name) noexcept {
 }
 
 template <typename T, size_t I>
-bool parse_field(const boost::json::object& obj, T& out, error_code& ec) {
+bool parse_frontorir_field(const boost::json::object& obj, T& out, error_code& ec) {
   using field_type = std::decay_t<decltype(boost::pfr::get<I>(out))>;
   constexpr std::string_view name = unescape_field_name(boost::pfr::get_name<I, T>());
+  if constexpr (is_keyfield(name)) {
+    return true;
+  }
   auto it = obj.find(name);
   if (it == obj.end()) {
     if (svarg_is_optional_field<field_type>::value)
@@ -51,7 +54,6 @@ bool parse_field(const boost::json::object& obj, T& out, error_code& ec) {
 
 }  // namespace noexport
 
-// TODO складывать такие поля в meta
 template <front_or_ir_type>
 struct allow_additional_field {
   [[nodiscard]] static bool allow(std::string_view name) noexcept {
@@ -80,14 +82,22 @@ struct from_json_value<T> {
       else
         return parse_error(" object expected, got `{}`", e2str(v.kind()));
     }
-    for (auto&& [key, _] : *obj) {
+    for (auto&& [key, val] : *obj) {
       std::string_view k(key);
-      if (!noexport::svarg_object_has_field<T>(k) && !allow_additional_field<T>{}.allow(k))
-        return parse_error(" not allowed field `{}` in type `{}`", k, type_name<T>());
+      if (!noexport::svarg_object_has_field<T>(k)) {
+        if (!allow_additional_field<T>{}.allow(k))
+          return parse_error(" not allowed field `{}` in type `{}`", k, type_name<T>());
+        else {
+          if constexpr (allows_meta_fields<std::decay_t<T>>) {
+            if (is_meta_key(std::string_view(key)))
+              out.SVARG_META_KEYFIELD[std::string(key)] = Any(val);
+          }
+        }
+      }
     }
     error_code ec = APPLY_INDEXES(boost::pfr::tuple_size_v<T>) {
       error_code ec;
-      (noexport::parse_field<T, Is>(*obj, out, ec) && ...);
+      (noexport::parse_frontorir_field<T, Is>(*obj, out, ec) && ...);
       return ec;
     };
     if (ec)

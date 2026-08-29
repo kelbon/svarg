@@ -156,4 +156,22 @@ template <status_range_e R>
     static_assert(false, "invalid status range value");
 }
 
+[[nodiscard]] inline bool is_meta_key(std::string_view key) noexcept {
+  return key.starts_with("x-");
+}
+
+// все ключи должны быть is_meta_key(key)
+// хранилище разных вспомогательных тегов, которые фронтенд хочет прокинуть бекенду
+// н-р deprecated или формат query и тд
+using meta_t = string_map<Any>;
+
+// только во фронтенде. Чтобы не ошибиться с написанием
+#define SVARG_META_KEYFIELD _keyfield_metainfo
+#define SVARG_ALLOW_META ::svarg::meta_t SVARG_META_KEYFIELD
+
+template <typename T>
+constexpr bool allows_meta_fields = requires(T& v) {
+  { v.SVARG_META_KEYFIELD } -> std::convertible_to<const meta_t&>;
+};
+
 }  // namespace svarg
