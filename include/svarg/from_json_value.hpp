@@ -77,7 +77,7 @@ struct from_json_value<T> {
       safe_write(j.get_uint64(), v);
       return {};
     }
-    throw svarg::parse_error(" expected int64 | uint64, got {}", e2str(j.kind()));
+    return svarg::parse_error(" expected int64 | uint64, got {}", e2str(j.kind()));
   }
 };
 
