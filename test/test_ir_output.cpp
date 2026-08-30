@@ -29,7 +29,6 @@ std::unordered_set<std::string> a_jsonptrs{
     "/components/schemas/OrderStatusEvent/properties/status",
     "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId",
     "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity",
-    "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/callbackUrl",
     "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId",
     "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event",
     "/components/parameters/LimitParam/schema",
@@ -128,6 +127,8 @@ std::unordered_set<std::string> a_jsonptrs_optimized{
     "/components/schemas/OrderStatusEvent/properties/status",
     "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event",
     "/paths/~1users~1{userId}/get/parameters/0/schema/items",
+    "/components/schemas/User/properties/id",
+    "/paths/~1users~1{userId}/parameters/0/schema",
 };
 
 std::unordered_set<std::string> b_jsonptrs_optimized{
@@ -161,6 +162,8 @@ std::unordered_set<std::string> a_jsonptrs_optimized2{
     "/paths/~1users~1{userId}/get/parameters/0/schema/items",
     "/components/schemas/OrderStatusEvent/properties/status",
     "/components/schemas/OrderStatusEvent",
+    "/components/schemas/User/properties/id",
+    "/paths/~1users~1{userId}/parameters/0/schema",
 };
 
 std::unordered_set<std::string> a_jsonptrs_optimized_no_exception2{
@@ -171,6 +174,8 @@ std::unordered_set<std::string> a_jsonptrs_optimized_no_exception2{
      "application~1json/schema"),
     "/components/requestBodies/OrderCreate/content/application~1json/schema",
     "/paths/~1users~1{userId}/get/parameters/0/schema/items",
+    "/paths/~1users~1{userId}/parameters/0/schema",
+    "/components/schemas/User/properties/id",
 };
 
 std::unordered_set<std::string> b_jsonptrs_optimized2_no_exception{

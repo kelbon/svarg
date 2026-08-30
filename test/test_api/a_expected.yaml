@@ -54,7 +54,8 @@
             "name": "favoriteItem"
             "required": false
           - "type":
-              "spec": "@string@"
+              "spec": "api-a"
+              "jsonptr": "/components/schemas/User/properties/id"
             "name": "id"
             "required": true
           - "type":
@@ -69,6 +70,12 @@
             "required": false
         "additional_properties":
           "spec": "@never@"
+  - "spec": "api-a"
+    "jsonptr": "/components/schemas/User/properties/id"
+    "type":
+      "fundamental": "string"
+    "meta":
+      "x-format-hint": "uuid"
   - "spec": "api-a"
     "jsonptr": "/components/schemas/UserPatch"
     "name": "UserPatch"
@@ -105,6 +112,12 @@
           - "profile"
           - "settings"
   - "spec": "api-a"
+    "jsonptr": "/paths/~1users~1{userId}/parameters/0/schema"
+    "type":
+      "fundamental": "string"
+    "meta":
+      "x-format-hint": "uuid"
+  - "spec": "api-a"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema"
     "type":
       "object":
@@ -120,6 +133,8 @@
             "required": false
         "additional_properties":
           "spec": "@never@"
+    "meta":
+      "x-format-hint": "int64"
   - "spec": "api-a"
     "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event"
     "type":
@@ -241,7 +256,8 @@
       - "location": "path"
         "name": "userId"
         "schema":
-          "spec": "@string@"
+          "spec": "api-a"
+          "jsonptr": "/paths/~1users~1{userId}/parameters/0/schema"
         "required": true
       - "location": "query"
         "name": "expand"

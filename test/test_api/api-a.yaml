@@ -15,7 +15,6 @@ paths:
         schema:
           type: string
           format: uuid
-          minLength: 1
     get:
       x-svarg-test-field: abc
       operationId: getUser
@@ -87,6 +86,7 @@ webhooks:
           application/json:
             schema:
               type: object
+              format: int64
               properties:
                 orderId:
                   type: string
@@ -160,7 +160,6 @@ components:
                 minimum: 1
               callbackUrl:
                 type: string
-                format: uri
 
   parameters:
     LimitParam:
@@ -175,7 +174,6 @@ components:
     X-Request-Id:
       schema:
         type: string
-        format: uuid
         minLength: 1
 
   examples:

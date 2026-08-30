@@ -351,13 +351,19 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     res.name = *name;
   else
     res.name = std::nullopt;
-  if (!schema.SVARG_META_KEYFIELD.empty()) {
-    res.meta = schema.SVARG_META_KEYFIELD;
-    if (!res.name && res.meta->contains(x_name_hint))
-      res.name = from_json<std::string>((*res.meta)[std::string(x_name_hint)].value);
-    res.meta->erase(x_name_hint);
-    if (res.meta->empty())
-      res.meta.reset();
+  // META
+  {
+    auto _ = guard_array(res.meta);
+    if (!schema.SVARG_META_KEYFIELD.empty()) {
+      res.meta = schema.SVARG_META_KEYFIELD;
+      if (!res.name && res.meta->contains(x_name_hint))
+        res.name = from_json<std::string>((*res.meta)[std::string(x_name_hint)].value);
+      res.meta->erase(x_name_hint);
+      if (res.meta->empty())
+        res.meta.reset();
+    }
+    if (schema.format)
+      (*res.meta)[std::string(x_format_hint)] = Any(to_json(*schema.format));
   }
   if (auto it = result_ir.schemas->find(res); it != result_ir.schemas->end())
     return schema_or_ref{*it};

@@ -19,8 +19,11 @@ constexpr inline std::string_view x_auth_scopes_openIdConnect = "x-authScopesOpe
 // string. Выставляется для операции с типом авторизации "openIdConnect"
 constexpr inline std::string_view x_openid_connect_url = "x-openIdConnectUrl";
 
-// добавляет нормальное имя инлайн структуре вместо сгенерированного. Значением должна быть строка
+// добавляет нормальное имя инлайн структуре вместо сгенерированного. Значение строка
 // игнорируется у именованных структур
 constexpr inline std::string_view x_name_hint = "x-name-hint";
+
+// передаётся из поля format схемы в meta IR схемы. Значение строка
+constexpr inline std::string_view x_format_hint = "x-format-hint";
 
 }  // namespace svarg

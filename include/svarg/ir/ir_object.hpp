@@ -15,6 +15,7 @@
 #include "svarg/utils/from_chars.hpp"
 #include "svarg/utils/matcher.hpp"
 #include "svarg/utils/parse_frontend_or_ir_type.hpp"
+#include "svarg/x_meta_keys.hpp"
 
 namespace svarg::ir {
 
@@ -402,7 +403,8 @@ struct schema {
   }
 
   bool is_trivial() const noexcept {
-    return !has_requirements() && std::holds_alternative<fundamental_e>(type.data);
+    return !has_requirements() && std::holds_alternative<fundamental_e>(type.data) &&
+           (!meta || !meta->contains(x_format_hint));
   }
 
   bool operator==(const schema& x) const noexcept {

@@ -10,7 +10,8 @@
             "name": "favoriteItem"
             "required": false
           - "type":
-              "spec": "@string@"
+              "spec": "api-a"
+              "jsonptr": "/components/schemas/User/properties/id"
             "name": "id"
             "required": true
           - "type":
@@ -25,6 +26,12 @@
             "required": false
         "additional_properties":
           "spec": "@never@"
+  - "spec": "api-a"
+    "jsonptr": "/components/schemas/User/properties/id"
+    "type":
+      "fundamental": "string"
+    "meta":
+      "x-format-hint": "uuid"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Error"
     "name": "Error"
