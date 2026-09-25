@@ -488,7 +488,7 @@ template <content_type_e C, typename T>
 [[nodiscard]] error_code parse_from(std::string_view data, T& out) {
   if constexpr (C == content_type_e::application_json) {
     boost::json::value v = boost::json::parse(data);
-    return from_json(v, out);
+    return try_from_json(v, out);
   } else {
     // starts_with_ci_prefix_lowered для тех у которых могут быть параметры
     static_assert(false, "unsupported content type");

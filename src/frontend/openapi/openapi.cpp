@@ -8,7 +8,7 @@ void postprocess_openapi_object(openapi_object& obj);
 
 openapi_object parse_spec(const boost::json::value& v, const openapi_options& options) {
   openapi_object obj;
-  from_json(v, obj).rethrow_if_failed();
+  try_from_json(v, obj).rethrow_if_failed();
   postprocess_openapi_object(obj);
   return obj;
 }

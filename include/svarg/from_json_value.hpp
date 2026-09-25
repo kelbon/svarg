@@ -28,14 +28,9 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] error_code from_json(const boost::json::value& j, T& out) {
-  return try_from_json(j, out);
-}
-
-template <typename T>
 T from_json(const boost::json::value& j) {
   T value;
-  from_json(j, value).rethrow_if_failed();
+  try_from_json(j, value).rethrow_if_failed();
   return value;
 }
 
