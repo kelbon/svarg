@@ -8,6 +8,8 @@ struct test_inner {
   metel::box<test_inner> next;
 
   bool operator==(const test_inner&) const = default;
+
+  YAP_OBJECT;
 };
 
 struct test_struct {
@@ -17,6 +19,8 @@ struct test_struct {
   std::vector<std::vector<test_struct>> inners;
 
   bool operator==(const test_struct&) const = default;
+
+  YAP_OBJECT;
 };
 
 template <typename T, typename ParseAs = T>
@@ -24,8 +28,8 @@ template <typename T, typename ParseAs = T>
   yap::binary_t bytes;
   yap::to_binary(x, bytes);
   ParseAs v;
-  std::span after = yap::from_binary(bytes, v);
-  return after.empty() && v == x;
+  std::span unparsed = yap::from_binary(bytes, v);
+  return unparsed.empty() && v == x;
 }
 
 TEST("to/from binary") {
@@ -51,6 +55,7 @@ TEST("to/from binary") {
   REQUIRE(check_good(std::vector<yap::int_t>{1, 2, 3, 4, 5}));
   REQUIRE(check_good(std::vector<std::string>{}));
   REQUIRE(check_good(std::vector<std::string>{"a", "bb", "ccc"}));
+  REQUIRE(check_good(std::vector<std::vector<yap::int_t>>{{}}));
   REQUIRE(check_good(std::vector<std::vector<yap::int_t>>{{1, 2}, {}, {3}}));
 
   // --- test_inner: без рекурсии ---
@@ -172,6 +177,8 @@ struct test_struct_v2 {
   bool operator==(const test_struct& t) const {
     return field == t.field && b == t.b && inners == t.inners;
   }
+
+  YAP_OBJECT;
 };
 
 // эмулирует ситуацию, когда добавили новое опциональное поле
@@ -185,6 +192,8 @@ struct test_struct_v3 {
   bool operator==(const test_struct& t) const {
     return field == t.field && b == t.b && strings == t.strings && inners == t.inners;
   }
+
+  YAP_OBJECT;
 };
 
 // эмулирует ситуацию, когда обязательное поле сделали опциональным
@@ -197,6 +206,8 @@ struct test_struct_v4 {
   bool operator==(const test_struct& t) const {
     return field == t.field && b == t.b && strings == t.strings && inners == t.inners;
   }
+
+  YAP_OBJECT;
 };
 
 TEST("backward compatibility") {
@@ -284,6 +295,123 @@ TEST("backward compatibility") {
 
   // REQUIRE((check_good<bool, yap::int_t>(false)));
   // REQUIRE((check_good<bool, yap::int_t>(true)));
+}
+
+struct empty_obj {
+  bool operator==(const empty_obj&) const = default;
+
+  YAP_OBJECT;
+};
+struct maybe_empty_obj {
+  std::optional<yap::int_t> i;
+
+  bool operator==(const maybe_empty_obj&) const = default;
+
+  YAP_OBJECT;
+};
+
+TEST("empty parsing") {
+  REQUIRE(check_good(empty_obj{}));
+  REQUIRE(check_good(maybe_empty_obj{}));
+}
+
+struct Location {
+  YAP_OBJECT;
+  YAP_INDEXED_KEYS;
+  double lat;
+  double lon;
+
+  bool operator==(const Location&) const = default;
+};
+
+struct Calibration {
+  YAP_OBJECT;
+  YAP_INDEXED_KEYS;
+
+  double offset;
+  yap::int_t factor;
+
+  bool operator==(const Calibration&) const = default;
+};
+
+struct Sensor {
+  YAP_OBJECT;
+  YAP_INDEXED_KEYS;
+
+  yap::uint_t id;
+  std::string name;
+  bool active;
+  std::vector<double> readings;
+  Location location;
+  std::vector<yap::huffman_encoded_string> tags;
+  std::vector<Calibration> calibrations;
+
+  bool operator==(const Sensor&) const = default;
+};
+
+struct Sensor_v2 {
+  YAP_OBJECT;
+  YAP_INDEXED_KEYS;
+
+  yap::uint_t id;
+  std::string name;
+  bool active;
+  std::vector<double> readings;
+  Location location;
+  std::vector<yap::huffman_encoded_string> tags;
+  yap::skipped_field<int> fdsfdsf;
+  // удалено последнее поле calibrations
+
+  bool operator==(const Sensor& other) const {
+    return id == other.id && name == other.name && readings == other.readings && location == other.location &&
+           tags == other.tags;
+  }
+};
+
+constexpr std::string_view json_equivalent =
+    R"({"id":42,"name":"sensor","active":true,"readings":[1.5,2.75,-0.3],"location":{"lat":52.37,"lon":4.895},"tags":["temp","outdoor"],"calibrations":[{"offset":0.1,"factor":2},{"offset":-0.05,"factor":-3}]})";
+
+TEST("compare with json") {
+  Sensor sensor = {
+      .id = 42,
+      .name = "sensor",
+      .active = true,
+      .readings = {1.5, 2.75, -0.3},
+      .location = {.lat = 52.37, .lon = 4.895},
+      .tags = {"temp", "outdoor"},
+      .calibrations =
+          {
+              {.offset = 0.1, .factor = 2},
+              {.offset = -0.05, .factor = -3},
+          },
+  };
+
+  yap::binary_t bytes = yap::to_binary(sensor);
+  static_assert(json_equivalent.size() == 201);
+  REQUIRE(bytes.size() == 83);  // 158 с именами полей
+  Sensor res;
+  yap::from_binary(bytes, res);
+  REQUIRE(res == sensor);
+  // декодирование когда в байтах индекс больше, чем полей есть в типе (последнее поле удалено)
+  Sensor_v2 res2;
+  yap::from_binary(bytes, res2);
+  REQUIRE(res2 == sensor);
+}
+
+struct longstr {
+  yap::huffman_encoded_string longstring;
+  YAP_OBJECT;
+  YAP_INDEXED_KEYS;
+};
+
+TEST("huffman strings") {
+  longstr l;
+  l.longstring = json_equivalent;
+  auto bytes = yap::to_binary(l);
+  REQUIRE(bytes.size() == 183);
+  longstr res;
+  yap::from_binary(bytes, res);
+  REQUIRE(res.longstring == l.longstring);
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

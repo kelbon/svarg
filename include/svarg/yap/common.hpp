@@ -29,8 +29,6 @@
 Для структурных типов нужна совместимость полей, интуитивные правила
 
 Изменение имени поля эквивалентно удалению + добавлению
-
-  TODO тест на слишком большой индекс
 */
 
 namespace yap {
@@ -41,40 +39,87 @@ using hpack::In;
 using hpack::Out;
 using int_t = int64_t;
 using uint_t = uint64_t;
-using svarg::error_code;
 
 using omo::sax_token;
 using omo::sax_token_value;
 using tokens_consumer = omo::tokens_consumer;
 
 template <typename T>
-constexpr inline bool is_optional_field_type = requires(const T& field) { field.has_value(); };
-
-// TODO indexed fields
-
-// Note: добавлять больше нельзя, должно вмещаться в 3 бита (8 штук)
-enum struct type_e : byte_t {
-  END_OBJECT = 0b0000'0000,  // в конце объекта (после всех KEY+VALUE) идёт это. Если просто стоит END_OBJECT
-                             // без предварительного KEY это означает пустой объект
-  BOOL = 0b0010'0000,        // одним байтом, 3 бита тип и дальше нижний бит 0 или 1, остальные 0
-  NONNEGATIVE_INT = 0b0100'0000,  // 3 бита тип, далее значение хпак кодированием (5 битным, чтобы первые 3
-                                  // бита не были затронуты)
-  NEGATIVE_INT = 0b0110'0000,     // также как NONNEGATIVE_INT, но кодируется -х
-  FLOAT = 0b1000'0000,   // 3 бита тип, длина в том же байте, дальше строчным представлением to/from chars
-  STRING = 0b1010'0000,  // 3 бита тип, дальше длина в том же байте хпаком, потом значение
-  ARRAY = 0b1100'0000,   // 3 бита тип, дальше количество элементов в том же байте хпаком, потом элементы
-  KEY = 0b1110'0000,  // 3 бита тип, KEY означаает начало ключ-значения. Сначала идёт ключ (также как строка)
-  // Набор последовательных KEY-VALUE по сути и является объектом. KEY невалиден без последующего значения
-
-  // НИЧЕГО НЕ ДОБАВЛЯТЬ (все 8 штук под 3 бита использованы)
+constexpr inline bool is_optional_field_type = requires(const T& field) {
+  field.has_value();
+  *field;
 };
 
-constexpr type_e get_type(byte_t b) noexcept {
-  return type_e(b & 0b1110'0000);
-}
+template <typename T>
+constexpr inline bool is_indexed_keys = requires { typename T::yap_indexed_keys_tag; };
 
-// сколько бит в первом байте hpack кодированного инта доступно для чтения
-constexpr inline int INT_WIDTH = 5;
+template <typename T>
+concept yap_object = requires { typename T::yap_object_tag; };
+
+// вместо имён полей записываются индексы, что уменьшает размер,
+// но порядок полей может сломать обратную совместимость
+#define YAP_INDEXED_KEYS using yap_indexed_keys_tag = int
+
+#define YAP_OBJECT using yap_object_tag = int
+
+// тег для записи строки в более коротком виде ценой скорости енкода/декода
+struct huffman_encoded_string {
+  std::string str;
+
+  huffman_encoded_string() = default;
+  huffman_encoded_string(std::string&& s) noexcept : str(std::move(s)) {
+  }
+  huffman_encoded_string(std::string_view s) : str(s) {
+  }
+  huffman_encoded_string(const char* s) : str(s) {
+  }
+
+  auto operator<=>(const huffman_encoded_string&) const = default;
+};
+
+// поле с этим типом игнорируется в yap::to_binary/from_binary
+// Note: если используются индексы вместо имён полей, то такое поле всё равно будет влиять на индекс полей за
+// ним
+template <typename T>
+struct skipped_field {
+  T value = {};
+
+  auto operator<=>(const skipped_field&) const = default;
+};
+
+template <typename>
+struct is_skipped_field : std::false_type {};
+template <typename T>
+struct is_skipped_field<skipped_field<T>> : std::true_type {};
+
+// первые два бита
+enum struct yap01bits_e : byte_t {
+  KEY = 0b11'00'0000,        // 2 бита тип, затем также как STRING (имя поля), начало пары key-value
+  KEY_INDEX = 0b10'00'0000,  // 2 бита тип, затем индекс поля, начало пары key-value
+  STRING = 0b01'00'0000,     // 2 бита тип, затем 6 битный hpack инт размер строки, затем содержимое строки
+  LOOK_NEXT2 = 0b00'00'0000  // означает проверить следующие 2 бита
+};
+
+// третий и четвёртый бит
+enum struct yap23bits_e : byte_t {
+  OBJECT_END = 0b00'00'0000,
+  // следующий ещё 1 бит (пятый) значит 0 - END_ARRAY, 1 - BEGIN_ARRAY
+  ARRAY_BEGIN_OR_END = 0b00'01'0000,
+  ARRAY_BEGIN = 0b00'01'1000,
+  ARRAY_END = 0b00'01'0000,
+  // началом объекта является KEY. Просто один OBJECT_END означает пустой объект
+  NONNEGATIVE_INT = 0b00'10'0000,
+  NEGATIVE_INT = 0b00'11'0000,
+
+  // double кодируется как строка, bool кодируется как NONNEGATIVE_INT (0 или 1)
+};
+
+constexpr yap01bits_e get01bits(byte_t b) noexcept {
+  return yap01bits_e(b & 0b1100'0000);
+}
+constexpr yap23bits_e get23bits(byte_t b) noexcept {
+  return yap23bits_e(b & 0b0011'0000);
+}
 
 inline tokens_consumer ignore_sax_value(sax_token& tok, dd::with_stack_resource r) {
   switch (tok.kind()) {

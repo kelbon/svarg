@@ -12,31 +12,31 @@ namespace yap {
 
 namespace noexport {
 
-[[nodiscard]] auto write_type(type_e t, Out auto _out) {
+[[nodiscard]] auto write_type(byte_t t, Out auto _out) {
   auto out = hpack::noexport::adapt_output_iterator(_out);
-  *out = static_cast<byte_t>(t);
+  *out = t;
   // без ++, чтобы записывать дальше в тот же байт
   return out;
 }
 
-// Не трогает первые 3 бита
+// Не трогает первые `int_width` бит
 template <Out It, int..., typename UINT>
-[[nodiscard]] It write_uint(UINT u, It out) {
+[[nodiscard]] It write_uint(UINT u, int int_width, It out) {
   static_assert(std::is_same_v<UINT, uint_t>);
-  return hpack::encode_integer<uint_t>(u, INT_WIDTH, out);
+  return hpack::encode_integer<uint_t>(u, int_width, out);
 }
 
 template <int..., typename UINT>
-[[nodiscard]] auto write_type_and_uint(type_e t, UINT sz, Out auto _out) {
+[[nodiscard]] auto write_type_and_uint(byte_t t, UINT sz, int int_width, Out auto _out) {
   static_assert(std::is_same_v<UINT, uint_t>);
   auto out = hpack::noexport::adapt_output_iterator(_out);
-  *out = static_cast<byte_t>(t);
-  return write_uint(sz, out);
+  *out = t;
+  return write_uint(sz, int_width, out);
 }
 
 template <Out It>
-[[nodiscard]] It write_typed_string(type_e t, std::string_view str, It _out) {
-  auto out = noexport::write_type_and_uint(t, static_cast<uint_t>(str.size()), _out);
+[[nodiscard]] It write_typed_string(yap01bits_e t, std::string_view str, It _out) {
+  auto out = noexport::write_type_and_uint(byte_t(t), static_cast<uint_t>(str.size()), /*int_width=*/6, _out);
   out = hpack::noexport::copy_n_fast(str.data(), str.size(), out);
   return hpack::noexport::unadapt<It>(out);
 }
@@ -68,22 +68,11 @@ template <typename T>
 
 // специализации
 
-template <typename E>
-  requires(std::is_enum_v<E>)
-struct to_binary_repr<E> {
-  template <Out It>
-  It operator()(E v, It out) const {
-    return to_binary(e2str(v), out);
-  }
-};
-
 template <>
 struct to_binary_repr<bool> {
   template <Out It>
   It operator()(bool v, It out) const {
-    *out = byte_t(type_e::BOOL) | (v ? 1 : 0);
-    ++out;
-    return out;
+    return to_binary(v ? uint_t(1) : uint_t(0), out);
   }
 };
 
@@ -93,7 +82,8 @@ template <>
 struct to_binary_repr<uint_t> {
   template <Out It>
   It operator()(uint_t v, It _out) const {
-    auto out = noexport::write_type_and_uint(type_e::NONNEGATIVE_INT, v, _out);
+    auto out = noexport::write_type_and_uint(
+        byte_t(yap01bits_e::LOOK_NEXT2) | byte_t(yap23bits_e::NONNEGATIVE_INT), v, /*int_width=*/4, _out);
     return hpack::noexport::unadapt<It>(out);
   }
 };
@@ -104,9 +94,10 @@ struct to_binary_repr<int_t> {
   It operator()(int_t v, It _out) const {
     if (v >= 0)
       return to_binary(uint_t(v), _out);
-    auto out = noexport::write_type(type_e::NEGATIVE_INT, _out);
+    auto out =
+        noexport::write_type(byte_t(yap01bits_e::LOOK_NEXT2) | byte_t(yap23bits_e::NEGATIVE_INT), _out);
     assert(v != std::numeric_limits<int_t>::min());  // overflow
-    out = noexport::write_uint(uint_t(-v), out);
+    out = noexport::write_uint(uint_t(-v), /*int_width=*/4, out);
     return hpack::noexport::unadapt<It>(out);
   }
 };
@@ -115,7 +106,7 @@ template <>
 struct to_binary_repr<std::string_view> {
   template <Out It>
   It operator()(std::string_view str, It out) const {
-    return noexport::write_typed_string(type_e::STRING, str, out);
+    return noexport::write_typed_string(yap01bits_e::STRING, str, out);
   }
 };
 
@@ -126,8 +117,17 @@ struct to_binary_repr<std::string> {
     return to_binary(std::string_view(str), out);
   }
 };
-// TODO при декоде нужно смотреть на совместимость типов, т.е. декожу, там double, но конверт нужен в инт -
-// должно сработать вероятно и уж тем более наоборот
+
+template <>
+struct to_binary_repr<huffman_encoded_string> {
+  template <Out It>
+  It operator()(const huffman_encoded_string& str, It out) const {
+    std::string s;
+    hpack::encode_string_huffman(str.str, std::back_inserter(s));
+    return to_binary(std::string_view(s), out);
+  }
+};
+
 template <>
 struct to_binary_repr<double> {
   template <Out It>
@@ -136,21 +136,24 @@ struct to_binary_repr<double> {
     auto [ptr, ec] = std::to_chars(tmp, tmp + 64, v);
     if (ec != std::errc{}) [[unlikely]]
       throw svarg::serialize_error("something bad happen, errc={}", std::to_underlying(ec));
-    return noexport::write_typed_string(type_e::FLOAT, std::string_view(+tmp, ptr), out);
+    return to_binary(std::string_view(+tmp, ptr), out);
   }
 };
 
-template <std::ranges::sized_range R>
+template <std::ranges::range R>
 struct to_binary_repr<R> {
   template <Out It>
   It operator()(const R& arr, It _out) const {
-    auto out = noexport::write_type_and_uint(type_e::ARRAY, static_cast<uint_t>(arr.size()), _out);
+    auto out = hpack::noexport::adapt_output_iterator(_out);
+    *out = byte_t(yap23bits_e::ARRAY_BEGIN);
+    ++out;
     for (const auto& elem : arr)
       out = to_binary(elem, out);
+    *out = byte_t(yap23bits_e::ARRAY_END);
+    ++out;
     return hpack::noexport::unadapt<It>(out);
   }
 };
-// TODO какой-то skipfield<T> для пропуска при сериализации и десериализации
 
 // box нужен для поддержки рекурсивных типов, там где optional сломает компиляцию
 // а также для полей которые очень редко реально хранятся, но занимают много места
@@ -178,35 +181,44 @@ namespace noexport {
 
 template <svarg::aggregate T, size_t I, Out It>
 [[nodiscard]] It yap_serialize_field(const T& in, It out) {
-  constexpr std::string_view name = boost::pfr::get_name<I, T>();
+  auto write_key = [](It out) {
+    constexpr std::string_view name = boost::pfr::get_name<I, T>();
+    if constexpr (is_indexed_keys<T>) {
+      out = noexport::write_type(byte_t(yap01bits_e::KEY_INDEX), out);
+      out = noexport::write_uint(uint_t(I), /*int_width=*/6, out);
+    } else {
+      out = noexport::write_typed_string(yap01bits_e::KEY, name, out);
+    }
+  };
 
   const auto& field = boost::pfr::get<I>(in);
-
   if constexpr (is_optional_field_type<boost::pfr::tuple_element_t<I, T>>) {
     if (!field.has_value())
       return out;  // empty optional feild
-    out = noexport::write_typed_string(type_e::KEY, name, out);
+    write_key(out);
     return to_binary(*field, out);
   } else {
-    out = noexport::write_typed_string(type_e::KEY, name, out);
+    write_key(out);
     return to_binary(field, out);
   }
 }
 
 }  // namespace noexport
 
-template <svarg::aggregate T>
+template <yap_object T>
 struct to_binary_repr<T> {
   static_assert(std::is_same_v<T, std::decay_t<T>>);
 
   template <Out It>
-  It operator()(const T& in, It out) const {
+  It operator()(const T& in, It _out) const {
+    auto out = hpack::noexport::adapt_output_iterator(_out);
     FOR_EACH_INDEX(boost::pfr::tuple_size_v<T>) {
-      out = noexport::yap_serialize_field<T, I>(in, out);
+      if constexpr (!is_skipped_field<boost::pfr::tuple_element_t<I, T>>::value)
+        out = noexport::yap_serialize_field<T, I>(in, out);
     };
-    *out = std::to_underlying(type_e::END_OBJECT);
+    *out = std::to_underlying(yap23bits_e::OBJECT_END);
     ++out;
-    return out;
+    return hpack::noexport::unadapt<It>(out);
   }
 };
 
