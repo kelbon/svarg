@@ -78,7 +78,7 @@ struct hash<::svarg::cxx_support::dest_and_src> {
 namespace svarg::cxx_support {
 
 // создаёт ssl контекст для клиента
-using make_ssl_fn = hidi::fn<hidi::client_ssl_context_ptr(const dest_and_src&)>;
+using make_ssl_fn = hidi::copyable_fn<hidi::client_ssl_context_ptr(const dest_and_src&)>;
 
 make_ssl_fn default_make_ssl();
 

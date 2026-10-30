@@ -1,5 +1,10 @@
 include(cmake/get_cpm.cmake)
 
+# см. то же самое в hidi
+if (WIN32)
+  set(BOOST_CONTEXT_IMPLEMENTATION winfib CACHE STRING "Boost.Context implementation (fcontext, ucontext, winfib)")
+endif()
+
 set(BOOST_INCLUDE_LIBRARIES system asio pfr json iostreams process stacktrace)
 CPMAddPackage(
   NAME BOOST
@@ -35,14 +40,14 @@ include(${CCOZY_SOURCE_DIR}/ccozy_tools.cmake)
 CPMAddPackage(
   NAME KELCORO
   GITHUB_REPOSITORY kelbon/kelcoro
-  GIT_TAG v1.4.3
+  GIT_TAG v1.4.7
 )
 
 # move_only_function, function ref etc (anyanylib)
 CPMAddPackage(
   NAME ANYANY
   GITHUB_REPOSITORY kelbon/AnyAny
-  GIT_TAG v1.2.1
+  GIT_TAG v1.3.0
 )
 
 # on_scope_exit / on_scope_failure (zallib)
@@ -62,7 +67,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME HIDI
   GIT_REPOSITORY https://github.com/kelbon/hidi
-  GIT_TAG v0.11.0
+  GIT_TAG v0.13.3
   OPTIONS "HIDI_USE_CPM ON"
 )
 
@@ -83,7 +88,7 @@ if (svarg_ENABLE_TESTING)
   CPMAddPackage(
     NAME MOKO3
     GITHUB_REPOSITORY kelbon/moko3
-    GIT_TAG v0.9.4
+    GIT_TAG v0.10.2
   )
 endif()
 
