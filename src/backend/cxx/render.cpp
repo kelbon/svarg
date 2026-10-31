@@ -57,21 +57,27 @@ static std::string make_cxx_ident(std::string_view str, const render_options& op
   return options.simple_cxx_identifiers ? to_cxx_ident_simple(str) : to_cxx_ident(str);
 }
 
-static std::string make_namespace(std::string_view spec, json_pointer jp, const render_options& options) {
+std::string renderer::make_namespace(std::string_view spec, json_pointer jp) const {
   if (jp.segments_count() > 0)
     jp.rm_last_segment();
-  std::string ns = options.simple_cxx_identifiers ? jsonptr2namespace_simple(jp) : jsonptr2namespace(jp);
-  if (ns.empty())
-    return make_cxx_ident(spec, options);
-  return std::format("{}::{}", make_cxx_ident(spec, options), ns);
+  std::string ns = make_cxx_ident(spec, options);
+  std::string prefix;
+  for (std::string_view seg : jp.segments()) {
+    prefix += '/';
+    prefix += seg;
+    ns += "::";
+    std::string unescaped = jp_unescape_segment(seg);
+    ns += options.simple_cxx_identifiers ? to_cxx_ident_simple(unescaped) : to_cxx_ident(unescaped);
+    // по этому пути лежит схема (тип), её подсхемы - в неймспейсе с суффиксом
+    if (schema_locations.contains(std::pair(std::string(spec), prefix)))
+      ns += options.inline_scope_suffix;
+  }
+  return ns;
 }
 
-static std::string make_namespace(std::string_view spec, const json_pointer& jp,
-                                  std::string_view relative_spec, const json_pointer& relative,
-                                  const render_options& options) {
-  // обращение relative_spec + relative -> spec + jp
-  return namespace_relative(make_namespace(relative_spec, relative, options),
-                            make_namespace(spec, jp, options));
+std::string renderer::make_namespace(std::string_view spec, const json_pointer& jp,
+                                     std::string_view relative_spec, const json_pointer& relative) const {
+  return namespace_relative(make_namespace(relative_spec, relative), make_namespace(spec, jp));
 }
 
 static std::string make_file_path(const ir::schema_ref& ref, const render_options& options) {
@@ -95,11 +101,16 @@ static std::string make_file_path(const ir::operation& ref, const render_options
   return path;
 }
 
-static std::string_view get_schema_name(const ir::schema& s, const render_options& options) {
-  return s.name ? *s.name : inline_schema_name;
+// у инлайн-схемы имя - последний сегмент её json pointer (свойство, индекс, "schema"...)
+static std::string get_schema_name(const ir::schema_ref& s, const render_options& options) {
+  if (s.name)
+    return std::string(*s.name);
+  if (s.jsonptr->segments_count() == 0)
+    return std::string(inline_schema_name);
+  return make_cxx_ident(s.jsonptr->last_segment(), options);  // last_segment уже без экранирования
 }
-static std::string_view get_schema_name(const ir::schema_ref& s, const render_options& options) {
-  return s.name ? *s.name : inline_schema_name;
+static std::string get_schema_name(const ir::schema& s, const render_options& options) {
+  return get_schema_name(s.ref(), options);
 }
 
 namespace detail {
@@ -385,8 +396,8 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   }
   // всё остальное на выводе это полноценные struct
 
-  std::string ns = make_namespace(t.spec, t.jsonptr, relspec, relative, options);
-  std::string_view name = get_schema_name(s, options);
+  std::string ns = make_namespace(t.spec, t.jsonptr, relspec, relative);
+  std::string name = get_schema_name(s, options);
   std::string result = ns.empty() ? std::string(name) : std::format("{}::{}", ns, name);
   return {.typeref = std::move(result), .is_alias = false};
 }
@@ -689,7 +700,7 @@ render_result renderer::render_schema(const ir::schema& s) const {
     deps = dealias(std::move(deps));
     for (auto& ref : deps)
       file_begin += std::format("#include \"{}\"\n", make_file_path(ref, options));
-    file_begin += std::format("\nnamespace {} {{\n\n", make_namespace(s.spec, s.jsonptr, options));
+    file_begin += std::format("\nnamespace {} {{\n\n", make_namespace(s.spec, s.jsonptr));
   }
   std::string schema_render;
 
@@ -1088,7 +1099,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     }
   }
 
-  result += std::format("namespace {} {{\n\n", make_namespace(op.spec, paths, options));
+  result += std::format("namespace {} {{\n\n", make_namespace(op.spec, paths));
 
   // id
   // то, что нужно определить после операции
@@ -1365,7 +1376,7 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
   std::string result = "#pragma once\n\n#include \"common_types.hpp\"\n\n";
   for (auto* op : operations)
     result += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
-  result += std::format("namespace {} {{\n\n", make_namespace(spec, {}, options));
+  result += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
 
   // TODO x-name для сервера поддержать ?
   result += "struct server : hidi::h2server {\nusing hidi::h2server::h2server;\n\n";
@@ -1443,7 +1454,7 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
   for (auto* op : operations)
     res += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
 
-  res += std::format("namespace {} {{\n\n", make_namespace(spec, {}, options));
+  res += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
 
   // клиент отправляет на один адрес, поэтому операции группируются по набору серверов
   std::map<std::set<server_object>, std::vector<const ir::operation*>> groups;

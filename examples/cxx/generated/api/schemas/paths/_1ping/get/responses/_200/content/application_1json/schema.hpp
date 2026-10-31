@@ -5,7 +5,7 @@
 
 namespace api::paths::_ping::get::responses::_200::content::application_json {
 
-struct _schema {
+struct schema {
   static constexpr svarg::cxx_support::parse_tag_e parse_tag = svarg::cxx_support::parse_tag_e::object;
 
   std::string status;

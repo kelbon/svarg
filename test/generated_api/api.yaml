@@ -105,6 +105,10 @@ components:
           default: 3
         kind:
           $ref: "#/components/schemas/Kind"
+        mode:
+          type: string
+          enum: [fast, slow]
+          default: slow
         tags:
           type: array
           items:

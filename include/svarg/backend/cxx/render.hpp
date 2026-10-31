@@ -14,6 +14,9 @@ struct render_options {
   // не генерирует ничего, только возвращает список путей сгенерированных файлов
   // сортированных по именам + раширениям
   bool dry_run = false;
+  // инлайн-подсхемы типа `X` лежат в неймспейсе `X<suffix>`, например Item_::properties::kind,
+  // чтобы неймспейс не конфликтовал с самим типом
+  std::string inline_scope_suffix = "_";
 };
 
 struct schema_ref_result {
@@ -36,6 +39,9 @@ struct rendered_with_name {
 struct renderer {
   explicit renderer([[clang::lifetimebound]] const ir::ir_object& ir, render_options opts)
       : options(std::move(opts)), ir(ir) {
+    if (ir.schemas)
+      for (const ir::schema& s : *ir.schemas)
+        schema_locations.emplace(s.spec, std::string(s.jsonptr.escaped()));
   }
 
   // возвращает список сгенерированных путей без дубликатов, сортированный по пути,
@@ -46,6 +52,14 @@ struct renderer {
   render_options options;
   const ir::ir_object& ir;
   mutable std::vector<fs::path> generated;
+  // (spec, json pointer) всех схем: по ним определяется, какие сегменты неймспейса получают суффикс
+  std::set<std::pair<std::string, std::string>> schema_locations;
+
+  // неймспейс для того, что лежит по `jp` (без последнего сегмента - это имя)
+  std::string make_namespace(std::string_view spec, json_pointer jp) const;
+  // обращение из relative_spec + relative к spec + jp
+  std::string make_namespace(std::string_view spec, const json_pointer& jp, std::string_view relative_spec,
+                             const json_pointer& relative) const;
 
   const ir::schemas_t& schemas() const {
     return *ir.schemas;

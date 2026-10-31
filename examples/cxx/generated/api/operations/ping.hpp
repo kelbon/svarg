@@ -27,7 +27,7 @@ struct ping {
     static constexpr std::string_view body_content_type = "application/json";
     static constexpr bool body_is_required = true;
 
-    paths::_ping::get::responses::_200::content::application_json::_schema body;
+    paths::_ping::get::responses::_200::content::application_json::schema body;
   };
 
   static constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {

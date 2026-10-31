@@ -150,6 +150,8 @@ TEST("generated server") {
   REQUIRE(echoed.body.name == "n" && echoed.body.count == 3);
   REQUIRE(echoed.body.kind.get() == api::components::schemas::Kind::b);
   REQUIRE(echoed.body.tags == std::vector<std::string>{"x"});
+  // инлайн-подсхема свойства: Item_::properties::mode
+  REQUIRE(echoed.body.mode.get() == api::components::schemas::Item_::properties::mode::slow);
 }
 
 // middleware: считает запросы и передаёт дальше
