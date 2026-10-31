@@ -560,8 +560,8 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
 // ожидает что file относительно spec dir
 resolved_schema lowering_context::resolve_schema_ref(reference_object ref, fs::path file,
                                                      json_pointer refjp) {
-  auto [schema, refered_file, jp] =
-      resolve_ref_to<schema_object>(std::move(ref), std::move(file), std::move(refjp), *this);
+  auto x = resolve_ref_to<schema_object>(std::move(ref), std::move(file), std::move(refjp), *this);
+  auto& [schema, refered_file, jp] = x;
   // это не инлайн схема, так как мы смогли на неё сослаться, т.е. у неё было имя (хотя по коду подойдёт
   // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
   std::optional<std::string> name = try_get_name(jp);

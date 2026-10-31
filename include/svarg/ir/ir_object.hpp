@@ -136,6 +136,7 @@ inline schema_ref make_fundamental_ref(fundamental_e e) noexcept {
       case fundamental_e::never:
         return "@never@";
     }
+    metel::unreachable();
   };
   ref.spec = f2scope();
   return ref;

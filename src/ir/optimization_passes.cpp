@@ -108,6 +108,7 @@ size_t do_pass_rm_unused_schemas(ir_object& ir, const ir_options& options) {
         case remove_category_e::any:
           return true;
       }
+      metel::unreachable();
     }();
 
     if (!used.contains(it->ref()) && allowed_to_remove) {
