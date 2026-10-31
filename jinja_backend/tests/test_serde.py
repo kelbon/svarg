@@ -86,7 +86,7 @@ def _sample_objects():
         pytest.param(
             ObjectSchema(
                 fields=[ObjectFieldInfo(type=int_ref, name="count", required=True)],
-                additional_fields=string_ref,
+                additional_properties=string_ref,
             ),
             id="object_schema",
         ),
@@ -176,7 +176,7 @@ class TestOmitsNoneOptionalFields:
 
     def test_object_schema_without_additional_fields(self):
         d = ObjectSchema(fields=[]).to_dict()
-        assert "additional_fields" not in d
+        assert "additional_properties" not in d
 
     def test_operation_without_optional_collections(self):
         d = Operation(spec="api.yaml", path="/x", method="get").to_dict()

@@ -116,7 +116,7 @@ class ObjectFieldInfo(Serializable):
 @kw_only_dataclass
 class ObjectSchema(Serializable):
     fields: list[ObjectFieldInfo] = field(default_factory=list)
-    additional_fields: Optional["SchemaRef"] = None
+    additional_properties: Optional["SchemaRef"] = None
 
 
 @kw_only_dataclass

@@ -148,8 +148,8 @@ struct {{ name }} {
 {% for f in data.fields %}
     {{ f | cpp_field_type }} {{ f.name | cpp_ident }};
 {% endfor %}
-{%- if data.additional_fields is not none %}
-    {{ ns }}::additional_properties<{{ data.additional_fields | cpp_type_for_ref }}> additional_properties;
+{%- if data.additional_properties is not none %}
+    {{ ns }}::additional_properties<{{ data.additional_properties | cpp_type_for_ref }}> additional_properties;
 {% endif %}
 {{ required_typelist(schema) }}};
 
