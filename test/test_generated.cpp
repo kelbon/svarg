@@ -17,13 +17,13 @@ struct test_server : api::server {
                                            hidi::request_context) override {
     api::getItem::response_200 rsp;
     rsp.body._dATA = std::format("item{}", op.path.id._dATA);
-    co_return make_response(op, rsp);
+    co_return make_response(rsp);
   }
 
   dd::task<hidi::http_response> do_upload(api::upload op, hidi::http_request,
                                           hidi::request_context) override {
     uploaded = op.body._dATA._dATA;
-    co_return make_response(op, api::upload::response_204{});
+    co_return make_response(api::upload::response_204{});
   }
 };
 

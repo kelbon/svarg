@@ -410,27 +410,6 @@ template <a_response R>
   return rawrsp;
 }
 
-// true, если `R` один из ответов операции `Op`
-template <an_operation Op, typename R>
-constexpr bool is_response_of = [] {
-  using result = typename Op::result_t;
-  if constexpr (std::is_same_v<result, R>)
-    return true;
-  else if constexpr (requires { result::data; })
-    return []<typename... Ts>(std::type_identity<std::variant<Ts...>>) {
-      return (std::is_same_v<Ts, R> || ...);
-    }(std::type_identity<decltype(result::data)>{});
-  else
-    return false;
-}();
-
-// `op` только для проверки на этапе компиляции, что ответ принадлежит операции
-template <an_operation Op, a_response R>
-[[nodiscard]] http_response make_response(const Op&, const R& rsp, const content_type_params& ctparams = {}) {
-  static_assert(is_response_of<Op, R>, "response is not declared for this operation");
-  return make_response(rsp, ctparams);
-}
-
 template <a_response R>
 error_code from_response(const http_response& rawrsp, R& rsp) {
   static_assert(metel::is_decayed_v<R>);

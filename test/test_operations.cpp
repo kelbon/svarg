@@ -264,7 +264,7 @@ TEST("response") {
   item_response rsp;
   rsp.headers.x_name._dATA = "ok";
   rsp.body._dATA._dATA = 6;
-  http_response raw = make_response(put_name{}, rsp);
+  http_response raw = make_response(rsp);
   REQUIRE(raw.status == 200);
 
   item_response out;
