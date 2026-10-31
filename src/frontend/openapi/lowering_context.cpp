@@ -234,6 +234,7 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
       fi.name = name;
       fi.type = ir::make_fundamental_ref(ir::fundamental_e::any);
       fi.required = true;
+      ot.fields.push_back(std::move(fi));
     }
   }
   if (schema.additionalProperties) {
