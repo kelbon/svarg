@@ -333,7 +333,7 @@ template <typename T>
 
 // ожидает что is_body_present(op) == true
 template <typename T, typename Vtor>
-constexpr void visit_body(T&& op, Vtor&& vtor) noexcept {
+constexpr void visit_body(T&& op, Vtor&& vtor) {
   static_assert(has_body<T>);
   if constexpr (has_single_body<T>()) {
     if constexpr (is_body_required<T>()) {
