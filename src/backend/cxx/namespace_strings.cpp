@@ -37,7 +37,8 @@ std::string namespace_relative(std::string_view a, std::string_view b) {
     b.remove_prefix(2);
   if (a.starts_with("::"))
     a.remove_prefix(2);
-  if (b.starts_with(a)) {
+  // `a` - префикс `b` по целым сегментам: X::anyOf не префикс X::anyOf_::_1
+  if (b.starts_with(a) && (a.empty() || b.size() == a.size() || b.substr(a.size()).starts_with("::"))) {
     std::string_view res = b;
     res.remove_prefix(a.size());
     if (res.starts_with("::"))

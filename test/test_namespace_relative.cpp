@@ -38,6 +38,8 @@ TEST("namespace_relative") {
   NR_CASE("a::b::c", "b::c", "::b::c");
   NR_CASE("b::c", "d::e", "::d::e");
   NR_CASE("a::b::c", "a::b", "::a::b");
+  // префикс только по целым сегментам
+  NR_CASE("x::anyOf", "x::anyOf_::_1", "::x::anyOf_::_1");
   NR_CASE("a::b::c", "b", "::b");
   NR_CASE("a", "a::b::c", "b::c");
   NR_CASE("a::b::c", "a::b::c", "");
