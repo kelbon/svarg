@@ -27,6 +27,12 @@ paths:
           schema:
             type: string
             default: all
+        - name: x-trace
+          in: header
+          content:
+            application/json:
+              schema:
+                type: string
       responses:
         "200":
           description: item name

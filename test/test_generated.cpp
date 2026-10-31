@@ -142,6 +142,10 @@ TEST("generated server") {
   REQUIRE(item.body == "item5/10/all");
   REQUIRE(item.headers.x_version == 1);
 
+  // параметр с content: application/json кодируется JSON, а не текстом
+  get.headers.x_trace = "t";
+  REQUIRE(std::ranges::contains(make_request(get).headers, hidi::http_header_t{"x-trace", R"("t")"}));
+
   REQUIRE(rsps[1].status == 404);
   REQUIRE(rsps[2].status == 404);
   REQUIRE(rsps[3].status == 400);

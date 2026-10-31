@@ -881,7 +881,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
     for (auto& [prop_name, content_type] : *body.membersEncoding) {
       // throw_if_unsupported_content_type(content_type);
       encoding += std::format("if (str == {}) return {};\n",
-                              render_string(make_cxx_ident(prop_name, options)), render_string(content_type));
+                              render_string(prop_name), render_string(content_type));
     }
     result += std::format(
         "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
@@ -906,7 +906,7 @@ std::string render_parameters(const auto& params, std::string_view relspec, cons
     if (p.encoding) {
       // throw_if_unsupported_content_type(*p.encoding);
       encoding += std::format("if (str == {}) return {};\n",
-                              render_string(make_cxx_ident(p.name, ren.options)), render_string(*p.encoding));
+                              render_string(p.name), render_string(*p.encoding));
     }
   }
   if (!encoding.empty()) {
@@ -957,7 +957,7 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
       std::string encoding;
       for (auto& [prop_name, content_type] : *body.membersEncoding) {
         encoding +=
-            std::format("if (str == {}) return {};\n", render_string(make_cxx_ident(prop_name, options)),
+            std::format("if (str == {}) return {};\n", render_string(prop_name),
                         render_string(content_type));
       }
       result += std::format(
