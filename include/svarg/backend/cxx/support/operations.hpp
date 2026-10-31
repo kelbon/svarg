@@ -23,44 +23,26 @@ constexpr http_method_e get_operation_method() {
   return method;
 }
 
-// обрабатывает корректно encoding
-// `Into` - енкодинг по умолчанию в который идёт запись
-// `FieldIndex` - индекс поля которое нужно сериализовать
-// `T` - тип внутри которого поле сериализуется
-template <content_type_e Into, size_t FieldIndex, typename T>
-std::string serialize_field_into(const T& f, std::index_sequence<FieldIndex> = {}) {
-  constexpr content_type_e encoding = [] {
-    if constexpr (has_encodings<T>) {
-      constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
-      if (enc.empty())
-        return Into;
-      content_type_e ct;
-      if (efromstr(enc, ct))
-        return ct;
-      throw serialize_error("unsupported content type `{}`", enc);
-    } else {
-      return Into;
-    }
-  };
-  return serialize_into<encoding>(get_field<FieldIndex>(f));
-}
-
+// параметр с `content:` (encoding_for не пуст) кодируется в этом content type, остальные - как текст
 template <size_t FieldIndex, typename T>
 std::string serialize_nonbody_field(const T& f, std::index_sequence<FieldIndex> = {}) {
   if constexpr (has_encodings<T>) {
     constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
-    if (enc.empty())
-      return serialize_nonbody_into(get_field<FieldIndex>(f));
-    constexpr content_type_e ct = [&] {
-      content_type_e e;
-      if (efromstr(enc, e))
-        return e;
-      throw serialize_error("unsupported content type `{}`", enc);
-    };
-    return serialize_into<ct>(get_field<FieldIndex>(f));
-  } else {
-    return serialize_nonbody_into(get_field<FieldIndex>(f));
+    if constexpr (!enc.empty())
+      return serialize_into<content_type_enum(enc)>(get_field<FieldIndex>(f));
   }
+  return serialize_nonbody_into(get_field<FieldIndex>(f));
+}
+
+// обратное к serialize_nonbody_field
+template <size_t FieldIndex, typename T>
+[[nodiscard]] error_code parse_nonbody_field(std::string_view value, T& f) {
+  if constexpr (has_encodings<T>) {
+    constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
+    if constexpr (!enc.empty())
+      return parse_from<content_type_enum(enc)>(value, get_field<FieldIndex>(f));
+  }
+  return parse_nonbody_from(value, get_field<FieldIndex>(f));
 }
 
 template <an_operation Op>
@@ -125,7 +107,7 @@ struct parse_path_visitor {
     static_assert(has_path_params<Op>);
     if (ec)
       return;
-    ec = parse_nonbody_from(path, get_field<I>(op.path));
+    ec = parse_nonbody_field<I>(path, op.path);
     path = {};
   }
   template <size_t I>
@@ -140,7 +122,7 @@ struct parse_path_visitor {
     }
     std::string_view arg = path.substr(0, pos);
     path.remove_prefix(pos + separator.size());
-    ec = parse_nonbody_from(arg, get_field<I>(op.path));
+    ec = parse_nonbody_field<I>(arg, op.path);
   }
 
   bool is_done() const {
@@ -345,7 +327,7 @@ template <an_operation Op>
         return {};  // игнорируем дополнительные аргументы
       unparsed.set(*index, false);
       return metel::visit_index<fields_count<query_t<Op>>() - 1>(
-          [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(op.query)); }, *index);
+          [&]<size_t I>() { return parse_nonbody_field<I>(value, op.query); }, *index);
     };
     ec = visit_query</*WwwUrlEncoded=*/false>(get_query(req.path), on_query_arg);
     if (ec)
@@ -383,7 +365,7 @@ template <an_operation Op>
             return error_code{};  // игнорируем дополнительные аргументы
           unparsed_cookies.set(*index, false);
           return metel::visit_index<fields_count<cookies_t<Op>>() - 1>(
-              [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(op.cookies)); }, *index);
+              [&]<size_t I>() { return parse_nonbody_field<I>(value, op.cookies); }, *index);
         };
         ec = visit_cookies(value, on_cookie_arg);
         if (ec)
@@ -396,7 +378,7 @@ template <an_operation Op>
       if (index) {
         unparsed_headers.set(*index, false);
         ec = metel::visit_index<fields_count<headers_t<Op>>() - 1>(
-            [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(op.headers)); }, *index);
+            [&]<size_t I>() { return parse_nonbody_field<I>(value, op.headers); }, *index);
         if (ec)
           return ec;
       }
@@ -478,7 +460,7 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
       if (index) {
         unparsed.set(*index, false);
         ec = metel::visit_index<fields_count<headers_t<R>>() - 1>(
-            [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(rsp.headers)); }, *index);
+            [&]<size_t I>() { return parse_nonbody_field<I>(value, rsp.headers); }, *index);
         if (ec)
           return ec;
       }

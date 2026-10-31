@@ -219,11 +219,12 @@ consteval std::string_view get_content_type() {
   return std::decay_t<T>::content_type;
 }
 
-// ошибка компиляции, если content type не поддерживается
+// неподдерживаемый content type - unknown: код компилируется, а сериализация/разбор такого тела
+// сообщают об ошибке во время выполнения
 consteval content_type_e content_type_enum(std::string_view content_type) {
   content_type_e e;
   if (!efromstr(content_type, e))
-    throw "unsupported content type";
+    return content_type_e::unknown;
   return e;
 }
 
@@ -320,10 +321,11 @@ template <typename T>
 
 template <content_type_e C, typename T>
 [[nodiscard]] std::string serialize_into(const T& value) {
-  if constexpr (C == content_type_e::application_json) {
+  if constexpr (is_json_content_type<C>) {
     return boost::json::serialize(to_json(value));
   } else {
-    static_assert(false, "unsupported content type");
+    throw serialize_error("content type `{}` is not supported (value of type `{}`)", e2str(C),
+                          type_name<T>());
   }
 }
 
@@ -356,7 +358,7 @@ template <content_type_e C, typename T>
     noexport::serialize_impl(bytes, sr);
     return bytes;
   } else {
-    static_assert(false, "unsupported content type");
+    throw serialize_error("content type `{}` is not supported (body of type `{}`)", e2str(C), type_name<T>());
   }
 }
 
@@ -369,8 +371,7 @@ template <content_type_e C, typename T>
       return parse_error("cannot parse JSON: {}", jec.message());
     return try_from_json(v, out);
   } else {
-    // starts_with_ci_prefix_lowered для тех у которых могут быть параметры
-    static_assert(false, "unsupported content type");
+    return parse_error("content type `{}` is not supported (value of type `{}`)", e2str(C), type_name<T>());
   }
 }
 
