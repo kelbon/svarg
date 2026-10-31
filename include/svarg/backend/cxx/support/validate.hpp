@@ -12,7 +12,7 @@ template <typename RequiredSchema, typename Schema>
 error_code validate_schema(const boost::json::value& json, const Schema& result) {
   static_assert(!has_recursive_requirements<RequiredSchema>());
   if constexpr (noexport::requirement_needs_tokens_reuse<RequiredSchema>()) {
-    Schema schema;
+    RequiredSchema schema;
     return try_from_json(json, schema);
   } else {
     return noexport::validate_parsed_object<RequiredSchema>(result);

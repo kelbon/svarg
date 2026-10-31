@@ -86,6 +86,19 @@ struct patch_t {
   }};
 };
 
+// своё ограничение + схема-требование (например allOf с $ref)
+struct short_name_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+
+  std::string _dATA;
+
+  using required_schemas = metel::typelist<name_t>;
+
+  static constexpr std::array<constraints_t, 1> constraints = {{
+      constraints_t{.max_length = 3u},
+  }};
+};
+
 template <typename T>
 static bool parses(std::string_view json) {
   T v;
@@ -99,6 +112,13 @@ TEST("string constraints") {
   REQUIRE(!parses<name_t>(R"("abcde")"));  // maxLength
   REQUIRE(!parses<name_t>(R"("AB")"));     // pattern
   REQUIRE(!parses<name_t>(R"("ab1")"));    // pattern
+}
+
+TEST("required schema") {
+  REQUIRE(parses<short_name_t>(R"("abc")"));
+  REQUIRE(!parses<short_name_t>(R"("abcd")"));  // своё maxLength
+  REQUIRE(!parses<short_name_t>(R"("a")"));     // minLength требования
+  REQUIRE(!parses<short_name_t>(R"("AB")"));    // pattern требования
 }
 
 TEST("string length in unicode characters") {
