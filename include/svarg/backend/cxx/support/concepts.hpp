@@ -391,8 +391,8 @@ template <typename T>
 consteval size_t fields_count() {
   static_assert(metel::is_decayed_v<T>);
   if constexpr (cxx_support::an_object<T>) {
-    constexpr bool ignore_last_field = cxx_support::an_object<T> && cxx_support::has_additional_properties<T>;
-    return std::decay_t<T>::field_names.size() - size_t(ignore_last_field);
+    // field_names - только объявленные свойства, поле additional properties (последнее) в них не входит
+    return std::decay_t<T>::field_names.size();
   } else if constexpr (std::is_aggregate_v<T>) {
     return boost::pfr::tuple_size_v<T>;
   } else {

@@ -517,7 +517,7 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
     result += std::format("\nusing {} = {};\n\n", cxx_support::additional_properties_schema_alias_name,
                           render_schema_ref(*additional_properties, relspec, relative).typeref);
     // TODO обработать возможное пересечение имён с обычными полями
-    result += std::format("additional_properties_t<{}> {};\n\n",
+    result += std::format("::svarg::cxx_support::additional_properties_t<{}> {};\n\n",
                           cxx_support::additional_properties_schema_alias_name,
                           cxx_support::additional_properties_field_name);
   }

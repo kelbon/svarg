@@ -105,6 +105,10 @@ boost::json::value aggregate_to_json(const A& v) {
   APPLY_INDEXES(fields_count<A>()) {
     (serialize_one(std::index_sequence<Is>{}), ...);
   };
+  if constexpr (cxx_support::has_additional_properties<A>) {
+    for (auto&& [name, value] : cxx_support::get_additional_properties(v))
+      obj[name] = to_json(value);
+  }
   cxx_support::validate_required_schemas(j, v).rethrow_if_failed();
   return obj;
 }

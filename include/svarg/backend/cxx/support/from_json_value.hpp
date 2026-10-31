@@ -200,18 +200,22 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
   std::bitset unparsed = cxx_support::get_required_bits_mask<A>();
 
   for (auto&& [key, value] : *obj) {
-    std::optional<size_t> i = cxx_support::get_field_index<A>(key);
-    if (i) {
-      metel::visit_index<fields_count<A>() - 1>(
-          [&]<size_t I>() {
-            if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
-              unparsed.set(I, false);
-            ec = try_from_json(value, cxx_support::get_field<I>(v));
-          },
-          *i);
-      if (ec)
-        return ec;
-    } else {
+    // объект может состоять только из additional properties
+    if constexpr (fields_count<A>() > 0) {
+      if (std::optional<size_t> i = cxx_support::get_field_index<A>(key)) {
+        metel::visit_index<fields_count<A>() - 1>(
+            [&]<size_t I>() {
+              if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
+                unparsed.set(I, false);
+              ec = try_from_json(value, cxx_support::get_field<I>(v));
+            },
+            *i);
+        if (ec)
+          return ec;
+        continue;
+      }
+    }
+    {
       if constexpr (cxx_support::an_object<A> && cxx_support::has_additional_properties<A>) {
         cxx_support::additional_properties_schema_t<A> property;
         ec = try_from_json(value, property);

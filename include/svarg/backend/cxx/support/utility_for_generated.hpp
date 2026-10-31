@@ -47,9 +47,10 @@ consteval bool valid_generated_object() {
 
   if constexpr (has_additional_properties<T>) {
     // лежит последним полем и с правильным типом
-    return boost::pfr::get_name<boost::pfr::tuple_size_v<T> - 1>() == additional_properties_field_name &&
-           std::is_same_v<boost::pfr::tuple_element_t<boost::pfr::tuple_size_v<T> - 1, T>,
-                          additional_properties_schema_t<T>>;
+    constexpr size_t last = boost::pfr::tuple_size_v<T> - 1;
+    return boost::pfr::get_name<last, T>() == additional_properties_field_name &&
+           std::is_same_v<boost::pfr::tuple_element_t<last, T>,
+                          additional_properties_t<additional_properties_schema_t<T>>>;
   }
   return true;
 }

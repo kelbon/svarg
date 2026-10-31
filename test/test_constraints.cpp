@@ -118,6 +118,21 @@ struct level_t {
   integer _implfield;
 };
 
+struct with_extra_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::object;
+
+  std::optional<std::string> a;
+
+  using additional_properties_type = integer;
+  additional_properties_t<additional_properties_type> _additional_properties;
+
+  [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
+    return false;
+  }
+
+  static constexpr std::array<std::string_view, 1> field_names = {"a"};
+};
+
 template <typename T>
 static bool parses(std::string_view json) {
   T v;
@@ -175,6 +190,13 @@ TEST("object constraints") {
   REQUIRE(parses<patch_t>(R"({"a": "x"})"));
   REQUIRE(parses<patch_t>(R"({"a": "x", "b": "y"})"));
   REQUIRE(!parses<patch_t>("{}"));  // minProperties
+}
+
+TEST("additional properties") {
+  with_extra_t v;
+  REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": "x", "n": 1})"), v).failed());
+  REQUIRE(v.a == "x" && v._additional_properties.size() == 1 && v._additional_properties.at("n") == 1);
+  REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": "x", "n": 1})"));
 }
 
 TEST("parsed value is kept") {
