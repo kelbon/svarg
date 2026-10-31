@@ -1091,6 +1091,8 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   result += std::format("namespace {} {{\n\n", make_namespace(op.spec, paths, options));
 
   // id
+  // то, что нужно определить после операции
+  std::string after_op;
   result += std::format("struct {} {{\n", make_cxx_ident(op.id, options));
 
   // parse tag
@@ -1213,7 +1215,11 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     if (results.size() == 1) {
       result += std::format("using result_t = {};\n", results.front().first);
     } else if (!results.empty()) {
-      result += "struct result_t {\n";
+      // определяется после операции: внутри неё clang считает ответы с полями по умолчанию
+      // (вложенные классы с инициализаторами) не default constructible, и variant тоже
+      result += "struct result_t;\n";
+      std::string& result = after_op;
+      result += std::format("struct {}::result_t {{\n", make_cxx_ident(op.id, options));
       auto names_rng = results | std::views::keys | std::views::join_with(',');
       result +=
           std::format("\n{}<{}> data;\n\n", variant_str, std::string(names_rng.begin(), names_rng.end()));
@@ -1230,7 +1236,9 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     }
   }
 
-  result += "};\n\n}\n";  // struct / namespace
+  result += "};\n\n";  // struct
+  result += after_op;
+  result += "}\n";  // namespace
   result += operation_file_end;
   return {make_file_path(op, options, is_webhook), std::move(result)};
 }

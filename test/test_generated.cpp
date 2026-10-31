@@ -166,8 +166,7 @@ struct counting {
 TEST("generated client") {
   test_server server(hidi::server_ssl_context_ptr(nullptr));
   int count = 0;
-  // result_t с несколькими ответами создаётся только из ответа
-  std::optional<api::getItem::result_t> item, not_found;
+  api::getItem::result_t item, not_found;
   api::upload::result_t uploaded;
   std::optional<hidi::http_response> unexpected;
 
@@ -204,9 +203,9 @@ TEST("generated client") {
 
   REQUIRE(count == 3);
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
-  REQUIRE(item->get_if_200() && item->get_if_200()->body == "item7/10/all");
+  REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7/10/all");
   REQUIRE(server.uploaded == "file");
-  REQUIRE(not_found->get_if_default() && not_found->get_if_default()->status == 404);
+  REQUIRE(not_found.get_if_default() && not_found.get_if_default()->status == 404);
   REQUIRE(unexpected && unexpected->status == 404);
 }
 
