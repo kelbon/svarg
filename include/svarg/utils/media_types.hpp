@@ -105,42 +105,23 @@ constexpr std::string_view eat_token(std::string_view& in) {
   return noexport::count_star_segments(content_type) > 0;
 }
 
-enum struct content_type_e {
-  application_json,
-  application_problem_json,
-  multipart_related,  // TODO реально саппорт, а не просто тут
-  unknown,
+// как кодируется значение с данным медиа типом
+enum struct body_format_e {
+  json,             // application/json и любой +json (problem+json, merge-patch+json, vnd...+json)
+  form_urlencoded,  // application/x-www-form-urlencoded, объект
+  multipart,        // multipart/*, пока не поддержан
+  raw,              // остальное: значение как есть (text/plain, octet-stream...)
 };
 
-// дефолтный используется при парсинге всяких хедеров, query/cookies и тд
-constexpr inline content_type_e default_content_type = content_type_e::application_json;
-
-inline constexpr std::string_view e2str(content_type_e c) noexcept {
-  switch (c) {
-    case content_type_e::application_json:
-      return "application/json";
-    case content_type_e::application_problem_json:
-      return "application/problem+json";
-    case content_type_e::multipart_related:
-      return "multipart/related";
-    case content_type_e::unknown:
-      return "unknown";
-  }
-  metel::unreachable();
-}
-
-inline constexpr bool efromstr(std::string_view str, content_type_e& out) noexcept {
-  std::optional c = ss::string_switch<content_type_e>(str)
-                        .case_("application/json", content_type_e::application_json)
-                        .case_("application/problem+json", content_type_e::application_problem_json)
-                        .case_("multipart/related", content_type_e::multipart_related)
-                        .or_nullopt();
-  if (!c) {
-    out = content_type_e::unknown;
-    return false;
-  }
-  out = *c;
-  return true;
+// precondition: медиа тип в нижнем регистре и без параметров
+[[nodiscard]] constexpr body_format_e body_format_of(std::string_view media_type) noexcept {
+  if (media_type == "application/json" || media_type.ends_with("+json"))
+    return body_format_e::json;
+  if (media_type == "application/x-www-form-urlencoded")
+    return body_format_e::form_urlencoded;
+  if (media_type.starts_with("multipart/"))
+    return body_format_e::multipart;
+  return body_format_e::raw;
 }
 
 // name -> value мапа параметров типа "boundary" -> "fdsfsdf" для multipart/form-data и так далее
@@ -149,12 +130,13 @@ using content_type_params = string_map_ci<std::string>;
 
 // преобразует content type и параметры в значение хедера content-type
 // не проверяет валидность параметров, имён и их значений для конкретного content_type
-[[nodiscard]] std::string media_type_to_hdr_value(content_type_e, const content_type_params&);
+[[nodiscard]] std::string media_type_to_hdr_value(std::string_view media_type, const content_type_params&);
 
 // из значения хедера content-type достаёт content_type и параметры
 // добавляет в out, а не заменяет
-[[nodiscard]] content_type_e media_type_from_hdr_value(std::string_view content_type_value,
-                                                       content_type_params& out);
+// возвращает медиа тип без параметров (подстроку `content_type_value`)
+[[nodiscard]] std::string_view media_type_from_hdr_value(std::string_view content_type_value,
+                                                         content_type_params& out);
 
 // убирает различия в представлении для разных медиа типов и ренжей
 // например application/JSoN; ChaRset: "UtF-8" -> application/json; charset=utf-8

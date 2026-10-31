@@ -24,15 +24,7 @@ struct application_x_www_form_urlencoded {
     return std::move(body);
   }
 
-  template <content_type_e C, typename T>
-  void arg(std::string_view k, const T& value) {
-    svarg::query_encode(k, std::back_inserter(body));
-    body.push_back('=');
-    body += serialize_into<C>(value);
-    body.push_back('&');
-  }
-
-  // значение уже сериализовано (параметры query), только percent-encoding
+  // значение уже сериализовано, только percent-encoding
   void nonbody_arg(std::string_view k, std::string_view value) {
     svarg::query_encode(k, std::back_inserter(body));
     body.push_back('=');

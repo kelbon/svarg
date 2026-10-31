@@ -2,6 +2,7 @@
 
 #include "svarg/backend/cxx/support/concepts.hpp"
 #include "svarg/backend/cxx/support/nonbody.hpp"
+#include "svarg/backend/cxx/support/body.hpp"
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
 #include "svarg/backend/cxx/support/x_www_form_urlencoded.hpp"
 #include "svarg/backend/cxx/support/names.hpp"
@@ -29,7 +30,7 @@ std::string serialize_nonbody_field(const T& f, std::index_sequence<FieldIndex> 
   if constexpr (has_encodings<T>) {
     constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
     if constexpr (!enc.empty())
-      return serialize_into<content_type_enum(enc)>(get_field<FieldIndex>(f));
+      return serialize_value<body_format_of(enc)>(get_field<FieldIndex>(f));
   }
   return serialize_nonbody_into(get_field<FieldIndex>(f));
 }
@@ -40,7 +41,7 @@ template <size_t FieldIndex, typename T>
   if constexpr (has_encodings<T>) {
     constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
     if constexpr (!enc.empty())
-      return parse_from<content_type_enum(enc)>(value, get_field<FieldIndex>(f));
+      return parse_value<body_format_of(enc)>(value, get_field<FieldIndex>(f));
   }
   return parse_nonbody_from(value, get_field<FieldIndex>(f));
 }
@@ -165,7 +166,7 @@ void serialize_headers_of(T&& v, http_headers_t& out) {
 
 namespace noexport {
 
-// вызывает vtor.template operator()<ContentType>(значение тела), если тело присутствует
+// вызывает vtor.template operator()<формат>(медиа тип, значение тела), если тело присутствует
 template <typename T, typename Vtor>
 void visit_body(const T& x, Vtor&& vtor) {
   if (!is_body_present(x)) {
@@ -174,16 +175,17 @@ void visit_body(const T& x, Vtor&& vtor) {
     return;
   }
   if constexpr (has_single_body<T>()) {
-    constexpr content_type_e C = content_type_enum(T::body_content_type);
+    constexpr body_format_e F = body_format_of(T::body_content_type);
     if constexpr (is_body_required<T>())
-      vtor.template operator()<C>(x.body);
+      vtor.template operator()<F>(T::body_content_type, x.body);
     else
-      vtor.template operator()<C>(*x.body);
+      vtor.template operator()<F>(T::body_content_type, *x.body);
   } else {
     std::visit(metel::matcher{
                    [](std::monostate) { metel::unreachable(); },
                    [&]<typename B>(const B& b) {
-                     vtor.template operator()<content_type_enum(get_content_type<B>())>(get_special_field(b));
+                     vtor.template operator()<body_format_of(get_content_type<B>())>(get_content_type<B>(),
+                                                                                     get_special_field(b));
                    },
                },
                x.body);
@@ -193,8 +195,8 @@ void visit_body(const T& x, Vtor&& vtor) {
 // вызывает `out(content_type_header_value, bytes)`, если тело присутствует
 template <typename T>
 void serialize_body_of(const T& x, const content_type_params& ctparams, auto&& out) {
-  visit_body(x, [&]<content_type_e C>(const auto& value) {
-    out(media_type_to_hdr_value(C, ctparams), serialize_body<C>(value, ctparams));
+  visit_body(x, [&]<body_format_e F>(std::string_view media_type, const auto& value) {
+    out(media_type_to_hdr_value(media_type, ctparams), serialize_body<F>(value));
   });
 }
 
@@ -214,17 +216,17 @@ template <typename T>
     // учитывает регистр и параметры (application/json; charset=utf-8)
     if (!match_content_type(T::body_content_type, content_type))
       return not_matched();
-    constexpr content_type_e C = content_type_enum(T::body_content_type);
+    constexpr body_format_e F = body_format_of(T::body_content_type);
     if constexpr (is_body_required<T>())
-      return parse_from<C>(data, x.body);
+      return parse_body<F>(data, x.body);
     else
-      return parse_from<C>(data, x.body.emplace());
+      return parse_body<F>(data, x.body.emplace());
   } else {
     return T::select_body_type(content_type, [&]<typename B>() -> error_code {
       if constexpr (std::is_void_v<B>)
         return not_matched();
       else
-        return parse_from<content_type_enum(get_content_type<B>())>(
+        return parse_body<body_format_of(get_content_type<B>())>(
             data, get_special_field(x.body.template emplace<B>()));
     });
   }

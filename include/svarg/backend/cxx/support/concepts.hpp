@@ -219,19 +219,6 @@ consteval std::string_view get_content_type() {
   return std::decay_t<T>::content_type;
 }
 
-// неподдерживаемый content type - unknown: код компилируется, а сериализация/разбор такого тела
-// сообщают об ошибке во время выполнения
-consteval content_type_e content_type_enum(std::string_view content_type) {
-  content_type_e e;
-  if (!efromstr(content_type, e))
-    return content_type_e::unknown;
-  return e;
-}
-
-template <content_type_e C>
-constexpr bool is_json_content_type =
-    C == content_type_e::application_json || C == content_type_e::application_problem_json;
-
 template <typename T>
 constexpr bool has_encodings = requires(std::string_view str) {
   { T::encoding_for(str) };
@@ -316,62 +303,6 @@ template <typename T>
       return !!op.body;
   } else {
     return !std::holds_alternative<std::monostate>(op.body);
-  }
-}
-
-template <content_type_e C, typename T>
-[[nodiscard]] std::string serialize_into(const T& value) {
-  if constexpr (is_json_content_type<C>) {
-    return boost::json::serialize(to_json(value));
-  } else {
-    throw serialize_error("content type `{}` is not supported (value of type `{}`)", e2str(C),
-                          type_name<T>());
-  }
-}
-
-namespace noexport {
-
-// пишет прямо в `out`, без промежуточной строки
-inline void serialize_impl(http_body_bytes& out, boost::json::serializer& sr) {
-  size_t len = 0;
-  out.resize(BOOST_JSON_STACK_BUFFER_SIZE);
-  for (;;) {
-    boost::json::string_view sv = sr.read(reinterpret_cast<char*>(out.data()) + len, out.size() - len);
-    len += sv.size();
-    if (sr.done())
-      break;
-    out.resize(out.size() * 2);
-  }
-  out.resize(len);
-}
-
-}  // namespace noexport
-
-template <content_type_e C, typename T>
-[[nodiscard]] http_body_bytes serialize_body(const T& body, const content_type_params&) {
-  if constexpr (is_json_content_type<C>) {
-    boost::json::value v = to_json(body);
-    unsigned char tmpbuf[256];
-    boost::json::serializer sr(boost::json::storage_ptr{}, +tmpbuf, sizeof(tmpbuf));
-    http_body_bytes bytes;
-    sr.reset(&v);
-    noexport::serialize_impl(bytes, sr);
-    return bytes;
-  } else {
-    throw serialize_error("content type `{}` is not supported (body of type `{}`)", e2str(C), type_name<T>());
-  }
-}
-
-template <content_type_e C, typename T>
-[[nodiscard]] error_code parse_from(std::string_view data, T& out) {
-  if constexpr (is_json_content_type<C>) {
-    std::error_code jec;
-    boost::json::value v = boost::json::parse(data, jec);
-    if (jec)
-      return parse_error("cannot parse JSON: {}", jec.message());
-    return try_from_json(v, out);
-  } else {
-    return parse_error("content type `{}` is not supported (value of type `{}`)", e2str(C), type_name<T>());
   }
 }
 

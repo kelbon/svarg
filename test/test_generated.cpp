@@ -28,6 +28,13 @@ struct test_server : api::server {
     co_return make_response(api::upload::response_204{});
   }
 
+  dd::task<hidi::http_response> do_login(api::login op, hidi::http_request, hidi::request_context) override {
+    api::login::response_200 rsp;
+    rsp.body = std::format("{}/{}/{}", op.body.user, op.body.remember,
+                           op.body.attempts ? std::to_string(*op.body.attempts) : "-");
+    co_return make_response(rsp);
+  }
+
   dd::task<hidi::http_response> do_putItem(api::putItem op, hidi::http_request,
                                            hidi::request_context) override {
     api::putItem::response_200 rsp;
@@ -39,7 +46,7 @@ struct test_server : api::server {
                                            hidi::request_context) override {
     if (auto* text = std::get_if<api::addNote::application_json_body>(&op.body))
       notes.push_back(text->get());
-    else if (auto* n = std::get_if<api::addNote::application_problem_json_body>(&op.body))
+    else if (auto* n = std::get_if<api::addNote::application_vnd_note_json_body>(&op.body))
       notes.push_back(std::to_string(n->get()));
     co_return make_response(api::addNote::response_204{});
   }
@@ -93,7 +100,7 @@ TEST("generated server") {
   http_request wrong_method = with_base_path(make_request(up), "/v2");
   wrong_method.method = hidi::http_method_e::GET;
   http_request bad_upload = with_base_path(make_request(up), "/v2");
-  bad_upload.body.data.assign(2, '"');  // пустая строка, minLength
+  bad_upload.body.data.clear();  // пустая строка, minLength
   http_request no_query = bad_get;
   no_query.path = "/v1/items/5";
   http_request bad_limit = bad_get;
@@ -102,6 +109,14 @@ TEST("generated server") {
   put_raw.method = hidi::http_method_e::PUT;
   put_raw.path = "/v1/items/5/data";
   put_raw.body.content_type = "application/json";
+  http_request form_raw;
+  form_raw.method = hidi::http_method_e::POST;
+  form_raw.path = "/v1/login";
+  form_raw.body.content_type = "application/x-www-form-urlencoded";
+  std::string_view form = "attempts=3&user=a+b%21";
+  form_raw.body.data.assign(form.begin(), form.end());
+  http_request form_bad = form_raw;
+  form_bad.body.data.assign(form.begin(), form.begin() + 10);  // нет обязательного user
   std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
@@ -116,8 +131,10 @@ TEST("generated server") {
                                           no_query,
                                           bad_limit,
                                           put_raw,
+                                          form_raw,
+                                          form_bad,
                                       });
-  REQUIRE(rsps.size() == 9);
+  REQUIRE(rsps.size() == 11);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
@@ -152,6 +169,11 @@ TEST("generated server") {
   REQUIRE(echoed.body.tags == std::vector<std::string>{"x"});
   // инлайн-подсхема свойства: Item_::properties::mode
   REQUIRE(echoed.body.mode.get() == api::components::schemas::Item_::properties::mode::slow);
+  // form-urlencoded запрос, text/plain ответ без JSON кавычек
+  REQUIRE(rsps[9].status == 200);
+  REQUIRE(rsps[9].body_strview() == "a b!/false/3");
+  REQUIRE(rsps[10].status == 400);
+
   // поле типа самого объекта
   REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);
 }
@@ -173,6 +195,7 @@ TEST("generated client") {
   api::getItem::result_t item, not_found;
   api::upload::result_t uploaded;
   std::optional<hidi::http_response> unexpected;
+  api::login::result_t greeting;
 
   run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
     api::client cli{counting{any_client(client_ref(h2)), &count}};
@@ -190,8 +213,13 @@ TEST("generated client") {
     api::addNote note;
     note.body.emplace<api::addNote::application_json_body>().get() = "text";
     (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
-    note.body.emplace<api::addNote::application_problem_json_body>().get() = 42;
+    note.body.emplace<api::addNote::application_vnd_note_json_body>().get() = 42;
     (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
+
+    api::login login;
+    login.body.user = "u&=";
+    login.body.remember = true;
+    greeting = co_await cli.send_login(login, hidi::deadline_t::never());
 
     // статус не из спецификации (404 на неверный base path): у getItem есть default ответ,
     // у upload нет - исключение
@@ -205,7 +233,8 @@ TEST("generated client") {
     }
   });
 
-  REQUIRE(count == 3);
+  REQUIRE(count == 4);
+  REQUIRE(greeting.body == "u&=/true/-");
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
   REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7/10/all");
   REQUIRE(server.uploaded == "file");

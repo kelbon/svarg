@@ -211,8 +211,8 @@ bool media_type_supports_encodings(std::string_view media_type) {
   return mt.starts_with("multipart/") || mt == "application/x-www-form-urlencoded";
 }
 
-std::string media_type_to_hdr_value(content_type_e type, const content_type_params& params) {
-  std::string result(e2str(type));
+std::string media_type_to_hdr_value(std::string_view media_type, const content_type_params& params) {
+  std::string result(media_type);
 
   for (const auto& [name, value] : params) {
     result += "; ";
@@ -228,13 +228,10 @@ std::string media_type_to_hdr_value(content_type_e type, const content_type_para
   return result;
 }
 
-content_type_e media_type_from_hdr_value(std::string_view content_type_value, content_type_params& out) {
+std::string_view media_type_from_hdr_value(std::string_view content_type_value, content_type_params& out) {
   std::string_view params;
-  std::string_view mediatype = noexport::split_media_type_and_params(content_type_value, params);
+  std::string_view mt = noexport::split_media_type_and_params(content_type_value, params);
 
-  content_type_e mt;
-  // unknown если незнакомый медиа тип
-  (void)efromstr(mediatype, mt);
   if (params.empty()) [[likely]]
     return mt;
   // parameters = *( OWS ";" OWS [ parameter ] )
