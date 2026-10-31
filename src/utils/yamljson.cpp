@@ -23,11 +23,12 @@ void pass_as_json(fs::path path, fn_cref<void(std::string_view) const> fn) {
   if (is_yaml_extension(ext.string())) {
     std::string json = load_yaml_as_json(path);
     return fn(std::string_view(json));
-  } else if (is_json_extension(path.string())) {
+  } else if (is_json_extension(ext.string())) {
     boost::iostreams::mapped_file_source file(path.string());
     return fn(std::string_view(file.data(), file.size()));
   } else {
-    throw std::invalid_argument("invalid spec extensions, allowed extensions .json and .yaml");
+    throw std::invalid_argument(
+        std::format("invalid extension of `{}`, allowed extensions .json and .yaml", path.string()));
   }
 }
 
