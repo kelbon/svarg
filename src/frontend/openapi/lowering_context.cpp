@@ -150,7 +150,7 @@ object_and_path<T> resolve_ref_to(reference_object ref, fs::path file, json_poin
                     "$ref should be into /components/*, but $ref = {}", ref.ref_);
     }
     boost::json::value json = chain.follow(std::move(ref));
-    reference_or refered = from_json<reference_or<T>>(json);
+    auto refered = from_json<reference_or<T>>(json);
     if (auto* value = refered.get_if_value()) {
       if (chain.first_with_overrides) {
         auto [reffile, refjp] = *std::move(chain.first_with_overrides);
