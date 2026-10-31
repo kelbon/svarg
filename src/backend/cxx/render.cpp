@@ -213,7 +213,10 @@ static std::string render_constraints(const std::vector<const ir::constraints_sc
 static arrayof<ir::object_field_info> as_object_fields(auto&& params) {
   arrayof<ir::object_field_info> result;
   for (const ir::operation_parameter& p : params)
-    result.push_back({.type = p.schema, .name = p.name, .required = p.required.value_or(false)});
+    result.push_back({.type = p.schema,
+                      .name = p.name,
+                      .required = p.required.value_or(false),
+                      .default_value = p.default_value});
   return result;
 }
 
@@ -417,11 +420,56 @@ std::string renderer::render_required_field(const ir::schema_ref& field, std::st
                      make_cxx_ident(name, options));
 }
 
+// инициализатор поля значением по умолчанию: литерал для фундаментальных типов, иначе разбор JSON
+// один раз (default_value)
+std::string renderer::render_default_value(const ir::schema_ref& type, const Any& value,
+                                           std::string_view relspec, const json_pointer& relative) const {
+  const boost::json::value& v = value.value;
+  auto invalid = [&] {
+    return render_error("default `{}` does not match type `{}`", boost::json::serialize(v),
+                        render_schema_ref(type, relspec, relative).typeref);
+  };
+  if (std::optional<ir::fundamental_e> f = type.if_fundamental()) {
+    switch (*f) {
+      case ir::fundamental_e::boolean:
+        if (!v.is_bool())
+          throw invalid();
+        return v.get_bool() ? "true" : "false";
+      case ir::fundamental_e::integer:
+        if (v.is_int64())
+          return std::format("::svarg::cxx_support::integer({})", v.get_int64());
+        throw invalid();
+      case ir::fundamental_e::number:
+        if (v.is_int64())
+          return std::format("::svarg::cxx_support::number(int64_t({}))", v.get_int64());
+        if (v.is_uint64())
+          return std::format("::svarg::cxx_support::number(uint64_t({}ull))", v.get_uint64());
+        if (v.is_double())
+          return std::format("::svarg::cxx_support::number(double({}))", v.get_double());
+        throw invalid();
+      case ir::fundamental_e::string:
+        if (!v.is_string())
+          throw invalid();
+        return std::format("std::string({})", render_string(std::string_view(v.get_string())));
+      default:
+        break;
+    }
+  }
+  return std::format("::svarg::cxx_support::default_value<{}, {}>()",
+                     render_schema_ref(type, relspec, relative).typeref,
+                     render_string(boost::json::serialize(v)));
+}
+
 std::string renderer::render_object_field(const ir::object_field_info& field, std::string_view relspec,
                                           const json_pointer& relative, bool recursive_field) const {
   if (recursive_field && field.required) {
     throw render_error("field `{}` in type `{}#{}` recursive and required", field.name, relspec,
                        relative.escaped());
+  }
+  // поле со значением по умолчанию присутствует всегда (рекурсивное остаётся опциональным)
+  if (field.default_value && !recursive_field) {
+    return std::format("{} = {}", render_required_field(field.type, field.name, relspec, relative, false),
+                       render_default_value(field.type, *field.default_value, relspec, relative));
   }
   if (field.required)
     return render_required_field(field.type, field.name, relspec, relative, recursive_field);
@@ -937,6 +985,7 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
           .schema = h.schema ? *h.schema : ir::make_fundamental_ref(ir::fundamental_e::string),
           .required = h.required,
           .encoding = h.encoding,
+          .default_value = h.default_value,
       });
     }
     result += "struct headers_t {\n";
@@ -1161,7 +1210,10 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
       result += "struct result_t {\n";
       auto names_rng = results | std::views::keys | std::views::join_with(',');
       result +=
-          std::format("\n{}<{}> data;\n\n", variant_str, std::string(names_rng.begin(), names_rng.end()));
+          // monostate первым: ответы с полями по умолчанию в хедерах не default constructible
+          // до завершения определения операции (в которую они вложены)
+          std::format("\n{}<std::monostate, {}> data;\n\n", variant_str,
+                      std::string(names_rng.begin(), names_rng.end()));
       for (auto& [struct_name, suffix] : results) {
         result +=
             std::format("const {0}* get_if_{1}() const noexcept {{ return std::get_if<{0}>(&data); }}\n",

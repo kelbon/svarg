@@ -202,13 +202,17 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
       fi.name = prop_name;
       auto [schemaref, field_schema] = resolve_schema(prop_sor, file, jp / "properties" / prop_name, *this);
       fi.type = schemaref;
-      if (field_schema.nullable || field_schema.default_)
+      if (field_schema.default_ && !field_schema.nullable)
+        fi.default_value = field_schema.default_;
+      bool listed_required = schema.required && std::ranges::contains(*schema.required, prop_name);
+      if (field_schema.nullable || field_schema.default_) {
         fi.required = false;
-      else if (schema.required) {
-        if (field_schema.nullable || field_schema.default_) {
-          emit_warn(file, jp, "property {}` marked as required, but {}. `required` ignored", prop_name,
+        if (listed_required) {
+          emit_warn(file, jp, "property `{}` marked as required, but {}. `required` ignored", prop_name,
                     field_schema.nullable ? "has nullable type" : "has default");
-        } else if (field_schema.is_write_only() || field_schema.is_read_only()) {
+        }
+      } else if (schema.required) {
+        if (field_schema.is_write_only() || field_schema.is_read_only()) {
           // readOnly/writeOnly означает, что по сути есть два типа - для запроса и ответа и required зависит
           // от этого здесь генерируется только один тип, поэтому оба readOnly/writeOnly означают по факту
           // опциональность поля
@@ -860,8 +864,11 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
         result_hdr.required = *hdrobj.required;
       if (hdrobj.schema && hdrobj.content)
         throw validate_error("header object cannot have both `schema` and `content` set");
-      if (hdrobj.schema)
-        result_hdr.schema = resolve_schema(*hdrobj.schema, reffile, refjp / "schema", *this).ir_schema;
+      if (hdrobj.schema) {
+        resolved_schema rs = resolve_schema(*hdrobj.schema, reffile, refjp / "schema", *this);
+        result_hdr.schema = rs.ir_schema;
+        result_hdr.default_value = rs.front_schema.default_;
+      }
       if (hdrobj.content) {
         if (hdrobj.content->size() != 1)
           throw validate_error("header object 'content' MUST contain one entry, but contains `{}`",
@@ -872,6 +879,10 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
               resolve_schema(*mtc.schema, reffile, refjp / "content" / content_type / "schema", *this)
                   .ir_schema;
         result_hdr.encoding = content_type;
+      }
+      if (result_hdr.required.value_or(false) && result_hdr.default_value) {
+        emit_warn(file, jp, "required header `{}` has default, default ignored", name);
+        result_hdr.default_value.reset();
       }
       result_hdr.validate();
       result.headers->insert(std::move(result_hdr));
@@ -896,9 +907,11 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
   ir::operation_parameter result;
   result.location = param.in;
   result.name = param.name;
-  if (param.schema)
-    result.schema = resolve_schema(*param.schema, file, jp / "schema", *this).ir_schema;
-  else {
+  if (param.schema) {
+    resolved_schema rs = resolve_schema(*param.schema, file, jp / "schema", *this);
+    result.schema = rs.ir_schema;
+    result.default_value = rs.front_schema.default_;
+  } else {
     // валидация была
     assert(param.content && param.content->size() == 1);
     // content type
@@ -919,6 +932,11 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
   }
   if (param.required)
     result.required = param.required;
+  if (result.required.value_or(false) && result.default_value) {
+    // default имеет смысл только для необязательного параметра
+    emit_warn(file, jp, "required parameter `{}` has default, default ignored", param.name);
+    result.default_value.reset();
+  }
   // TODO result.meta
   return result;
 }

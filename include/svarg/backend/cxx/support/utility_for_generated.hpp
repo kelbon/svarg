@@ -54,6 +54,26 @@ consteval bool valid_generated_object() {
   return true;
 }
 
+// необязательное поле - optional/box или oneof (пустое состояние), поле со значением по умолчанию
+// хранится как есть и присутствует всегда
+template <size_t I, typename T>
+[[nodiscard]] constexpr bool is_field_present(const T& t) noexcept {
+  if constexpr (T::is_required(get_field_name<I, T>())) {
+    return true;
+  } else {
+    const auto& f = get_field<I>(t);
+    using F = std::remove_cvref_t<decltype(f)>;
+    if constexpr (requires { f.has_value(); })
+      return f.has_value();
+    else if constexpr (requires { f.is_null(); })
+      return !f.is_null();
+    else if constexpr (a_oneof<F>)
+      return !get_special_field(f).is_null();
+    else
+      return true;
+  }
+}
+
 // возвращает битовую маску где единицы расставлены на места требуемых полей
 template <cxx_support::has_named_fields O>
 consteval std::bitset<fields_count<O>()> get_required_bits_mask() {

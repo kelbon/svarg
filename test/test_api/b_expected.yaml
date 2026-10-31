@@ -428,6 +428,7 @@
         "schema":
           "spec": "api-a"
           "jsonptr": "/components/parameters/LimitParam/schema"
+        "default_value": 20
       - "location": "header"
         "name": "X-Api-Key"
         "schema":

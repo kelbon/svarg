@@ -111,6 +111,7 @@ class ObjectFieldInfo(Serializable):
     # НЕ optional в C++ (bool required = false;) -> сериализуется всегда,
     # поэтому это обычное (не Optional) поле с default
     required: bool = False
+    default_value: Optional[Any] = None
 
 
 @kw_only_dataclass

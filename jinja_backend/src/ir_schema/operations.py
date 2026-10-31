@@ -52,6 +52,7 @@ class OperationParameter(Serializable):
     location: ParameterLocation = ParameterLocation.PATH
     required: Optional[bool] = None
     encoding: Optional[str] = None
+    default_value: Optional[Any] = None
     meta: Optional[MetaT] = None
 
 
@@ -65,6 +66,7 @@ class Header(Serializable):
     name: str
     required: Optional[bool] = None
     schema: Optional[SchemaRef] = None
+    default_value: Optional[Any] = None
 
 
 # ---------------------------------------------------------------------------

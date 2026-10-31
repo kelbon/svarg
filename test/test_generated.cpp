@@ -17,7 +17,8 @@ struct test_server : api::server {
   dd::task<hidi::http_response> do_getItem(api::getItem op, hidi::http_request,
                                            hidi::request_context) override {
     api::getItem::response_200 rsp;
-    rsp.body = std::format("item{}", op.path.id.get());
+    // limit и tag со значениями по умолчанию
+    rsp.body = std::format("item{}/{}/{}", op.path.id.get(), op.query.limit.get(), op.query.tag);
     co_return make_response(rsp);
   }
 
@@ -25,6 +26,13 @@ struct test_server : api::server {
                                           hidi::request_context) override {
     uploaded = op.body.get();
     co_return make_response(api::upload::response_204{});
+  }
+
+  dd::task<hidi::http_response> do_putItem(api::putItem op, hidi::http_request,
+                                           hidi::request_context) override {
+    api::putItem::response_200 rsp;
+    rsp.body = op.body;  // эхо, поля по умолчанию уже заполнены
+    co_return make_response(rsp);
   }
 
   dd::task<hidi::http_response> do_addNote(api::addNote op, hidi::http_request,
@@ -86,6 +94,16 @@ TEST("generated server") {
   wrong_method.method = hidi::http_method_e::GET;
   http_request bad_upload = with_base_path(make_request(up), "/v2");
   bad_upload.body.data.assign(2, '"');  // пустая строка, minLength
+  http_request no_query = bad_get;
+  no_query.path = "/v1/items/5";
+  http_request bad_limit = bad_get;
+  bad_limit.path = "/v1/items/5?limit=0";  // minimum у параметра со значением по умолчанию
+  http_request put_raw;
+  put_raw.method = hidi::http_method_e::PUT;
+  put_raw.path = "/v1/items/5/data";
+  put_raw.body.content_type = "application/json";
+  std::string_view item_json = R"({"name":"n"})";
+  put_raw.body.data.assign(item_json.begin(), item_json.end());
 
   test_server server(hidi::server_ssl_context_ptr(nullptr));
   std::vector rsps = exchange(server, {
@@ -95,13 +113,17 @@ TEST("generated server") {
                                           bad_get,
                                           with_base_path(make_request(up), "/v2"),
                                           bad_upload,
+                                          no_query,
+                                          bad_limit,
+                                          put_raw,
                                       });
-  REQUIRE(rsps.size() == 6);
+  REQUIRE(rsps.size() == 9);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
   REQUIRE(!from_response(rsps[0], item).failed());
-  REQUIRE(item.body == "item5");
+  REQUIRE(item.body == "item5/10/all");
+  REQUIRE(item.headers.x_version == 1);
 
   REQUIRE(rsps[1].status == 404);
   REQUIRE(rsps[2].status == 404);
@@ -109,6 +131,25 @@ TEST("generated server") {
   REQUIRE(rsps[4].status == 204);
   REQUIRE(server.uploaded == "data");
   REQUIRE(rsps[5].status == 400);
+
+  // значения по умолчанию: отсутствующие параметры, хедер, поля тела
+  REQUIRE(rsps[6].status == 200);
+  REQUIRE(!from_response(rsps[6], item).failed());
+  REQUIRE(item.body == "item5/10/all");
+  std::erase_if(rsps[6].headers, [](auto& h) { return h.name() == "x-version"; });
+  item = {};
+  item.headers.x_version = 7;
+  REQUIRE(!from_response(rsps[6], item).failed());
+  REQUIRE(item.headers.x_version == 7);  // отсутствующий хедер не трогает значение
+
+  REQUIRE(rsps[7].status == 400);
+
+  api::putItem::response_200 echoed;
+  REQUIRE(rsps[8].status == 200);
+  REQUIRE(!from_response(rsps[8], echoed).failed());
+  REQUIRE(echoed.body.name == "n" && echoed.body.count == 3);
+  REQUIRE(echoed.body.kind.get() == api::components::schemas::Kind::b);
+  REQUIRE(echoed.body.tags == std::vector<std::string>{"x"});
 }
 
 // middleware: считает запросы и передаёт дальше
@@ -143,14 +184,14 @@ TEST("generated client") {
     // несколько тел: выбирается по content type
     api::addNote note;
     note.body.emplace<api::addNote::application_json_body>().get() = "text";
-    co_await cli.send_addNote(note, hidi::deadline_t::never());
+    (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
     note.body.emplace<api::addNote::application_problem_json_body>().get() = 42;
-    co_await cli.send_addNote(note, hidi::deadline_t::never());
+    (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
   });
 
   REQUIRE(count == 3);
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
-  REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7");
+  REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7/10/all");
   REQUIRE(server.uploaded == "file");
 }
 

@@ -405,13 +405,4 @@ template <size_t I, typename T>
   return boost::pfr::get<I>(std::forward<T>(t));
 }
 
-template <size_t I, typename T>
-[[nodiscard]] constexpr bool is_field_present(const T& t) noexcept {
-  if constexpr (T::is_required(get_field_name<I, T>())) {
-    return true;
-  } else {
-    return !!get_field<I>(t);
-  }
-}
-
 }  // namespace svarg::cxx_support

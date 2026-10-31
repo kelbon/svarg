@@ -73,6 +73,8 @@ struct renderer {
 
   std::string render_required_field(const ir::schema_ref&, std::string_view name, std::string_view relspec,
                                     const json_pointer& relative, bool recursive) const;
+  std::string render_default_value(const ir::schema_ref&, const Any& value, std::string_view relspec,
+                                   const json_pointer& relative) const;
   std::string render_optional_field(const ir::schema_ref&, std::string_view name, std::string_view relspec,
                                     const json_pointer& relative, bool recursive) const;
 

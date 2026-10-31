@@ -99,12 +99,8 @@ boost::json::value aggregate_to_json(const A& v) {
   auto serialize_one = [&]<size_t I>(std::index_sequence<I>) {
     const auto& field = cxx_support::get_field<I>(v);
     constexpr std::string_view field_name = cxx_support::get_field_name<I, A>();
-    if constexpr (A::is_required(field_name)) {
+    if (cxx_support::is_field_present<I>(v))
       obj[field_name] = to_json(field);
-    } else {
-      if (field)
-        obj[field_name] = to_json(field);
-    }
   };
   APPLY_INDEXES(fields_count<A>()) {
     (serialize_one(std::index_sequence<Is>{}), ...);

@@ -190,6 +190,8 @@ struct object_field_info {
   // * тип НЕ readOnly/writeOnly (там необходимость передавать зависит от запрос/ответ, но тип то один)
   // if/then/else игнорируются
   bool required = false;
+  // `default` схемы поля. Поле с ним всегда присутствует: отсутствующее при разборе получает это значение
+  std::optional<Any> default_value;
 
   std::strong_ordering operator<=>(const object_field_info& r) const noexcept {
     return type <=> r.type;
@@ -521,6 +523,8 @@ struct operation_parameter {
   std::optional<content_type_t> encoding;
   // default - false
   optional<bool> auth_related;
+  // `default` схемы параметра, отсутствующий параметр получает это значение
+  std::optional<Any> default_value;
 
   [[nodiscard]] bool is_auth_related() const noexcept {
     return auth_related ? *auth_related : false;
@@ -545,6 +549,8 @@ struct header {
   // по умолчанию false
   std::optional<bool> required;
   std::optional<content_type_t> encoding;
+  // `default` схемы хедера, отсутствующий хедер получает это значение
+  std::optional<Any> default_value;
 
   void validate() const {
     // чтобы не ломать агрегатность, проверяет валидность

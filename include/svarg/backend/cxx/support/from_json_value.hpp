@@ -10,6 +10,9 @@
 #include "svarg/backend/cxx/support/validate.hpp"
 
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
+#include "svarg/utils/constexpr_string.hpp"
+
+#include <boost/json/parse.hpp>
 
 namespace svarg {
 
@@ -57,7 +60,7 @@ struct from_json_value<T> {
     if (it == T::values.end())
       return validate_error("string {} cannot be value of enum {}", str, type_name<T>());
     // енам генерируется так, что порядок имён совпадает с порядком в массиве
-    get_special_field(v) = T::values_e(std::distance(T::values.begin(), it));
+    get_special_field(v) = typename T::values_e(std::distance(T::values.begin(), it));
     return {};
   }
 };
@@ -256,3 +259,18 @@ struct from_json_value<T> {
 };
 
 }  // namespace svarg
+
+namespace svarg::cxx_support {
+
+// значение по умолчанию поля из спецификации, разбирается из JSON один раз
+template <typename T, constexpr_string Json>
+[[nodiscard]] const T& default_value() {
+  static const T value = [] {
+    T v;
+    try_from_json(boost::json::parse(Json.str()), v).rethrow_if_failed();
+    return v;
+  }();
+  return value;
+}
+
+}  // namespace svarg::cxx_support

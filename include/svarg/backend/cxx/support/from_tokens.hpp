@@ -116,7 +116,7 @@ struct from_tokens<T> {
     if (it == T::values.end())
       throw validate_error("string {} cannot be value of enum {}", str, type_name<T>());
     // енам генерируется так, что порядок имён совпадает с порядком в массиве
-    get_special_field(v) = T::values_e(std::distance(T::values.begin(), it));
+    get_special_field(v) = typename T::values_e(std::distance(T::values.begin(), it));
     return {};
   }
 };

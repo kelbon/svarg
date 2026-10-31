@@ -16,9 +16,25 @@ paths:
           schema:
             type: integer
             minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 10
+        - name: tag
+          in: query
+          schema:
+            type: string
+            default: all
       responses:
         "200":
           description: item name
+          headers:
+            x-version:
+              schema:
+                type: integer
+                default: 1
           content:
             application/json:
               schema:
@@ -54,3 +70,47 @@ paths:
       responses:
         "204":
           description: added
+  /items/{id}/data:
+    put:
+      operationId: putItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Item"
+      responses:
+        "200":
+          description: stored item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+components:
+  schemas:
+    Item:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+          default: 3
+        kind:
+          $ref: "#/components/schemas/Kind"
+        tags:
+          type: array
+          items:
+            type: string
+          default: [x]
+    Kind:
+      type: string
+      enum: [a, b]
+      default: b
