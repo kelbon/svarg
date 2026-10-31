@@ -48,6 +48,8 @@ TEST("cxx_ident") {
   // и макросы
   CXX_IDENT_CASE("NULL", "NULL_", "NULL_");
   CXX_IDENT_CASE("linux", "linux_", "linux_");
+  // макросы windows.h - нет, это обычные слова
+  CXX_IDENT_CASE("max", "max", "max");
   CXX_IDENT_CASE("not", "not_", "not_");
   CXX_IDENT_CASE("xor_eq", "xor_eq_", "xor_eq_");
   CXX_IDENT_CASE("true", "true_", "true_");
