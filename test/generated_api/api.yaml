@@ -128,6 +128,91 @@ paths:
             text/plain:
               schema:
                 type: string
+  /files:
+    post:
+      operationId: uploadFiles
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                size:
+                  type: integer
+                meta:
+                  $ref: "#/components/schemas/Item"
+                file:
+                  type: string
+                  format: binary
+            encoding:
+              file:
+                contentType: application/octet-stream
+      responses:
+        "200":
+          description: summary
+          content:
+            text/plain:
+              schema:
+                type: string
+  /messages:
+    post:
+      operationId: transfer
+      requestBody:
+        required: true
+        content:
+          multipart/related:
+            schema:
+              type: object
+              properties:
+                jsonData:
+                  $ref: "#/components/schemas/Item"
+                binaryN1:
+                  type: string
+                  format: binary
+                binaryN2:
+                  type: string
+                  format: binary
+            encoding:
+              jsonData:
+                contentType: application/json
+              binaryN1:
+                contentType: application/vnd.3gpp.5gnas
+                headers:
+                  Content-Id:
+                    schema:
+                      type: string
+              binaryN2:
+                contentType: application/vnd.3gpp.ngap
+                headers:
+                  Content-Id:
+                    schema:
+                      type: string
+      responses:
+        "200":
+          description: echo
+          content:
+            multipart/related:
+              schema:
+                type: object
+                properties:
+                  jsonData:
+                    $ref: "#/components/schemas/Item"
+                  binaryN2:
+                    type: string
+                    format: binary
+              encoding:
+                jsonData:
+                  contentType: application/json
+                binaryN2:
+                  contentType: application/vnd.3gpp.ngap
+                  headers:
+                    Content-Id:
+                      schema:
+                        type: string
 components:
   schemas:
     Item:

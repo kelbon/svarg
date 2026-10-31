@@ -36,6 +36,31 @@ struct test_server : api::server {
     co_return make_response(rsp);
   }
 
+  dd::task<hidi::http_response> do_uploadFiles(api::uploadFiles op, hidi::http_request,
+                                               hidi::request_context) override {
+    api::uploadFiles::response_200 rsp;
+    rsp.body = std::format("{}/{}/{}/{}", op.body.title, op.body.size.value_or(-1),
+                           op.body.meta ? op.body.meta->name : "-", op.body.file.value_or("-"));
+    co_return make_response(rsp);
+  }
+
+  std::string n1;
+
+  // эхо: JSON часть и N2 часть с тем же Content-Id
+  dd::task<hidi::http_response> do_transfer(api::transfer op, hidi::http_request,
+                                            hidi::request_context) override {
+    if (op.body.binaryN1)
+      n1 = std::format("{}={}", op.body.binaryN1->headers.content_id.value_or("-"), op.body.binaryN1->value);
+    api::transfer::response_200 rsp;
+    rsp.body.jsonData = op.body.jsonData;
+    if (op.body.binaryN2) {
+      rsp.body.binaryN2.emplace();
+      rsp.body.binaryN2->headers.content_id = op.body.binaryN2->headers.content_id;
+      rsp.body.binaryN2->value = op.body.binaryN2->value;
+    }
+    co_return make_response(rsp);
+  }
+
   dd::task<hidi::http_response> do_putItem(api::putItem op, hidi::http_request,
                                            hidi::request_context) override {
     api::putItem::response_200 rsp;
@@ -125,6 +150,33 @@ TEST("generated server") {
           }()).body.strview() == "user=u&remember=false&meta=%22m%22");
   http_request form_bad = form_raw;
   form_bad.body.data.assign(form.begin(), form.begin() + 10);  // нет обязательного user
+  // части не по порядку свойств, разбираются по content type; бинарные данные с нулевым байтом
+  using namespace std::string_view_literals;
+  http_request related;
+  related.method = hidi::http_method_e::POST;
+  related.path = "/v1/messages";
+  related.body.content_type = R"(Multipart/Related; type="application/json"; boundary="b 1")";
+  std::string_view related_body =
+      "preamble\r\n"
+      "--b 1\r\n"
+      "Content-Type: application/vnd.3gpp.ngap\r\n"
+      "Content-Id: n2\r\n"
+      "\r\n"
+      "N2\0\x01\r\n"
+      "--b 1  \r\n"
+      "content-type: application/json\r\n"
+      "\r\n"
+      R"({"name":"j"})"
+      "\r\n--b 1\r\n"
+      "Content-Type: application/vnd.3gpp.5gnas\r\n"
+      "CONTENT-ID: n1\r\n"
+      "\r\n"
+      "N1\r\n"
+      "--b 1--\r\n"sv;
+  related.body.data.assign(related_body.begin(), related_body.end());
+  http_request related_bad = related;
+  std::string_view bad_body = "--b 1\r\nContent-Type: text/html\r\n\r\nx\r\n--b 1--"sv;
+  related_bad.body.data.assign(bad_body.begin(), bad_body.end());
   std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
@@ -141,8 +193,10 @@ TEST("generated server") {
                                           put_raw,
                                           form_raw,
                                           form_bad,
+                                          related,
+                                          related_bad,
                                       });
-  REQUIRE(rsps.size() == 11);
+  REQUIRE(rsps.size() == 13);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
@@ -186,6 +240,16 @@ TEST("generated server") {
   REQUIRE(rsps[9].body_strview() == "a b!/false/3/m");
   REQUIRE(rsps[10].status == 400);
 
+  // multipart/related: части сопоставлены по content type, Content-Id сохранён
+  REQUIRE(rsps[11].status == 200);
+  REQUIRE(server.n1 == "n1=N1");
+  api::transfer::response_200 echo;
+  REQUIRE(!from_response(rsps[11], echo).failed());
+  REQUIRE(echo.body.jsonData && echo.body.jsonData->name == "j");
+  REQUIRE(echo.body.binaryN2 && echo.body.binaryN2->headers.content_id == "n2" &&
+          echo.body.binaryN2->value == "N2\0\x01"sv);
+  REQUIRE(rsps[12].status == 400);  // часть не подходит ни к одному свойству
+
   // поле типа самого объекта
   REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);
 }
@@ -208,6 +272,7 @@ TEST("generated client") {
   api::upload::result_t uploaded;
   std::optional<hidi::http_response> unexpected;
   api::login::result_t greeting;
+  api::uploadFiles::result_t summary;
 
   run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
     api::client cli{counting{any_client(client_ref(h2)), &count}};
@@ -234,6 +299,12 @@ TEST("generated client") {
     login.body.meta = "x y";
     greeting = co_await cli.send_login(login, hidi::deadline_t::never());
 
+    api::uploadFiles files;
+    files.body.title = "t \"q\"";
+    files.body.meta.emplace().name = "m";
+    files.body.file = std::string("\r\n--\0", 5);
+    summary = co_await cli.send_uploadFiles(files, hidi::deadline_t::never());
+
     // статус не из спецификации (404 на неверный base path): у getItem есть default ответ,
     // у upload нет - исключение
     api::client wrong_path{client_ref(h2), "/nope"};
@@ -246,8 +317,9 @@ TEST("generated client") {
     }
   });
 
-  REQUIRE(count == 4);
+  REQUIRE(count == 5);
   REQUIRE(greeting.body == "u&=/true/-/x y");
+  REQUIRE(summary.body == std::format("t \"q\"/-1/m/{}", std::string("\r\n--\0", 5)));
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
   REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7/10/all");
   REQUIRE(server.uploaded == "file");

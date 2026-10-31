@@ -603,6 +603,9 @@ struct body {
   // мапа имя property из schema => как его кодировать конкретно в этом теле
   // application/json и тд контент типы
   std::optional<string_map<content_type_t>> membersEncoding;
+  // мапа имя property => хедеры её части (encoding.headers), только для multipart. Например Content-Id,
+  // по которому на бинарную часть ссылается JSON часть (3GPP)
+  std::optional<string_map<std::set<header>>> membersHeaders;
   // означает, что schema применяется не ко всему телу, а к единице стрима
   // (например openapi 3.2 itemsSchema)
   // по умолчанию false

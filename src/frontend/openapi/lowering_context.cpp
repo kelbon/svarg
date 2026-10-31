@@ -833,9 +833,26 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
         // наличие property в схеме не проверяется, так как там очень сложно - может быть в anyOf и тд
         // где-то
         for (auto& [property, enc] : *obj.encoding) {
-          if (!enc.contentType)
-            continue;  // остальное пока игнорируется (всякие style и тд)
-          result.membersEncoding->try_emplace(property, *enc.contentType);
+          if (enc.contentType)
+            result.membersEncoding->try_emplace(property, *enc.contentType);
+          // хедеры частей есть только у multipart. Content-Type описывается contentType, а
+          // Content-Disposition (form-data) формируется из имени свойства, поэтому игнорируются
+          if (enc.headers && !enc.headers->empty() && lowered(content_type).starts_with("multipart/")) {
+            std::set<ir::header> headers;
+            for (auto& [name, hdr] : *enc.headers) {
+              std::string lname = lowered(name);
+              if (lname == "content-type" || lname == "content-disposition")
+                continue;
+              headers.insert(
+                  header_lowering(name, hdr, file, jp / "encoding" / property / "headers" / name));
+            }
+            if (!headers.empty()) {
+              if (!result.membersHeaders)
+                result.membersHeaders.emplace();
+              result.membersHeaders->try_emplace(property, std::move(headers));
+            }
+          }
+          // остальное пока игнорируется (style, explode...)
         }
       } else {
         emit_warn(file, jp, "media type `{}` does not support encodings, `encoding` ignored", content_type);
@@ -846,21 +863,11 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
   return result;
 }
 
-// statusstr пустой для дефолтного респонса
-ir::response_desc lowering_context::response_lowering(std::optional<std::string_view> statusstr,
-                                                      const response_object& rsp, fs::path file,
-                                                      json_pointer jp) {
-  ir::response_desc result;
-  if (statusstr)
-    result.set_status(*statusstr);
-  else
-    result.make_default();
-  if (rsp.headers) {
-    auto _ = guard_array(result.headers);
-    for (auto& [name, hdr] : *rsp.headers) {
+ir::header lowering_context::header_lowering(std::string_view name, const reference_or<header_object>& hdr,
+                                             fs::path file, json_pointer jp) {
       ir::header result_hdr;
       result_hdr.name = lowered(name);
-      auto [hdrobj, reffile, refjp] = resolve_ref_and_ret(hdr, file, jp / "headers" / name, *this);
+      auto [hdrobj, reffile, refjp] = resolve_ref_and_ret(hdr, file, jp, *this);
       if (hdrobj.required)
         result_hdr.required = *hdrobj.required;
       if (hdrobj.schema && hdrobj.content)
@@ -886,8 +893,22 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
         result_hdr.default_value.reset();
       }
       result_hdr.validate();
-      result.headers->insert(std::move(result_hdr));
-    }
+      return result_hdr;
+}
+
+// statusstr пустой для дефолтного респонса
+ir::response_desc lowering_context::response_lowering(std::optional<std::string_view> statusstr,
+                                                      const response_object& rsp, fs::path file,
+                                                      json_pointer jp) {
+  ir::response_desc result;
+  if (statusstr)
+    result.set_status(*statusstr);
+  else
+    result.make_default();
+  if (rsp.headers) {
+    auto _ = guard_array(result.headers);
+    for (auto& [name, hdr] : *rsp.headers)
+      result.headers->insert(header_lowering(name, hdr, file, jp / "headers" / name));
   }
   if (rsp.content) {
     auto _ = guard_array(result.bodies);

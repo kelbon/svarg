@@ -57,6 +57,21 @@ static std::string make_cxx_ident(std::string_view str, const render_options& op
   return options.simple_cxx_identifiers ? to_cxx_ident_simple(str) : to_cxx_ident(str);
 }
 
+static ir::operation_parameter header_as_parameter(const ir::header& h) {
+  h.validate();
+  return ir::operation_parameter{
+      .location = parameter_location::header,
+      .name = h.name,
+      .schema = h.schema ? *h.schema : ir::make_fundamental_ref(ir::fundamental_e::string),
+      .required = h.required,
+      .encoding = h.encoding,
+      .default_value = h.default_value,
+  };
+}
+
+std::string render_parameters(const auto& params, std::string_view relspec, const json_pointer& relative,
+                              const renderer& ren);
+
 std::string renderer::make_namespace(std::string_view spec, json_pointer jp) const {
   if (jp.segments_count() > 0)
     jp.rm_last_segment();
@@ -283,6 +298,12 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
         collect(a.additional_properties);
         for (auto& f : a.fields)
           collect(f.type);
+        // схемы хедеров частей multipart рендерятся внутрь
+        if (const ir::body* b = find_body_encodings(t); b && b->membersHeaders)
+          for (auto& [_, headers] : *b->membersHeaders)
+            for (auto& h : headers)
+              if (h.schema)
+                collect(*h.schema);
         return;
       },
   };
@@ -482,6 +503,25 @@ std::string renderer::render_default_value(const ir::schema_ref& type, const Any
                      render_string(boost::json::serialize(v)));
 }
 
+static std::string part_headers_struct_name(std::string_view property, const render_options& options) {
+  return std::format("{}_part_headers", make_cxx_ident(property, options));
+}
+
+// хедеры частей multipart (encoding.headers) - вложенные структуры объекта тела
+std::string renderer::render_part_headers(const string_map<std::set<ir::header>>& part_headers,
+                                          std::string_view relspec, const json_pointer& relative) const {
+  std::string result;
+  for (auto& [property, headers] : part_headers) {
+    std::vector<ir::operation_parameter> params;
+    for (auto& h : headers)
+      params.push_back(header_as_parameter(h));
+    result += std::format("struct {} {{\n", part_headers_struct_name(property, options));
+    result += render_parameters(params, relspec, relative, *this);
+    result += "};\n\n";
+  }
+  return result;
+}
+
 static std::string render_encoding_for(const string_map<ir::content_type_t>& encodings) {
   std::string encoding;
   for (auto& [prop_name, content_type] : encodings)
@@ -495,7 +535,9 @@ static std::string render_encoding_for(const string_map<ir::content_type_t>& enc
 void renderer::collect_body_encodings() {
   auto add = [&](const std::set<ir::body>& bodies) {
     for (const ir::body& b : bodies) {
-      if (!b.membersEncoding || b.membersEncoding->empty() || b.schema.is_fundamental())
+      bool has_encodings = (b.membersEncoding && !b.membersEncoding->empty()) ||
+                           (b.membersHeaders && !b.membersHeaders->empty());
+      if (!has_encodings || b.schema.is_fundamental())
         continue;
       // одна схема в нескольких телах - encoding берётся из первого
       const ir::schema& s = schemaof(b.schema);
@@ -542,26 +584,35 @@ std::string renderer::render_object_field(const ir::object_field_info& field, st
 std::string renderer::render_object_fields(const arrayof<ir::object_field_info>& fields,
                                            std::string_view relspec, const json_pointer& relative,
                                            std::optional<ir::schema_ref> fields_owner,
-                                           std::optional<ir::schema_ref> additional_properties) const {
+                                           std::optional<ir::schema_ref> additional_properties,
+                                           const string_map<std::set<ir::header>>* part_headers) const {
   auto is_recursive = [&](const ir::schema_ref& r) {
     if (r.is_fundamental())
       return false;
     return fields_owner ? is_recursive_field(*fields_owner, r) : false;
   };
+  auto render_field = [&](const ir::object_field_info& f) {
+    // часть multipart с хедерами: part<T, хедеры>
+    if (part_headers && part_headers->contains(f.name)) {
+      std::string type = std::format("::svarg::cxx_support::part<{}, {}>",
+                                     render_schema_ref(f.type, relspec, relative).typeref,
+                                     part_headers_struct_name(f.name, options));
+      if (f.required)
+        return std::format("{} {};\n", type, make_cxx_ident(f.name, options));
+      return std::format("{}<{}> {};\n", optional_str, type, make_cxx_ident(f.name, options));
+    }
+    return render_object_field(f, relspec, relative, is_recursive(f.type)) + ";\n";
+  };
 
   std::string result;
   for (auto&& f : fields) {
-    if (f.required) {
-      result += render_object_field(f, relspec, relative, is_recursive(f.type));
-      result += ";\n";
-    }
+    if (f.required)
+      result += render_field(f);
   }
   // затем опциональные
   for (auto&& f : fields) {
-    if (!f.required) {
-      result += render_object_field(f, relspec, relative, is_recursive(f.type));
-      result += ";\n";
-    }
+    if (!f.required)
+      result += render_field(f);
   }
   if (!additional_properties || additional_properties->is_fundamental(ir::fundamental_e::never)) {
     result += std::format("\nusing {} = void;\n\n", cxx_support::additional_properties_schema_alias_name);
@@ -727,9 +778,14 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
       },
       [&](const ir::object_schema& a) -> std::string {
         std::string result = render_parse_tag(cxx_support::parse_tag_e::object);
+        const ir::body* body = find_body_encodings(s);
+        const string_map<std::set<ir::header>>* part_headers =
+            body && body->membersHeaders ? &*body->membersHeaders : nullptr;
+        if (part_headers)
+          result += render_part_headers(*part_headers, s.spec, s.jsonptr);
         result += render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(),
-                                       a.additional_properties);
-        if (const ir::body* body = find_body_encodings(s))
+                                       a.additional_properties, part_headers);
+        if (body && body->membersEncoding && !body->membersEncoding->empty())
           result += render_encoding_for(*body->membersEncoding);
         return result;
       },
@@ -1024,17 +1080,8 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
     result += "int status = 0;\n";
   if (rsp.headers && !rsp.headers->empty()) {
     std::vector<ir::operation_parameter> params;
-    for (auto& h : *rsp.headers) {
-      h.validate();
-      params.push_back(ir::operation_parameter{
-          .location = parameter_location::header,
-          .name = h.name,
-          .schema = h.schema ? *h.schema : ir::make_fundamental_ref(ir::fundamental_e::string),
-          .required = h.required,
-          .encoding = h.encoding,
-          .default_value = h.default_value,
-      });
-    }
+    for (auto& h : *rsp.headers)
+      params.push_back(header_as_parameter(h));
     result += "struct headers_t {\n";
     result += render_parameters(params, spec, jp, *this);
     result += "};\n";

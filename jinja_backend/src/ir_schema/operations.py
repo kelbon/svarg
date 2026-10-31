@@ -79,6 +79,7 @@ class Body(Serializable):
     content_type: str = field_with_key(key="contentType")
     schema: SchemaRef
     members_encoding: Optional[dict[str, str]] = field_with_key(key="membersEncoding", default=None)
+    members_headers: Optional[dict[str, list[Header]]] = field_with_key(key="membersHeaders", default=None)
     streaming: Optional[bool] = None
 
 

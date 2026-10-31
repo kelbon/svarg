@@ -38,7 +38,7 @@ consteval void check_format() {
   else if constexpr (F == body_format_e::form_urlencoded)
     static_assert(an_object<T>, "application/x-www-form-urlencoded requires object schema");
   else if constexpr (F == body_format_e::multipart)
-    static_assert(false, "multipart media types are not supported yet");
+    static_assert(an_object<T>, "multipart requires object schema");
 }
 
 }  // namespace noexport
@@ -76,6 +76,28 @@ template <body_format_e F, typename T>
   } else {
     return parse_nonbody_from(data, out);
   }
+}
+
+// параметр с `content:` (encoding_for не пуст) кодируется в этом content type, остальные - как текст
+template <size_t FieldIndex, typename T>
+std::string serialize_nonbody_field(const T& f, std::index_sequence<FieldIndex> = {}) {
+  if constexpr (has_encodings<T>) {
+    constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
+    if constexpr (!enc.empty())
+      return serialize_value<body_format_of(enc)>(get_field<FieldIndex>(f));
+  }
+  return serialize_nonbody_into(get_field<FieldIndex>(f));
+}
+
+// обратное к serialize_nonbody_field
+template <size_t FieldIndex, typename T>
+[[nodiscard]] error_code parse_nonbody_field(std::string_view value, T& f) {
+  if constexpr (has_encodings<T>) {
+    constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
+    if constexpr (!enc.empty())
+      return parse_value<body_format_of(enc)>(value, get_field<FieldIndex>(f));
+  }
+  return parse_nonbody_from(value, get_field<FieldIndex>(f));
 }
 
 }  // namespace svarg::cxx_support

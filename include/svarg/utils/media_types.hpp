@@ -109,7 +109,7 @@ constexpr std::string_view eat_token(std::string_view& in) {
 enum struct body_format_e {
   json,             // application/json и любой +json (problem+json, merge-patch+json, vnd...+json)
   form_urlencoded,  // application/x-www-form-urlencoded, объект
-  multipart,        // multipart/*, пока не поддержан
+  multipart,        // multipart/*, объект: свойства - части
   raw,              // остальное: значение как есть (text/plain, octet-stream...)
 };
 

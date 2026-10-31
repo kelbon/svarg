@@ -15,6 +15,7 @@
 #include "svarg/backend/cxx/support/value_format.hpp"
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
 #include "svarg/backend/cxx/support/x_www_form_urlencoded.hpp"
+#include "svarg/backend/cxx/support/multipart.hpp"
 
 // кодирование тел по медиа типу (body_format_of), формат выбирается во время компиляции, неподходящая к
 // формату схема - ошибка компиляции:
@@ -22,7 +23,7 @@
 //  - form_urlencoded: объект, поле кодируется по своему encoding.contentType, по умолчанию как
 //    параметр query (без JSON кавычек), если это простое значение, иначе JSON
 //  - raw: строка, число, bool или енам, значение как есть (text/plain "abc", а не "\"abc\"")
-//  - multipart: не поддержан
+//  - multipart: объект, каждое свойство - часть (см. multipart.hpp)
 
 namespace svarg::cxx_support {
 
@@ -108,8 +109,11 @@ template <an_object T>
 
 }  // namespace noexport
 
+// `media_type` - медиа тип тела без параметров, `params` - параметры хедера content-type (multipart
+// добавляет boundary)
 template <body_format_e F, typename T>
-[[nodiscard]] http_body_bytes serialize_body(const T& body) {
+[[nodiscard]] http_body_bytes serialize_body(const T& body, std::string_view media_type,
+                                             content_type_params& params) {
   noexport::check_format<F, T>();
   http_body_bytes bytes;
   if constexpr (F == body_format_e::json) {
@@ -122,6 +126,8 @@ template <body_format_e F, typename T>
     std::string s;
     if constexpr (F == body_format_e::form_urlencoded)
       s = noexport::form_encode(body);
+    else if constexpr (F == body_format_e::multipart)
+      s = multipart_encode(body, media_type, params);
     else
       s = serialize_nonbody_into(body);
     bytes.assign(s.begin(), s.end());
@@ -129,11 +135,14 @@ template <body_format_e F, typename T>
   return bytes;
 }
 
+// `content_type` - значение хедера content-type целиком (с параметрами)
 template <body_format_e F, typename T>
-[[nodiscard]] error_code parse_body(std::string_view data, T& out) {
+[[nodiscard]] error_code parse_body(std::string_view content_type, std::string_view data, T& out) {
   noexport::check_format<F, T>();
   if constexpr (F == body_format_e::form_urlencoded)
     return noexport::form_decode(data, out);
+  else if constexpr (F == body_format_e::multipart)
+    return multipart_decode(content_type, data, out);
   else
     return parse_value<F>(data, out);
 }

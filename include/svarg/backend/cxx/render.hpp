@@ -60,6 +60,8 @@ struct renderer {
   std::map<std::pair<std::string, std::string>, const ir::body*> body_encodings;
 
   void collect_body_encodings();
+  std::string render_part_headers(const string_map<std::set<ir::header>>& part_headers,
+                                  std::string_view relspec, const json_pointer& relative) const;
   const ir::body* find_body_encodings(const ir::schema& s) const;
 
   // неймспейс для того, что лежит по `jp` (без последнего сегмента - это имя)
@@ -104,7 +106,8 @@ struct renderer {
   // TODO? геттеры и сеттеры
   std::string render_object_fields(const arrayof<ir::object_field_info>& fields, std::string_view relspec,
                                    const json_pointer& relative, std::optional<ir::schema_ref> fields_owner,
-                                   std::optional<ir::schema_ref> additional_properties) const;
+                                   std::optional<ir::schema_ref> additional_properties,
+                                   const string_map<std::set<ir::header>>* part_headers = nullptr) const;
 
   std::string render_object_field(const ir::object_field_info&, std::string_view relspec,
                                   const json_pointer& relative, bool recursive_field) const;

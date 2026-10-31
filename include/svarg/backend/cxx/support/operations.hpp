@@ -24,28 +24,6 @@ constexpr http_method_e get_operation_method() {
   return method;
 }
 
-// параметр с `content:` (encoding_for не пуст) кодируется в этом content type, остальные - как текст
-template <size_t FieldIndex, typename T>
-std::string serialize_nonbody_field(const T& f, std::index_sequence<FieldIndex> = {}) {
-  if constexpr (has_encodings<T>) {
-    constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
-    if constexpr (!enc.empty())
-      return serialize_value<body_format_of(enc)>(get_field<FieldIndex>(f));
-  }
-  return serialize_nonbody_into(get_field<FieldIndex>(f));
-}
-
-// обратное к serialize_nonbody_field
-template <size_t FieldIndex, typename T>
-[[nodiscard]] error_code parse_nonbody_field(std::string_view value, T& f) {
-  if constexpr (has_encodings<T>) {
-    constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
-    if constexpr (!enc.empty())
-      return parse_value<body_format_of(enc)>(value, get_field<FieldIndex>(f));
-  }
-  return parse_nonbody_from(value, get_field<FieldIndex>(f));
-}
-
 template <an_operation Op>
 struct serialize_path_visitor {
   const Op& p;
@@ -196,7 +174,15 @@ void visit_body(const T& x, Vtor&& vtor) {
 template <typename T>
 void serialize_body_of(const T& x, const content_type_params& ctparams, auto&& out) {
   visit_body(x, [&]<body_format_e F>(std::string_view media_type, const auto& value) {
-    out(media_type_to_hdr_value(media_type, ctparams), serialize_body<F>(value));
+    if constexpr (F == body_format_e::multipart) {
+      content_type_params params = ctparams;
+      http_body_bytes bytes = serialize_body<F>(value, media_type, params);
+      out(media_type_to_hdr_value(media_type, params), std::move(bytes));
+    } else {
+      content_type_params unused;
+      http_body_bytes bytes = serialize_body<F>(value, media_type, unused);
+      out(media_type_to_hdr_value(media_type, ctparams), std::move(bytes));
+    }
   });
 }
 
@@ -218,16 +204,16 @@ template <typename T>
       return not_matched();
     constexpr body_format_e F = body_format_of(T::body_content_type);
     if constexpr (is_body_required<T>())
-      return parse_body<F>(data, x.body);
+      return parse_body<F>(content_type, data, x.body);
     else
-      return parse_body<F>(data, x.body.emplace());
+      return parse_body<F>(content_type, data, x.body.emplace());
   } else {
     return T::select_body_type(content_type, [&]<typename B>() -> error_code {
       if constexpr (std::is_void_v<B>)
         return not_matched();
       else
         return parse_body<body_format_of(get_content_type<B>())>(
-            data, get_special_field(x.body.template emplace<B>()));
+            content_type, data, get_special_field(x.body.template emplace<B>()));
     });
   }
 }
