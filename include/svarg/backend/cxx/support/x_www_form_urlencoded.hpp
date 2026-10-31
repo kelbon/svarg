@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-#include "svarg/backend/cxx/support/concepts.hpp"
+#include "svarg/backend/cxx/support/value_format.hpp"
 #include "svarg/utils/path_tools.hpp"
 
 namespace svarg::cxx_support {
@@ -24,7 +24,13 @@ struct application_x_www_form_urlencoded {
     return std::move(body);
   }
 
-  // значение уже сериализовано, только percent-encoding
+  // значение кодируется по формату F (поле с encoding.contentType - в JSON и т.д.)
+  template <body_format_e F, typename T>
+  void arg(std::string_view k, const T& value) {
+    nonbody_arg(k, serialize_value<F>(value));
+  }
+
+  // значение уже сериализовано (параметры query), только percent-encoding
   void nonbody_arg(std::string_view k, std::string_view value) {
     svarg::query_encode(k, std::back_inserter(body));
     body.push_back('=');

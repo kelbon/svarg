@@ -30,8 +30,9 @@ struct test_server : api::server {
 
   dd::task<hidi::http_response> do_login(api::login op, hidi::http_request, hidi::request_context) override {
     api::login::response_200 rsp;
-    rsp.body = std::format("{}/{}/{}", op.body.user, op.body.remember,
-                           op.body.attempts ? std::to_string(*op.body.attempts) : "-");
+    rsp.body = std::format("{}/{}/{}/{}", op.body.user, op.body.remember,
+                           op.body.attempts ? std::to_string(*op.body.attempts) : "-",
+                           op.body.meta.value_or("-"));
     co_return make_response(rsp);
   }
 
@@ -113,8 +114,15 @@ TEST("generated server") {
   form_raw.method = hidi::http_method_e::POST;
   form_raw.path = "/v1/login";
   form_raw.body.content_type = "application/x-www-form-urlencoded";
-  std::string_view form = "attempts=3&user=a+b%21";
+  // meta - с encoding application/json
+  std::string_view form = "attempts=3&user=a+b%21&meta=%22m%22";
   form_raw.body.data.assign(form.begin(), form.end());
+  REQUIRE(make_request([] {
+            api::login l;
+            l.body.user = "u";
+            l.body.meta = "m";
+            return l;
+          }()).body.strview() == "user=u&remember=false&meta=%22m%22");
   http_request form_bad = form_raw;
   form_bad.body.data.assign(form.begin(), form.begin() + 10);  // нет обязательного user
   std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
@@ -175,7 +183,7 @@ TEST("generated server") {
   REQUIRE(echoed.body.mode.get() == api::components::schemas::Item_::properties::mode::slow);
   // form-urlencoded запрос, text/plain ответ без JSON кавычек
   REQUIRE(rsps[9].status == 200);
-  REQUIRE(rsps[9].body_strview() == "a b!/false/3");
+  REQUIRE(rsps[9].body_strview() == "a b!/false/3/m");
   REQUIRE(rsps[10].status == 400);
 
   // поле типа самого объекта
@@ -223,6 +231,7 @@ TEST("generated client") {
     api::login login;
     login.body.user = "u&=";
     login.body.remember = true;
+    login.body.meta = "x y";
     greeting = co_await cli.send_login(login, hidi::deadline_t::never());
 
     // статус не из спецификации (404 на неверный base path): у getItem есть default ответ,
@@ -238,7 +247,7 @@ TEST("generated client") {
   });
 
   REQUIRE(count == 4);
-  REQUIRE(greeting.body == "u&=/true/-");
+  REQUIRE(greeting.body == "u&=/true/-/x y");
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
   REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7/10/all");
   REQUIRE(server.uploaded == "file");

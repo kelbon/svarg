@@ -482,6 +482,47 @@ std::string renderer::render_default_value(const ir::schema_ref& type, const Any
                      render_string(boost::json::serialize(v)));
 }
 
+static std::string render_encoding_for(const string_map<ir::content_type_t>& encodings) {
+  std::string encoding;
+  for (auto& [prop_name, content_type] : encodings)
+    encoding += std::format("if (str == {}) return {};\n", render_string(prop_name), render_string(content_type));
+  return std::format(
+      "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
+      "{{ {} return \"\";\n}}\n\n",
+      encoding);
+}
+
+void renderer::collect_body_encodings() {
+  auto add = [&](const std::set<ir::body>& bodies) {
+    for (const ir::body& b : bodies) {
+      if (!b.membersEncoding || b.membersEncoding->empty() || b.schema.is_fundamental())
+        continue;
+      // одна схема в нескольких телах - encoding берётся из первого
+      const ir::schema& s = schemaof(b.schema);
+      body_encodings.try_emplace(std::pair(s.spec, std::string(s.jsonptr.escaped())), &b);
+    }
+  };
+  for (auto* ops : {&ir.operations, &ir.webhooks}) {
+    if (!*ops)
+      continue;
+    for (const ir::operation& op : **ops) {
+      if (op.bodies)
+        add(*op.bodies);
+      if (op.responses)
+        for (auto& r : *op.responses)
+          if (r.bodies)
+            add(*r.bodies);
+      if (op.defaultResponse && op.defaultResponse->bodies)
+        add(*op.defaultResponse->bodies);
+    }
+  }
+}
+
+const ir::body* renderer::find_body_encodings(const ir::schema& s) const {
+  auto it = body_encodings.find(std::pair(s.spec, std::string(s.jsonptr.escaped())));
+  return it == body_encodings.end() ? nullptr : it->second;
+}
+
 std::string renderer::render_object_field(const ir::object_field_info& field, std::string_view relspec,
                                           const json_pointer& relative, bool recursive_field) const {
   if (recursive_field && field.required) {
@@ -688,6 +729,8 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         std::string result = render_parse_tag(cxx_support::parse_tag_e::object);
         result += render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(),
                                        a.additional_properties);
+        if (const ir::body* body = find_body_encodings(s))
+          result += render_encoding_for(*body->membersEncoding);
         return result;
       },
   };
@@ -876,18 +919,6 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
                         render_string(body.contentType));
   result += render_special_field(render_schema_ref(body.schema, spec, jp).typeref);
-  if (body.membersEncoding && !body.membersEncoding->empty()) {
-    std::string encoding;
-    for (auto& [prop_name, content_type] : *body.membersEncoding) {
-      // throw_if_unsupported_content_type(content_type);
-      encoding += std::format("if (str == {}) return {};\n",
-                              render_string(prop_name), render_string(content_type));
-    }
-    result += std::format(
-        "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
-        "{{ {} return \"\";\n}}\n\n",
-        encoding);
-  }
 
   result += "};\n";
 
@@ -953,18 +984,6 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     result += std::format("static constexpr bool body_is_required = {};\n", body.required);
     if (body.streaming && *body.streaming)
       result += "static constexpr bool body_is_streaming = true;\n";
-    if (body.membersEncoding && !body.membersEncoding->empty()) {
-      std::string encoding;
-      for (auto& [prop_name, content_type] : *body.membersEncoding) {
-        encoding +=
-            std::format("if (str == {}) return {};\n", render_string(prop_name),
-                        render_string(content_type));
-      }
-      result += std::format(
-          "[[nodiscard]] static constexpr std::string_view body_encoding_for(std::string_view str) noexcept"
-          "{{ {} return \"\";\n}}\n",
-          encoding);
-    }
     std::string type = render_schema_ref(body.schema, spec, jp).typeref;
     if (body.required)
       result += std::format("\n{} body;\n", type);

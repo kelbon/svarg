@@ -116,6 +116,11 @@ paths:
                   default: false
                 attempts:
                   type: integer
+                meta:
+                  type: string
+            encoding:
+              meta:
+                contentType: application/json
       responses:
         "200":
           description: greeting

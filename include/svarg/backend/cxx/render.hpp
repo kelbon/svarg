@@ -42,6 +42,7 @@ struct renderer {
     if (ir.schemas)
       for (const ir::schema& s : *ir.schemas)
         schema_locations.emplace(s.spec, std::string(s.jsonptr.escaped()));
+    collect_body_encodings();
   }
 
   // возвращает список сгенерированных путей без дубликатов, сортированный по пути,
@@ -54,6 +55,12 @@ struct renderer {
   mutable std::vector<fs::path> generated;
   // (spec, json pointer) всех схем: по ним определяется, какие сегменты неймспейса получают суффикс
   std::set<std::pair<std::string, std::string>> schema_locations;
+  // (spec, json pointer) схемы тела form/multipart => тело с encoding её свойств. encoding рендерится в
+  // саму схему (encoding_for), чтобы кодировать её поля без знания о владельце тела
+  std::map<std::pair<std::string, std::string>, const ir::body*> body_encodings;
+
+  void collect_body_encodings();
+  const ir::body* find_body_encodings(const ir::schema& s) const;
 
   // неймспейс для того, что лежит по `jp` (без последнего сегмента - это имя)
   std::string make_namespace(std::string_view spec, json_pointer jp) const;
