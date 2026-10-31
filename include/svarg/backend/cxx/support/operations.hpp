@@ -288,13 +288,17 @@ parse_error unparsed_error(const auto& unparsed, std::string_view what) {
 }  // namespace noexport
 
 // content-type берётся не из headers, а из req.body.content_type
+// `base_path` - путь из url сервера (например "/v1"), с которого начинается req.path
 template <an_operation Op>
-[[nodiscard]] error_code from_request(const http_request& req, Op& op) {
+[[nodiscard]] error_code from_request(const http_request& req, Op& op, std::string_view base_path = {}) {
   assert(req.method == get_operation_method<Op>());
 
   error_code ec;
 
   [[maybe_unused]] std::string_view path = path_and_query(req.path).first;
+  if (!path.starts_with(base_path))
+    return parse_error("path `{}` does not start with base path `{}`", path, base_path);
+  path.remove_prefix(base_path.size());
 
   if constexpr (has_path_params<Op>) {
     ec = parse_path_params(path, op);

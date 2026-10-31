@@ -2,12 +2,16 @@
 
 #include "generated/api/client.hpp"
 
-#include "generated/api/servers.hpp"
+#include "generated/api/server.hpp"
 
-struct example_server : api::server__ {
-  // TODO rename
-  dd::task<hidi::http_response> do_ping(api::ping, hidi::http_request, hidi::request_context) override {
-    co_return hidi::http_response{.status = 200};
+struct example_server : api::server {
+  using api::server::server;
+
+  dd::task<hidi::http_response> do_ping(api::ping op, hidi::http_request, hidi::request_context) override {
+    api::ping::response_200 rsp;
+    rsp.body._dATA.status = "ok";
+    // ответ проверяется на принадлежность операции при компиляции
+    co_return svarg::cxx_support::make_response(op, rsp);
   }
 };
 

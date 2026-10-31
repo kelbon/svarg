@@ -24,10 +24,6 @@ using hidi::http_response;
 using hidi::internet_address;
 using hidi::request_context;
 
-// для генерации сервера
-[[nodiscard]] inline dd::task<http_response> make_bad_request_rsp() {
-  co_return http_response{.status = 400};
-}
 // TODO добавить HTTP коды енам, его e2str/efromstr и в самом http2 вынести это в отдельный неймспейс
 
 }  // namespace svarg::cxx_support

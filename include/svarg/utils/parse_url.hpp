@@ -101,7 +101,7 @@ constexpr bool is_scheme_char(char c, bool first) {
   auto pos = s.find("://");
   if (pos == std::string_view::npos)
     return true;
-  return !is_valid_scheme(s);
+  return !is_valid_scheme(s.substr(0, pos));
 }
 
 [[nodiscard]] url_ref parse_absolute_url(std::string_view url);

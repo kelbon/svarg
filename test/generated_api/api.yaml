@@ -1,0 +1,42 @@
+openapi: 3.1.0
+info:
+  title: generated server/client test
+  version: 1.0.0
+servers:
+  - url: https://api.example.com/v1
+  - url: https://staging.example.com/v1/
+paths:
+  /items/{id}:
+    get:
+      operationId: getItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: item name
+          content:
+            application/json:
+              schema:
+                type: string
+        default:
+          description: error
+  /upload:
+    post:
+      operationId: upload
+      servers:
+        - url: https://upload.example.com/v2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+              minLength: 1
+      responses:
+        "204":
+          description: done

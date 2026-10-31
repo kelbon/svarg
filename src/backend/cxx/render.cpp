@@ -753,41 +753,16 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
     write_file(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
   }
 
-  // servers.hpp только если есть операции
-
+  // server.hpp только если есть операции, один сервер на спеку (адрес сервера определяется listen)
   if (ir.operations) {
-    // spec -> (url -> [op*])
-    string_map<std::map<server_object, std::vector<const ir::operation*>>> servers;
+    string_map<std::vector<const ir::operation*>> spec2ops;
     for (auto& op : *ir.operations) {
       assert(op.has_path() || !op.servers);  // у вебхуков не должно быть серверов
-      if (op.servers) {
-        for (auto& s : *op.servers)
-          servers[op.spec][s].push_back(&op);
-      }
+      if (op.servers)
+        spec2ops[op.spec].push_back(&op);
     }
-    // file -> rendered
-    string_map<std::string> server_files;
-    for (auto& [spec, srvs] : servers) {
-      for (auto& s : srvs) {
-        auto [it, emplaced] = server_files.try_emplace(spec);
-        if (emplaced) {
-          it->second += "#pragma once\n\n#include \"common_types.hpp\"\n\n";
-          // include необходимых операций
-          for (auto* op : s.second) {
-            it->second +=
-                std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
-          }
-          it->second += std::format("namespace {}\n {{", make_namespace(spec, {}, options));
-        }
-
-        it->second += render_server(s.first, s.second, spec);
-        it->second += "\n\n";
-      }
-    }
-    for (auto& [spec, rendered] : server_files) {
-      rendered += "}\n\n";  // end namespace
-      write_file(output_dir / spec / "servers.hpp", rendered);
-    }
+    for (auto& [spec, ops] : spec2ops)
+      write_file(output_dir / spec / "server.hpp", render_server(ops, spec));
   }
 
   if (ir.operations) {
@@ -1127,67 +1102,63 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   if (op.defaultResponse)
     result += render_response(*op.defaultResponse, op.spec, paths).render;
 
-  if (op.responses) {
+  if (op.responses || op.defaultResponse) {
+    // имена структур ответов в порядке op.responses
     std::vector<std::string> struct_names;
-    for (auto& r : *op.responses) {
-      auto [struct_name, rendered] = render_response(r, op.spec, paths);
-      result += rendered;
-      struct_names.push_back(std::move(struct_name));
+    if (op.responses) {
+      for (auto& r : *op.responses) {
+        assert(!r.is_default());
+        auto [struct_name, rendered] = render_response(r, op.spec, paths);
+        result += rendered;
+        struct_names.push_back(std::move(struct_name));
+      }
     }
+    static const std::remove_cvref_t<decltype(*op.responses)> no_responses;
+    const auto& responses = op.responses ? *op.responses : no_responses;
+    auto statuses = [&](bool ranges) {
+      return std::views::zip(struct_names, responses) |
+             std::views::filter([ranges](auto&& x) { return std::get<1>(x).is_range() == ranges; });
+    };
 
     result += "static constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {\n";
     // сначала не ренжи (2ХХ)
-    for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
-      assert(!r.is_default());
-      if (!r.is_range()) {
-        result += std::format("if (status == {}) return vtor.template operator()<{}>();\n",
-                              r.status.to_string(), struct_name);
-      }
+    for (auto&& [struct_name, r] : statuses(/*ranges=*/false)) {
+      result += std::format("if (status == {}) return vtor.template operator()<{}>();\n",
+                            r.status.to_string(), struct_name);
     }
     // затам ренжи, чтобы более специализированный был проверен раньше
-    for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
-      assert(!r.is_default());
-      if (r.is_range()) {
-        result += std::format(
-            "if (svarg::match_status_range<status_range_e::{}>(status)) return vtor.template "
-            "operator()<{}>();\n",
-            r.status.to_string(), struct_name);
-      }
+    for (auto&& [struct_name, r] : statuses(/*ranges=*/true)) {
+      result += std::format(
+          "if (svarg::match_status_range<status_range_e::{}>(status)) return vtor.template "
+          "operator()<{}>();\n",
+          r.status.to_string(), struct_name);
     }
     if (op.defaultResponse)
       result += "return vtor.template operator()<default_response>();\n";
     else
       result += "return vtor.template operator()<void>();\n";
     result += "}\n\n";
-    if (op.defaultResponse)
-      struct_names.push_back("default_response");
-    remove_duplicates(struct_names);
 
-    if (struct_names.size() == 1) {
-      result += std::format("using result_t = {};\n", struct_names.front());
+    // (имя структуры, суффикс get_if_)
+    std::vector<std::pair<std::string, std::string>> results;
+    for (auto&& [struct_name, r] : std::views::zip(struct_names, responses))
+      results.emplace_back(struct_name, r.status.to_string());
+    if (op.defaultResponse)
+      results.emplace_back("default_response", "default");
+
+    if (results.size() == 1) {
+      result += std::format("using result_t = {};\n", results.front().first);
     } else {
       result += "struct result_t {\n";
-      auto names_rng = struct_names | std::views::join_with(',');
+      auto names_rng = results | std::views::keys | std::views::join_with(',');
       result +=
           std::format("\n{}<{}> data;\n\n", variant_str, std::string(names_rng.begin(), names_rng.end()));
-      for (auto&& [struct_name, r] : std::views::zip(struct_names, *op.responses)) {
-        if (!r.is_default()) {
-          result += std::format("const {}* get_if_{}() const noexcept {{", struct_name, r.status.to_string());
-          result += std::format("return std::get_if<{}>(&data);\n", struct_name);
-          result += "}\n";
-          // non-const
-          result += std::format("{}* get_if_{}() noexcept {{", struct_name, r.status.to_string());
-          result += std::format("return std::get_if<{}>(&data);\n", struct_name);
-          result += "}\n";
-        } else {
-          result +=
-              "const default_response* get_if_default() const noexcept { return "
-              "std::get_if<default_response>(&data); }\n";
-          // non-const
-          result +=
-              "default_response* get_if_default() noexcept { return "
-              "std::get_if<default_response>(&data); }\n";
-        }
+      for (auto& [struct_name, suffix] : results) {
+        result +=
+            std::format("const {0}* get_if_{1}() const noexcept {{ return std::get_if<{0}>(&data); }}\n",
+                        struct_name, suffix);
+        result += std::format("{0}* get_if_{1}() noexcept {{ return std::get_if<{0}>(&data); }}\n",
+                              struct_name, suffix);
       }
       result += "};\n";
     }
@@ -1227,56 +1198,58 @@ ir::schema_refs_t renderer::dealias(ir::schema_refs_t schemas) const {
 
 // CLIENT/SERVER
 
-struct build_make_url_visitor {
-  std::string& out;
-  const server_object& server;
-  const render_options& options;
+// путь из url сервера без завершающего '/', переменные заменяются значениями по умолчанию
+// "https://api.example.com/v1/" -> "/v1", "/" -> ""
+static std::string server_base_path(const server_object& s) {
+  std::string url;
+  std::string_view tmpl = s.url;
+  while (!tmpl.empty()) {
+    size_t open = tmpl.find('{');
+    url += tmpl.substr(0, open);
+    if (open == tmpl.npos)
+      break;
+    size_t close = tmpl.find('}', open);
+    if (close == tmpl.npos)
+      throw render_error("invalid server url `{}`", s.url);
+    std::string_view name = tmpl.substr(open + 1, close - open - 1);
+    auto var = s.variables ? s.variables->find(name) : decltype(s.variables->find(name)){};
+    if (!s.variables || var == s.variables->end())
+      throw render_error("server url `{}` uses undefined variable `{}`", s.url, name);
+    url += var->second.default_;
+    tmpl.remove_prefix(close + 1);
+  }
+  std::string_view path = url;
+  if (!is_relative_url(url))
+    path = parse_absolute_url(url).path;
+  path = path.substr(0, path.find_first_of("?#"));
+  while (path.ends_with('/'))
+    path.remove_suffix(1);
+  if (!path.empty() && !path.starts_with('/'))
+    throw render_error("server url `{}` has path not starting with '/'", s.url);
+  return std::string(path);
+}
 
-  explicit build_make_url_visitor(std::string& x, const server_object& srv, const render_options& options)
-      : out(x), server(srv), options(options) {
-    out += "std::string result;\n";
-  }
+namespace {
 
-  void substr(std::string_view sv) {
-    out += std::format("result += {};\n", render_string(sv));
-  }
-  void param(std::string_view param_name) {
-    out += std::format("result += {};\n", make_cxx_ident(param_name, options));
-  }
-  void param(std::string_view param_name, std::string_view sep) {
-    param(param_name);
-    substr(sep);
-  }
-
-  void pattern_end() {
-    out += "return result;\n";
-  }
-  void error(std::string_view msg) {
-    throw render_error("{}", msg);
-  }
-
-  static consteval bool is_done() {
-    return false;
-  }
+// операция по полному пути (base path сервера + путь операции)
+struct route {
+  const ir::operation* op;
+  std::string base_path;
+  std::string path;  // включая base_path
 };
+
+}  // namespace
 
 // TODO теоретически пути делятся на "точное соответствие" - хеш мапа и для динамических и для статических,
 // без аргументов пути и может префиксное дерево для остального. Но существуют неоднозначности
 
-// TODO test
-// возвращает сортированных набор операций такой, что по нему можно идти сверху вниз при матче path
+// возвращает сортированных набор маршрутов такой, что по нему можно идти сверху вниз при матче path
 // и первый сматченный будет наиболее специализированным
-// возвращает мапу метод -> операции (сначала не шаблонные пути, затем шаблонные сортированные по приоритету)
-static string_map<std::vector<const ir::operation*>> order_operations_right_for_path_matching(
-    const std::vector<const ir::operation*>& operations) {
-  auto is_not_templated = [](const ir::operation* o) {
-    assert(o->has_path());
-    return !is_template_path(o->path);
-  };
+// возвращает мапу метод -> маршруты (сначала не шаблонные пути, затем шаблонные сортированные по приоритету)
+static string_map<std::vector<route>> order_routes_for_path_matching(std::vector<route> routes) {
+  auto is_not_templated = [](const route& r) { return !is_template_path(r.path); };
   // TODO такую неоднозначность (см. ниже) можно решать по правилу точное совпадение выигрывает. В данном
   // случае v1 это точное совпадение с пришедшей строкой, а значит выигрывает она?
-  // TODO рантайм обработчики добавить и если нет кривых паттернов, либо по требованию пользователя
-  // использовать префиксное дерево
 
   // приоритет важен для предсказуемости выбора в неоднозначных ситуациях
   // /v1/{a} и /{version}/x могут сматчить одну и ту же строку "/v1/x"
@@ -1284,63 +1257,44 @@ static string_map<std::vector<const ir::operation*>> order_operations_right_for_
   // для разрешения этой ситуации используется приоритет,
   // в опенапи приоритет выше если операция написана выше в спеке
 
-  auto by_priority = [](const ir::operation* a, const ir::operation* b) {
+  auto by_priority = [](const route& a, const route& b) {
     // меньше приоритет - выше в списке. У всех должен быть назначен приоритет, так как вебхуки не должны
     // быть присоединены к серверу
-    return (a->priority.value() <=> b->priority.value()) == std::strong_ordering::less;
+    return a.op->priority.value() < b.op->priority.value();
   };
-  auto by_specialization = [by_priority](const ir::operation* a, const ir::operation* b) {
-    auto order = compare_paths_specialized(a->path, b->path);
+  auto by_specialization = [by_priority](const route& a, const route& b) {
+    auto order = compare_paths_specialized(a.path, b.path);
     if (order != std::strong_ordering::equivalent)
       // в начале самые приоритетные
       return order == std::strong_ordering::greater;
     return by_priority(a, b);
   };
 
-  // метод -> операции
-  string_map<std::vector<const ir::operation*>> operations_ordered;
-  // раскладываем по методам
-  for (auto& op : operations)
-    operations_ordered[op->method].push_back(op);
+  // метод -> маршруты
+  string_map<std::vector<route>> ordered;
+  for (auto& r : routes)
+    ordered[r.op->method].push_back(std::move(r));
   // сортируем внутри вектора по специализации и приоритету
-  for (auto& [method, ops] : operations_ordered) {
+  for (auto& [method, rs] : ordered) {
     // сначала не шаблонизированные пути
-    auto templated = std::ranges::partition(ops, is_not_templated);
-    std::ranges::stable_sort(ops.begin(), templated.begin(), by_priority);
+    auto templated = std::ranges::partition(rs, is_not_templated);
+    std::ranges::stable_sort(rs.begin(), templated.begin(), by_priority);
     std::ranges::stable_sort(templated, by_specialization);
   }
-
-  return operations_ordered;
+  return ordered;
 }
 
-std::string renderer::render_server(const server_object& s,
-                                    const std::vector<const ir::operation*>& operations,
+std::string renderer::render_server(const std::vector<const ir::operation*>& operations,
                                     std::string_view spec) const {
   assert(!operations.empty());
 
-  std::string result;
+  std::string result = "#pragma once\n\n#include \"common_types.hpp\"\n\n";
+  for (auto* op : operations)
+    result += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
+  result += std::format("namespace {} {{\n\n", make_namespace(spec, {}, options));
 
-  if (is_relative_url(s.url))
-    emit_warn("relative url `{}` in server in something strange", s.url);
-  result += std::format("struct server_{} : hidi::h2server {{\n\n", make_cxx_ident(s.url, options));
-  result += "static std::string make_url(";
-  if (s.variables) {
-    bool first = true;
-    for (auto&& [name, var] : *s.variables) {
-      if (!first)
-        result += ',';
-      result += std::format("std::string_view {}", make_cxx_ident(name, options));
-      first = false;
-    }
-  }
-  result += ") {\n";  // start fn
-  if (s.variables)
-    // TODO тест что действительно работает
-    visit_templated_path_parts(s.url, build_make_url_visitor(result, s, options));
-  else
-    result += std::format("return {};\n", render_string(s.url));
-  result += "}\n";  // end fn
   // TODO x-name для сервера поддержать ?
+  result += "struct server : hidi::h2server {\nusing hidi::h2server::h2server;\n\n";
 
   auto make_handler_method_name = [&](const ir::operation& op) {
     return std::format("do_{}", make_cxx_ident(op.id, options));
@@ -1359,35 +1313,50 @@ std::string renderer::render_server(const server_object& s,
   }
 
   result +=
-      "virtual dd::task<hidi::http_response> on_unknown_operation(hidi::http_request req, "
-      "hidi::request_context) { throw "
-      "svarg::parse_error(\"cannot find handler for path `{}`\", req.path);\n}\n";
+      "// путь и метод не подошли ни к одной операции\n"
+      "virtual dd::task<hidi::http_response> on_unknown_operation(hidi::http_request, "
+      "hidi::request_context) {\n"
+      "co_return hidi::http_response{.status = 404};\n}\n\n"
+      "// операция найдена, но запрос не соответствует ей (параметры, тело...)\n"
+      "virtual dd::task<hidi::http_response> on_bad_request(hidi::http_request, svarg::error_code, "
+      "hidi::request_context) {\n"
+      "co_return hidi::http_response{.status = 400};\n}\n\n";
 
   result +=
       "dd::task<hidi::http_response> handle_request(hidi::http_request req, hidi::request_context ctx) "
-      "override {\n";
+      "override {\n"
+      "std::string_view path = svarg::path_and_query(req.path).first;\n";
 
-  string_map ordered_operations = order_operations_right_for_path_matching(operations);
+  // операция доступна по base path каждого своего сервера
+  std::vector<route> routes;
+  for (auto* op : operations) {
+    std::set<std::string> base_paths;
+    for (auto& srv : *op->servers)
+      base_paths.insert(server_base_path(srv));
+    for (auto& bp : base_paths)
+      routes.push_back(route{.op = op, .base_path = bp, .path = bp + deescape_path(op->path)});
+  }
 
-  result += "switch(req.method) {";
-  for (auto& [method, ops] : ordered_operations) {
-    result += std::format("case hidi::http_method_e::{}:", method);
-    for (auto& op : ops) {
+  result += "switch(req.method) {\n";
+  for (auto& [method, rs] : order_routes_for_path_matching(std::move(routes))) {
+    result += std::format("case hidi::http_method_e::{}:\n", method);
+    for (auto& r : rs) {
       result += std::format(
-          "if (svarg::match_path_pattern<{}>(svarg::path_and_query(req.path).first)) {{\n"
-          "{} op;\nsvarg::error_code ec = svarg::cxx_support::from_request(req, op);\nif (ec) return "
-          "svarg::cxx_support::make_bad_request_rsp();\n"
+          "if (svarg::match_path_pattern<{}>(path)) {{\n"
+          "{} op;\n"
+          "svarg::error_code ec = svarg::cxx_support::from_request(req, op, {});\n"
+          "if (ec) return on_bad_request(std::move(req), std::move(ec), std::move(ctx));\n"
           "return {}(std::move(op), std::move(req), std::move(ctx));\n"
           "}}\n",
-          render_string(deescape_path(op->path)), make_cxx_ident(op->id, options),
-          make_handler_method_name(*op));
+          render_string(r.path), make_cxx_ident(r.op->id, options), render_string(r.base_path),
+          make_handler_method_name(*r.op));
     }
+    result += "break;\n";
   }
-  result +=
-      "default: return on_unknown_operation(std::move(req), std::move(ctx)); break;\n}\n";  // end switch
-
-  result += "}\n";     // end fn
-  result += "};\n\n";  // end struct
+  result += "default: break;\n}\n";  // end switch
+  result += "return on_unknown_operation(std::move(req), std::move(ctx));\n";
+  result += "}\n";        // end fn
+  result += "};\n\n}\n";  // end struct, namespace
   return result;
 }
 

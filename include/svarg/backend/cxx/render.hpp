@@ -134,8 +134,8 @@ struct renderer {
   friend std::string render_parameters(const auto& params, std::string_view spec, const json_pointer& jp,
                                        const renderer&);
 
-  std::string render_server(const server_object&, const std::vector<const ir::operation*>& operations,
-                            std::string_view spec) const;
+  // один сервер на спеку со всеми операциями
+  std::string render_server(const std::vector<const ir::operation*>& operations, std::string_view spec) const;
 
   std::string render_client(const std::vector<const ir::operation*>& operations, std::string_view spec) const;
 
