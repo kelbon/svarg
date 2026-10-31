@@ -45,6 +45,9 @@ TEST("cxx_ident") {
   CXX_IDENT_CASE("namespace", "namespace_", "namespace_");
   CXX_IDENT_CASE("return", "return_", "return_");
   CXX_IDENT_CASE("co_await", "co_await_", "co_await_");
+  // и макросы
+  CXX_IDENT_CASE("NULL", "NULL_", "NULL_");
+  CXX_IDENT_CASE("linux", "linux_", "linux_");
   CXX_IDENT_CASE("not", "not_", "not_");
   CXX_IDENT_CASE("xor_eq", "xor_eq_", "xor_eq_");
   CXX_IDENT_CASE("true", "true_", "true_");

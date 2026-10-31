@@ -116,6 +116,12 @@ static constexpr bool is_cxx_keyword(std::string_view s) noexcept {
       .cases("__FUNCSIG__", "__FUNCDNAME__", "__cdecl", "__stdcall", "__fastcall", true)
       .cases("__forceinline", "__declspec", "__int8", "__int16", true)
       .cases("__int32", "__int64", "__ptr32", "__ptr64", true)
+      // макросы стандартной библиотеки и платформ (linux и unix определены в gnu++ режиме,
+      // остальные - в windows.h), значения енамов вроде NULL встречаются в спецификациях
+      .cases("NULL", "EOF", "errno", "assert", "offsetof", true)
+      .cases("stdin", "stdout", "stderr", "linux", "unix", true)
+      .cases("TRUE", "FALSE", "ERROR", "DELETE", "IN", true)
+      .cases("OUT", "OPTIONAL", "interface", "min", "max", true)
       .or_default(false);
 }
 
