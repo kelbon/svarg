@@ -1160,7 +1160,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   if (op.defaultResponse)
     result += render_response(*op.defaultResponse, op.spec, paths).render;
 
-  if (op.responses || op.defaultResponse) {
+  {
     // имена структур ответов в порядке op.responses
     std::vector<std::string> struct_names;
     if (op.responses) {
@@ -1204,16 +1204,15 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
     if (op.defaultResponse)
       results.emplace_back("default_response", "default");
 
+    // результат клиента - описанные в спецификации ответы: единственный - сам ответ, несколько - вариант.
+    // Статус не из спецификации попадает в default ответ, а без него клиент бросает unexpected_response
     if (results.size() == 1) {
       result += std::format("using result_t = {};\n", results.front().first);
-    } else {
+    } else if (!results.empty()) {
       result += "struct result_t {\n";
       auto names_rng = results | std::views::keys | std::views::join_with(',');
       result +=
-          // monostate первым: ответы с полями по умолчанию в хедерах не default constructible
-          // до завершения определения операции (в которую они вложены)
-          std::format("\n{}<std::monostate, {}> data;\n\n", variant_str,
-                      std::string(names_rng.begin(), names_rng.end()));
+          std::format("\n{}<{}> data;\n\n", variant_str, std::string(names_rng.begin(), names_rng.end()));
       for (auto& [struct_name, suffix] : results) {
         result +=
             std::format("const {0}* get_if_{1}() const noexcept {{ return std::get_if<{0}>(&data); }}\n",
@@ -1222,6 +1221,8 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
                               struct_name, suffix);
       }
       result += "};\n";
+    } else {
+      result += "struct result_t {};\n";  // ответов нет, любой статус неожиданный
     }
   }
 

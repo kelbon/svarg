@@ -166,8 +166,10 @@ struct counting {
 TEST("generated client") {
   test_server server(hidi::server_ssl_context_ptr(nullptr));
   int count = 0;
-  api::getItem::result_t item;
+  // result_t с несколькими ответами создаётся только из ответа
+  std::optional<api::getItem::result_t> item, not_found;
   api::upload::result_t uploaded;
+  std::optional<hidi::http_response> unexpected;
 
   run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
     api::client cli{counting{any_client(client_ref(h2)), &count}};
@@ -187,12 +189,25 @@ TEST("generated client") {
     (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
     note.body.emplace<api::addNote::application_problem_json_body>().get() = 42;
     (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
+
+    // статус не из спецификации (404 на неверный base path): у getItem есть default ответ,
+    // у upload нет - исключение
+    api::client wrong_path{client_ref(h2), "/nope"};
+    not_found = co_await wrong_path.send_getItem(get, hidi::deadline_t::never());
+    api::client_upload_example_com_v2 wrong_upload{client_ref(h2), "/nope"};
+    try {
+      (void)co_await wrong_upload.send_upload(up, hidi::deadline_t::never());
+    } catch (unexpected_response& e) {
+      unexpected = std::move(e.response);
+    }
   });
 
   REQUIRE(count == 3);
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
-  REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7/10/all");
+  REQUIRE(item->get_if_200() && item->get_if_200()->body == "item7/10/all");
   REQUIRE(server.uploaded == "file");
+  REQUIRE(not_found->get_if_default() && not_found->get_if_default()->status == 404);
+  REQUIRE(unexpected && unexpected->status == 404);
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

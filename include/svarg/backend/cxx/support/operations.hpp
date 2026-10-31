@@ -496,40 +496,49 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
   return {};
 }
 
+// бросается клиентом, если статус ответа не описан для операции (и у неё нет default ответа)
+struct unexpected_response : svarg_exception {
+  http_response response;
+
+  unexpected_response(http_response rsp, std::string_view operation)
+      : svarg_exception("status `{}` is not described for operation `{}`", rsp.status, operation),
+        response(std::move(rsp)) {
+  }
+};
+
+// описанные в спецификации ответы операции: сам ответ, либо структура с вариантом ответов
 template <an_operation Op>
 using operation_result = typename Op::result_t;
 
 namespace noexport {
 
-// result_t - либо сам ответ, либо структура с вариантом ответов
-template <typename T, typename Result>
-[[nodiscard]] T& emplace_result(Result& r) {
-  if constexpr (std::is_same_v<Result, T>)
-    return r;
+template <typename Result, typename T>
+[[nodiscard]] Result make_result(T&& v) {
+  if constexpr (std::is_same_v<Result, std::decay_t<T>>)
+    return std::forward<T>(v);
   else
-    return r.data.template emplace<T>();
+    return Result{.data = std::forward<T>(v)};
 }
 
 }  // namespace noexport
 
 // отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
+// бросает исключение при ошибке транспорта, неразобранном ответе и unexpected_response
 template <an_operation Op>
 [[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
                                                           deadline_t deadline) {
   static_assert(metel::is_decayed_v<Op>);
   http_response rsp = co_await client.send_request(std::move(req), deadline);
   // TODO sax parsing
-  operation_result<Op> result;
-  auto do_parse = [&]<typename T>() {
+  co_return Op::visit_response_status(rsp.status, [&]<typename T>() -> operation_result<Op> {
     if constexpr (std::is_void_v<T>) {
-      throw parse_error("status `{}` do not match any response for operation `{}`", rsp.status,
-                        type_name<Op>());
+      throw unexpected_response(std::move(rsp), type_name<Op>());
     } else {
-      from_response(rsp, noexport::emplace_result<T>(result)).rethrow_if_failed();
+      T v;
+      from_response(rsp, v).rethrow_if_failed();
+      return noexport::make_result<operation_result<Op>>(std::move(v));
     }
-  };
-  Op::visit_response_status(rsp.status, do_parse);
-  co_return result;
+  });
 }
 
 }  // namespace svarg::cxx_support
