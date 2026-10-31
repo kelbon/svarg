@@ -9,7 +9,7 @@ paths:
       summary: Health check
       responses:
         "200":
-          description: OK
+          description: OKAY
           content:
             application/json:
               schema:

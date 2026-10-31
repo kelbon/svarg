@@ -1155,6 +1155,9 @@ struct build_make_url_visitor {
   }
 };
 
+// TODO теоретически пути делятся на "точное соответствие" - хеш мапа и для динамических и для статических,
+// без аргументов пути и может префиксное дерево для остального. Но существуют неоднозначности
+
 // TODO test
 // возвращает сортированных набор операций такой, что по нему можно идти сверху вниз при матче path
 // и первый сматченный будет наиболее специализированным
@@ -1165,11 +1168,17 @@ static string_map<std::vector<const ir::operation*>> order_operations_right_for_
     assert(o->has_path());
     return !is_template_path(o->path);
   };
+  // TODO такую неоднозначность (см. ниже) можно решать по правилу точное совпадение выигрывает. В данном
+  // случае v1 это точное совпадение с пришедшей строкой, а значит выигрывает она?
+  // TODO рантайм обработчики добавить и если нет кривых паттернов, либо по требованию пользователя
+  // использовать префиксное дерево
+
   // приоритет важен для предсказуемости выбора в неоднозначных ситуациях
   // /v1/{a} и /{version}/x могут сматчить одну и ту же строку "/v1/x"
   // хотя среди них нет более специализированного
   // для разрешения этой ситуации используется приоритет,
   // в опенапи приоритет выше если операция написана выше в спеке
+
   auto by_priority = [](const ir::operation* a, const ir::operation* b) {
     // меньше приоритет - выше в списке. У всех должен быть назначен приоритет, так как вебхуки не должны
     // быть присоединены к серверу
@@ -1208,7 +1217,7 @@ std::string renderer::render_server(const server_object& s,
 
   if (is_relative_url(s.url))
     emit_warn("relative url `{}` in server in something strange", s.url);
-  result += std::format("struct server_{} : svarg::http2_server {{\n\n", make_cxx_ident(s.url, options));
+  result += std::format("struct server_{} : hidi::h2server {{\n\n", make_cxx_ident(s.url, options));
   result += "static std::string make_url(";
   if (s.variables) {
     bool first = true;
@@ -1239,29 +1248,30 @@ std::string renderer::render_server(const server_object& s,
     // возвращает http_response чтобы пользователь мог гибче назначить всякие параметры content type
     // или сделать что-то неподдерживаемое библиотекой
     result += std::format(
-        "virtual dd::task<svarg::http_response> {}({}, svarg::http_request, svarg::request_context) = "
+        "virtual dd::task<hidi::http_response> {}({}, hidi::http_request, hidi::request_context) = "
         "0;\n\n",
         make_handler_method_name(*op), make_cxx_ident(op->id, options));
   }
 
   result +=
-      "virtual dd::task<svarg::http_response> on_unknown_operation(svarg::http_request req, "
-      "svarg::request_context) { throw "
+      "virtual dd::task<hidi::http_response> on_unknown_operation(hidi::http_request req, "
+      "hidi::request_context) { throw "
       "svarg::parse_error(\"cannot find handler for path `{}`\", req.path);\n}\n";
 
   result +=
-      "dd::task<http_response> handle_request(svarg::http_request req, svarg::request_context ctx) "
+      "dd::task<hidi::http_response> handle_request(hidi::http_request req, hidi::request_context ctx) "
       "override {\n";
 
   string_map ordered_operations = order_operations_right_for_path_matching(operations);
 
   result += "switch(req.method) {";
   for (auto& [method, ops] : ordered_operations) {
-    result += std::format("case svarg::http_method_e::{}:", method);
+    result += std::format("case hidi::http_method_e::{}:", method);
     for (auto& op : ops) {
       result += std::format(
           "if (svarg::match_path_pattern<{}>(svarg::path_and_query(req.path).first)) {{\n"
-          "{} op;\nerror_code ec = from_request(req, op);\nif (ec) return svarg::make_bad_request_rsp();\n"
+          "{} op;\nsvarg::error_code ec = svarg::cxx_support::from_request(req, op);\nif (ec) return "
+          "svarg::cxx_support::make_bad_request_rsp();\n"
           "return {}(std::move(op), std::move(req), std::move(ctx));\n"
           "}}\n",
           render_string(deescape_path(op->path)), make_cxx_ident(op->id, options),

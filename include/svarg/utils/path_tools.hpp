@@ -349,10 +349,10 @@ constexpr bool match_path_pattern(std::string_view path_pattern, std::string_vie
 // игнорирует возможный % енкодинг путей
 template <constexpr_string PathPattern>
 constexpr bool match_path_pattern(std::string_view path) {
-  if constexpr (!is_template_path(PathPattern))
+  if constexpr (!is_template_path(PathPattern.str()))
     return PathPattern == path;
   else
-    return match_path_pattern(PathPattern, path);
+    return match_path_pattern(PathPattern.str(), path);
 }
 
 // QUERY
