@@ -17,14 +17,14 @@ using cxx_support::special_field_name;
 static constexpr std::string_view optional_str = "std::optional";
 static constexpr std::string_view variant_str = "std::variant";
 // используется также как optional, но когда поля рекурсивные (т.е. нельзя сделать optional)
-static constexpr std::string_view box_str = "metel::box";
+static constexpr std::string_view box_str = "::metel::box";
 // название шаблона куда подставлять аргументы allOf
-static constexpr std::string_view allof_str = "allof";
-static constexpr std::string_view anyof_str = "anyof";
-static constexpr std::string_view oneof_str = "oneof";
-static constexpr std::string_view array_str = "arrayof";
+static constexpr std::string_view allof_str = "::svarg::cxx_support::allof";
+static constexpr std::string_view anyof_str = "::svarg::cxx_support::anyof";
+static constexpr std::string_view oneof_str = "::svarg::cxx_support::oneof";
+static constexpr std::string_view array_str = "::svarg::cxx_support::arrayof";
 // куда вставлять аргумент 'not' из openapi
-static constexpr std::string_view not_str = "not_a";
+static constexpr std::string_view not_str = "::svarg::cxx_support::not_a";
 // для схемы без имени. Она будет в отдельном уникальном неймспейсе с этим именем
 static constexpr std::string_view inline_schema_name = "_schema";
 // добавляется в начале каждой схемы
@@ -44,7 +44,7 @@ static constexpr std::string_view operation_file_begin = R"(
 )";
 // добавляется в конце каждой схемы
 static constexpr std::string_view operation_file_end = "";
-static constexpr std::string_view typelist_str = "typelist";
+static constexpr std::string_view typelist_str = "::metel::typelist";
 
 // выключено, чтобы генерировать любые апи. Ошибка будет выдана на этапе попытки записи в такой формат
 // static void throw_if_unsupported_content_type(const ir::content_type_t& t) {
@@ -295,9 +295,10 @@ std::vector<std::string> renderer::collect_mentioned_first_layer_specs(const ir:
 }
 
 schema_ref_result renderer::render_fundamental_type(const ir::fundamental_e f) const {
+  // полностью квалифицированные, генерируемый код находится в неймспейсе спеки
   if (f == ir::fundamental_e::string)
     return {.typeref = "std::string", .is_alias = true};
-  return {.typeref = std::string(e2str(f)), .is_alias = true};
+  return {.typeref = std::format("::svarg::cxx_support::{}", e2str(f)), .is_alias = true};
 }
 
 std::string renderer::render_discriminator(const ir::discriminator_desc& d, std::string_view relspec,
@@ -589,7 +590,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
               if (!v.value.is_null())
                 throw parse_error("cannot parse `null` from not null json value `{}`",
                                   to_json_string(v, /*pretty=*/false));
-              result += std::format("null,");
+              result += "::svarg::cxx_support::null{},";
             }
           } else {
             throw render_error("not fundamental types in enums are not supported");
