@@ -12,6 +12,22 @@ namespace svarg::cxx_support {
 // TODO добавить здесь про дискриминаторы и всякое нужное для render, связать через этот файл render.cpp с
 // cxx_support
 
+// metel::visit_index для любого числа полей (у metel не больше 128): вызывает f.template operator()<i>(),
+// i < Count. В спецификациях встречаются объекты и query с сотнями параметров
+template <size_t Count, size_t Offset = 0>
+constexpr decltype(auto) visit_field_index(auto&& f, size_t i) {
+  static_assert(Count > Offset);
+  constexpr size_t chunk = metel::VISIT_INDEX_MAX + 1;
+  auto shifted = [&]<size_t I>() -> decltype(auto) { return f.template operator()<Offset + I>(); };
+  if constexpr (Count - Offset <= chunk) {
+    return metel::visit_index<Count - Offset - 1>(shifted, i - Offset);
+  } else {
+    if (i - Offset < chunk)
+      return metel::visit_index<chunk - 1>(shifted, i - Offset);
+    return visit_field_index<Count, Offset + chunk>(f, i);
+  }
+}
+
 // имя максимально кривое для наименьшей вероятности пересечения с другими именами
 static constexpr std::string_view special_field_name = "_implfield";
 

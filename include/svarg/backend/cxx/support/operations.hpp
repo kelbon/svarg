@@ -326,7 +326,7 @@ template <an_operation Op>
       if (!index)
         return {};  // игнорируем дополнительные аргументы
       unparsed.set(*index, false);
-      return metel::visit_index<fields_count<query_t<Op>>() - 1>(
+      return visit_field_index<fields_count<query_t<Op>>()>(
           [&]<size_t I>() { return parse_nonbody_field<I>(value, op.query); }, *index);
     };
     ec = visit_query</*WwwUrlEncoded=*/false>(get_query(req.path), on_query_arg);
@@ -364,7 +364,7 @@ template <an_operation Op>
           if (!index)
             return error_code{};  // игнорируем дополнительные аргументы
           unparsed_cookies.set(*index, false);
-          return metel::visit_index<fields_count<cookies_t<Op>>() - 1>(
+          return visit_field_index<fields_count<cookies_t<Op>>()>(
               [&]<size_t I>() { return parse_nonbody_field<I>(value, op.cookies); }, *index);
         };
         ec = visit_cookies(value, on_cookie_arg);
@@ -377,7 +377,7 @@ template <an_operation Op>
       std::optional index = get_field_index<headers_t<Op>>(name);
       if (index) {
         unparsed_headers.set(*index, false);
-        ec = metel::visit_index<fields_count<headers_t<Op>>() - 1>(
+        ec = visit_field_index<fields_count<headers_t<Op>>()>(
             [&]<size_t I>() { return parse_nonbody_field<I>(value, op.headers); }, *index);
         if (ec)
           return ec;
@@ -459,7 +459,7 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
       std::optional index = get_field_index<headers_t<R>>(name);
       if (index) {
         unparsed.set(*index, false);
-        ec = metel::visit_index<fields_count<headers_t<R>>() - 1>(
+        ec = visit_field_index<fields_count<headers_t<R>>()>(
             [&]<size_t I>() { return parse_nonbody_field<I>(value, rsp.headers); }, *index);
         if (ec)
           return ec;

@@ -203,7 +203,7 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
     // объект может состоять только из additional properties
     if constexpr (fields_count<A>() > 0) {
       if (std::optional<size_t> i = cxx_support::get_field_index<A>(key)) {
-        metel::visit_index<fields_count<A>() - 1>(
+        cxx_support::visit_field_index<fields_count<A>()>(
             [&]<size_t I>() {
               if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
                 unparsed.set(I, false);

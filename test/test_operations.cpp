@@ -271,5 +271,11 @@ TEST("response") {
   REQUIRE(from_response(bad, out).failed());
 }
 
+TEST("visit_field_index") {
+  // больше, чем metel::visit_index умеет за раз
+  for (size_t i : {0, 127, 128, 255, 256, 299})
+    REQUIRE(visit_field_index<300>([]<size_t I>() { return I; }, i) == i);
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;
