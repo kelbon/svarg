@@ -409,7 +409,11 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   return {.typeref = std::move(result), .is_alias = false};
 }
 
-bool renderer::is_recursive_field(const ir::schema& s, const ir::schema_ref& field_type) const {
+bool renderer::is_recursive_field(const ir::schema_ref& owner, const ir::schema_ref& field_type) const {
+  // поле типа самого владельца (Node { Node child; }), collect_all_mentioned не видит прямую
+  // ссылку на себя
+  if (field_type == owner)
+    return true;
   ir::schema_refs_t deps;
   return collect_all_mentioned(field_type, deps);
 }
@@ -501,7 +505,7 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
   auto is_recursive = [&](const ir::schema_ref& r) {
     if (r.is_fundamental())
       return false;
-    return fields_owner ? is_recursive_field(schemaof(*fields_owner), r) : false;
+    return fields_owner ? is_recursive_field(*fields_owner, r) : false;
   };
 
   std::string result;

@@ -78,7 +78,7 @@ struct renderer {
     std::println("warning: {}", std::format(fmt, std::forward<Args>(args)...));
   }
 
-  bool is_recursive_field(const ir::schema& s, const ir::schema_ref& field_type) const;
+  bool is_recursive_field(const ir::schema_ref& owner, const ir::schema_ref& field_type) const;
   std::string render_schemas_array(const arrayof<ir::schema_ref>& arr, std::string_view relspec,
                                    const json_pointer& relative) const;
   std::string render_struct_content(const ir::schema& s, std::string typeref) const;

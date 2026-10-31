@@ -114,6 +114,8 @@ components:
           items:
             type: string
           default: [x]
+        child:
+          $ref: "#/components/schemas/Item"
     Kind:
       type: string
       enum: [a, b]

@@ -102,7 +102,7 @@ TEST("generated server") {
   put_raw.method = hidi::http_method_e::PUT;
   put_raw.path = "/v1/items/5/data";
   put_raw.body.content_type = "application/json";
-  std::string_view item_json = R"({"name":"n"})";
+  std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
   test_server server(hidi::server_ssl_context_ptr(nullptr));
@@ -152,6 +152,8 @@ TEST("generated server") {
   REQUIRE(echoed.body.tags == std::vector<std::string>{"x"});
   // инлайн-подсхема свойства: Item_::properties::mode
   REQUIRE(echoed.body.mode.get() == api::components::schemas::Item_::properties::mode::slow);
+  // поле типа самого объекта
+  REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);
 }
 
 // middleware: считает запросы и передаёт дальше
