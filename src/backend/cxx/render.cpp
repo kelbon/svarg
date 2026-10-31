@@ -251,13 +251,20 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
     return;
   auto& t = schemaof(s);
 
-  if (t.type.is_fundamental())
-    return;
-
   auto collect = [&](const ir::schema_ref& ref) {
     if (ref != s && !ref.is_fundamental())  // рекурсия
       out.insert(ref);                      // если ref уже там был, то автоматически обрабатывается
   };
+  // схемы-требования упоминаются в required_schemas, ограничения рендерятся внутрь и файла не имеют
+  if (t.required) {
+    for (const ir::schema_ref& r : *t.required)
+      if (r.is_fundamental() || !schemaof(r).type.is_constraints())
+        collect(r);
+  }
+
+  if (t.type.is_fundamental())
+    return;
+
   auto collect_all = [&](const arrayof<ir::schema_ref>& arr) {
     for (auto& ref : arr)
       collect(ref);
