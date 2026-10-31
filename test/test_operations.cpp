@@ -1,0 +1,214 @@
+#include <moko3/moko3.hpp>
+
+#include "svarg/backend/cxx/support/common_types.hpp"
+
+// операция повторяет то, что генерирует бекенд: структуры параметров без parse_tag,
+// сначала обязательные поля, затем опциональные
+
+using namespace svarg::cxx_support;
+
+struct name_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+
+  std::string _dATA;
+
+  static constexpr std::array<constraints_t, 1> constraints = {{
+      constraints_t{.min_length = 2u, .pattern = "^[a-z]+$"},
+  }};
+};
+
+struct even_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+
+  integer _dATA;
+
+  static constexpr std::array<constraints_t, 1> constraints = {{
+      constraints_t{.multiple_of = bound_t(int64_t(2))},
+  }};
+};
+
+struct color_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::string_enum;
+
+  enum struct values_e { red, green };
+  using enum values_e;
+
+  static constexpr std::array<std::string_view, 2> values = {"red", "green"};
+
+  values_e _dATA;
+};
+
+// GET /v1/{id}/items/{n}
+struct get_item {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::operation;
+
+  static constexpr inline std::string_view method = "GET";
+
+  static constexpr void visit_path(auto&& vtor) {
+    vtor.substr("/v1/");
+    vtor.param(std::index_sequence<0>{}, "/items/");
+    vtor.param(std::index_sequence<1>{});
+  }
+  static constexpr std::string_view path_expr = "/v1/{id}/items/{n}";
+
+  struct path_t {
+    name_t id;
+    even_t n;
+
+    using additional_properties_type = void;
+
+    [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
+      return true;
+    }
+    static constexpr std::array<std::string_view, 2> field_names = {"id", "n"};
+  };
+  struct query_t {
+    name_t q;
+    std::optional<std::string> s;
+    std::optional<color_t> c;
+
+    using additional_properties_type = void;
+
+    [[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {
+      return str == "q";
+    }
+    static constexpr std::array<std::string_view, 3> field_names = {"q", "s", "c"};
+  };
+  struct headers_t {
+    even_t x_even;
+    std::optional<color_t> x_color;
+
+    using additional_properties_type = void;
+
+    [[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {
+      return str == "x-even";
+    }
+    static constexpr std::array<std::string_view, 2> field_names = {"x-even", "x-color"};
+  };
+  struct cookies_t {
+    std::optional<std::string> a;
+    std::optional<name_t> b;
+
+    using additional_properties_type = void;
+
+    [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
+      return false;
+    }
+    static constexpr std::array<std::string_view, 2> field_names = {"a", "b"};
+  };
+
+  path_t path;
+  query_t query;
+  headers_t headers;
+  cookies_t cookies;
+};
+
+struct item_response {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::response;
+
+  static constexpr int status = 200;
+
+  struct headers_t {
+    name_t x_name;
+
+    using additional_properties_type = void;
+
+    [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
+      return true;
+    }
+    static constexpr std::array<std::string_view, 1> field_names = {"x-name"};
+  };
+  headers_t headers;
+};
+
+static get_item make_op() {
+  get_item op;
+  op.path.id._dATA = "abc";
+  op.path.n._dATA = 4;
+  op.query.q._dATA = "xy";
+  op.query.s = "a&b c";
+  op.headers.x_even._dATA = 2;
+  op.headers.x_color = color_t{color_t::green};
+  op.cookies.b = name_t{"zz"};
+  return op;
+}
+
+static std::string_view header(const http_request& req, std::string_view name) {
+  for (auto& h : req.headers)
+    if (h.name() == name)
+      return h.value();
+  return {};
+}
+
+static void set_header(http_request& req, std::string_view name, std::string_view value) {
+  for (auto& h : req.headers)
+    if (h.name() == name)
+      h.hvalue = value;
+}
+
+static bool parses(const http_request& req) {
+  get_item op;
+  return !from_request(req, op).failed();
+}
+
+TEST("make_request") {
+  http_request req = make_request(make_op());
+  REQUIRE(req.path == "/v1/abc/items/4?q=xy&s=a%26b%20c");
+  REQUIRE(header(req, "x-even") == "2");
+  REQUIRE(header(req, "x-color") == "green");
+  // отсутствующая первая кука не оставляет разделителя
+  REQUIRE(header(req, "cookie") == "b=zz");
+}
+
+TEST("request roundtrip") {
+  get_item op = make_op();
+  op.cookies.a = "1";
+  http_request req = make_request(op);
+  REQUIRE(header(req, "cookie") == "a=1; b=zz");
+
+  get_item out;
+  REQUIRE(!from_request(req, out).failed());
+  REQUIRE(out.path.id._dATA == "abc" && out.path.n._dATA == 4);
+  REQUIRE(out.query.q._dATA == "xy" && out.query.s == "a&b c" && !out.query.c);
+  REQUIRE(out.headers.x_even._dATA == 2 && out.headers.x_color->_dATA == color_t::green);
+  REQUIRE(out.cookies.a == "1" && out.cookies.b->_dATA == "zz");
+}
+
+TEST("invalid request") {
+  http_request req = make_request(make_op());
+  REQUIRE(parses(req));
+
+  http_request r = req;
+  r.path = "/v1/abc/items/3?q=xy";  // multipleOf в пути
+  REQUIRE(!parses(r));
+  r.path = "/v1/abc/items/4?q=XY";  // pattern в query
+  REQUIRE(!parses(r));
+  r.path = "/v1/abc/items/4?s=x";  // нет обязательного q
+  REQUIRE(!parses(r));
+  r.path = "/v1/abc/items/4?q=xy&unknown=1";  // лишние аргументы игнорируются
+  REQUIRE(parses(r));
+
+  r = req;
+  set_header(r, "x-color", "blue");
+  REQUIRE(!parses(r));
+  r = req;
+  set_header(r, "cookie", "b=Z");
+  REQUIRE(!parses(r));
+}
+
+TEST("response headers") {
+  item_response rsp;
+  rsp.headers.x_name._dATA = "ok";
+  http_response raw = make_response(rsp);
+  REQUIRE(raw.status == 200);
+
+  item_response out;
+  REQUIRE(!from_response(raw, out).failed());
+  REQUIRE(out.headers.x_name._dATA == "ok");
+
+  raw.headers.front().hvalue = "NO";
+  REQUIRE(from_response(raw, out).failed());
+}
+
+REGISTER_TEST_LISTENER(moko3::gtest_listener);
+MOKO3_MAIN;

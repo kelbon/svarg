@@ -109,9 +109,12 @@ struct parse_path_visitor {
   std::string_view path;
   error_code ec;
 
+  // visit_path не проверяет is_done, поэтому после ошибки все вызовы пропускаются
   void substr(std::string_view s) {
+    if (ec)
+      return;
     if (!path.starts_with(s)) [[unlikely]] {
-      ec = parse_error("");
+      ec = parse_error("path `{}` does not match `{}`", path, s);
       return;
     }
     path.remove_prefix(s.size());
@@ -119,15 +122,19 @@ struct parse_path_visitor {
   template <size_t I>
   void param(std::index_sequence<I> field_index) {
     static_assert(has_path_params<Op>);
+    if (ec)
+      return;
     ec = parse_nonbody_from(path, get_field<I>(op.path));
     path = {};
   }
   template <size_t I>
   void param(std::index_sequence<I> field_index, std::string_view separator) {
     static_assert(has_path_params<Op>);
+    if (ec)
+      return;
     auto pos = path.find(separator);
     if (pos == path.npos) {
-      ec = parse_error("");
+      ec = parse_error("path `{}` does not contain separator `{}`", path, separator);
       return;
     }
     std::string_view arg = path.substr(0, pos);
@@ -153,8 +160,10 @@ template <an_operation Op>
       assert(path == Op::path_expr);  // сервер не должен вызывать такой парсинг
       return {};
     } else {
-      parse_path_visitor<Op> vtor(op);
+      parse_path_visitor<Op> vtor{.op = op, .path = path};
       Op::visit_path(vtor);
+      if (!vtor.ec && !vtor.path.empty())
+        return parse_error("unexpected path suffix `{}`", vtor.path);
       return std::move(vtor.ec);
     }
   }
@@ -162,11 +171,11 @@ template <an_operation Op>
 
 template <typename T>
 void serialize_headers_of(T&& v, http_headers_t& out) {
-  if constexpr (has_header_params<T>) {
+  if constexpr (has_header_params<std::decay_t<T>>) {
     FOR_EACH_FIELD_INDEX_OF(headers_t<T>) {
       if (is_field_present<I>(v.headers))
-        out.emplace_back(get_field_name<I, headers_t<T>>(),
-                         serialize_nonbody_field<I>(std::forward<T>(v).headers));
+        out.emplace_back(std::string(get_field_name<I, headers_t<T>>()),
+                         serialize_nonbody_field<I>(v.headers));
     };
   }
 }
@@ -209,18 +218,18 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
     std::string cookie_header;
     FOR_EACH_FIELD_INDEX_OF(cookies_t<Op>) {
       if (is_field_present<I>(op.cookies)) {
-        cookie_header += get_field_name<I, cookies_t<Op>>();
-        cookie_header += '=';
-        cookie_header += serialize_nonbody_field<I>(op.cookies);
-        if constexpr (I != (fields_count<cookies_t<Op>>() - 1)) {
-          // https://datatracker.ietf.org/doc/html/rfc6265.html?utm_source=chatgpt.com#section-4.2.1
+        if (!cookie_header.empty()) {
+          // https://datatracker.ietf.org/doc/html/rfc6265.html#section-4.2.1
           // формально по грамматике пробел действительно обязателен
           cookie_header += "; ";
         }
+        cookie_header += get_field_name<I, cookies_t<Op>>();
+        cookie_header += '=';
+        cookie_header += serialize_nonbody_field<I>(op.cookies);
       }
-      if (!cookie_header.empty())
-        req.headers.emplace_back(std::string(cookie_hdr), std::move(cookie_header));
     };
+    if (!cookie_header.empty())
+      req.headers.emplace_back(std::string(cookie_hdr), std::move(cookie_header));
   }
 
   if constexpr (has_body<Op>) {
@@ -252,7 +261,13 @@ template <an_operation Op>
 
   error_code ec;
 
-  auto [path, query] = path_and_query(req.path);
+  [[maybe_unused]] std::string_view path = path_and_query(req.path).first;
+
+  if constexpr (has_path_params<Op>) {
+    ec = parse_path_params(path, op);
+    if (ec)
+      return ec;
+  }
 
   if constexpr (has_query_params<Op>) {
     std::bitset unparsed = cxx_support::get_required_bits_mask<query_t<Op>>();
@@ -264,7 +279,7 @@ template <an_operation Op>
       return metel::visit_index<fields_count<query_t<Op>>() - 1>(
           [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(op.query)); }, *index);
     };
-    ec = visit_query</*WwwUrlEncoded=*/false>(get_query(query), on_query_arg);
+    ec = visit_query</*WwwUrlEncoded=*/false>(get_query(req.path), on_query_arg);
     if (ec)
       return ec;
     if (unparsed.any())
@@ -388,7 +403,7 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
       }
       if constexpr (has_body<R>) {
         // первый хедер content_type выигрывает (чтобы поведение было одинаковым has_body/!has_body)
-        if (name.empty() && name == content_type_hdr) {
+        if (content_type.empty() && name == content_type_hdr) {
           content_type = value;
         }
       }

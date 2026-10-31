@@ -206,6 +206,13 @@ concept an_operation = tagged_as<T>(parse_tag_e::operation);
 template <typename T>
 concept a_response = tagged_as<T>(parse_tag_e::response);
 
+// объекты и структуры параметров операций (path_t, query_t, headers_t, cookies_t)
+template <typename T>
+concept has_named_fields = requires(std::string_view name) {
+  T::field_names;
+  { T::is_required(name) } -> std::same_as<bool>;
+};
+
 template <a_body T>
 consteval std::string_view get_content_type() {
   static_assert(is_lowered(std::decay_t<T>::content_type));
@@ -256,8 +263,9 @@ constexpr bool has_header_params = requires {
   O::headers;
 };
 
-template <an_operation Op>
-using headers_t = typename std::decay_t<Op>::headers_t;
+// операции и ответы
+template <typename T>
+using headers_t = typename std::decay_t<T>::headers_t;
 
 template <typename T>
 constexpr bool has_body = requires { std::decay_t<T>::body; };

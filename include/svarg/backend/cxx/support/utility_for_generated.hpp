@@ -55,7 +55,7 @@ consteval bool valid_generated_object() {
 }
 
 // возвращает битовую маску где единицы расставлены на места требуемых полей
-template <cxx_support::an_object O>
+template <cxx_support::has_named_fields O>
 consteval std::bitset<fields_count<O>()> get_required_bits_mask() {
   std::bitset<fields_count<O>()> mask;
 
@@ -65,7 +65,7 @@ consteval std::bitset<fields_count<O>()> get_required_bits_mask() {
   return mask;
 }
 
-template <an_object A>
+template <has_named_fields A>
 constexpr std::optional<size_t> get_field_index(std::string_view field_name) {
   return APPLY_INDEXES(fields_count<A>()) {
     using switch_t = ss::string_switch<size_t>;
