@@ -119,6 +119,34 @@ struct item_response {
     static constexpr std::array<std::string_view, 1> field_names = {"x-name"};
   };
   headers_t headers;
+
+  struct application_json_body {
+    static constexpr bool is_required = true;
+    static constexpr parse_tag_e parse_tag = parse_tag_e::body;
+    static constexpr std::string_view content_type = "application/json";
+
+    even_t _dATA;
+  };
+  application_json_body body;
+};
+
+// PUT /name с необязательным телом
+struct put_name {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::operation;
+
+  static constexpr inline std::string_view method = "PUT";
+  static constexpr std::string_view path_expr = "/name";
+
+  struct application_json_body {
+    static constexpr bool is_required = false;
+    static constexpr parse_tag_e parse_tag = parse_tag_e::body;
+    static constexpr std::string_view content_type = "application/json";
+
+    name_t _dATA;
+  };
+  std::optional<application_json_body> body;
+
+  using result_t = item_response;
 };
 
 static get_item make_op() {
@@ -196,18 +224,61 @@ TEST("invalid request") {
   REQUIRE(!parses(r));
 }
 
-TEST("response headers") {
+static bool parses(const http_request& req, put_name& op) {
+  op = {};
+  return !from_request(req, op).failed();
+}
+
+TEST("request body") {
+  put_name op;
+  op.body.emplace()._dATA._dATA = "abc";
+  http_request req = make_request(op);
+  REQUIRE(req.body.content_type == "application/json");
+  REQUIRE(req.body.strview() == R"("abc")");
+
+  put_name out;
+  REQUIRE(parses(req, out));
+  REQUIRE(out.body && out.body->_dATA._dATA == "abc");
+
+  req.body.content_type = "Application/JSON; charset=utf-8";
+  REQUIRE(parses(req, out));
+
+  req.body.content_type = "text/plain";
+  REQUIRE(!parses(req, out));
+
+  req.body.content_type = "application/json";
+  auto set_body = [&](std::string_view b) { req.body.data.assign(b.begin(), b.end()); };
+  set_body(R"("A")");  // pattern
+  REQUIRE(!parses(req, out));
+  set_body(R"("abc)");  // некорректный JSON
+  REQUIRE(!parses(req, out));
+
+  // необязательное тело отсутствует
+  req = make_request(put_name{});
+  REQUIRE(req.body.content_type.empty() && req.body.data.empty());
+  REQUIRE(parses(req, out));
+  REQUIRE(!out.body);
+}
+
+TEST("response") {
   item_response rsp;
   rsp.headers.x_name._dATA = "ok";
-  http_response raw = make_response(rsp);
+  rsp.body._dATA._dATA = 6;
+  http_response raw = make_response(put_name{}, rsp);
   REQUIRE(raw.status == 200);
 
   item_response out;
   REQUIRE(!from_response(raw, out).failed());
-  REQUIRE(out.headers.x_name._dATA == "ok");
+  REQUIRE(out.headers.x_name._dATA == "ok" && out.body._dATA._dATA == 6);
 
-  raw.headers.front().hvalue = "NO";
-  REQUIRE(from_response(raw, out).failed());
+  http_response bad = raw;
+  bad.headers.front().hvalue = "NO";
+  REQUIRE(from_response(bad, out).failed());
+
+  bad = raw;
+  bad.body.clear();  // обязательное тело
+  std::erase_if(bad.headers, [](auto& h) { return h.name() == "content-type"; });
+  REQUIRE(from_response(bad, out).failed());
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

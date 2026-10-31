@@ -180,6 +180,48 @@ void serialize_headers_of(T&& v, http_headers_t& out) {
   }
 }
 
+namespace noexport {
+
+// тело типа `B` внутри операции/ответа `x`, создаётся если его нет
+template <typename B, typename T>
+[[nodiscard]] B& emplace_body(T& x) {
+  if constexpr (!has_single_body<T>())
+    return x.body.template emplace<B>();
+  else if constexpr (is_body_required<T>())
+    return x.body;
+  else
+    return x.body.emplace();
+}
+
+// вызывает `out(content_type_header_value, bytes)`, если тело присутствует
+template <typename T>
+void serialize_body_of(const T& x, const content_type_params& ctparams, auto&& out) {
+  if (!is_body_present(x))
+    return;
+  visit_body(x, [&]<typename B>(const B& b) {
+    out(media_type_to_hdr_value(get_content_type_enum<B>(), ctparams), serialize_body(b, ctparams));
+  });
+}
+
+// пустые content type и данные означают отсутствие тела
+template <typename T>
+[[nodiscard]] error_code parse_body_of(std::string_view content_type, std::string_view data, T& x) {
+  if (content_type.empty() && data.empty()) {
+    if constexpr (is_body_required<T>())
+      return parse_error("body is required for `{}`", type_name<T>());
+    else
+      return {};
+  }
+  return select_body_type<T>(content_type, [&]<typename B>() -> error_code {
+    if constexpr (std::is_void_v<B>)
+      return parse_error("content type `{}` not matched any body of `{}`", content_type, type_name<T>());
+    else
+      return parse_from<get_content_type_enum<B>()>(data, emplace_body<B>(x));
+  });
+}
+
+}  // namespace noexport
+
 // не заполняет req.path, если у операции нет пути (вебхук...)
 // складывает content_type не в headers, а в req.body.content_type
 // не выставляет req.scheme и req.authority, это должно заполняться уже клиентом при отправке
@@ -187,12 +229,6 @@ template <an_operation Op>
 http_request make_request(const Op& op, const content_type_params& ctparams = {}) {
   http_request req;
 
-  if constexpr (has_body<Op>) {
-    if (is_body_present(op)) {
-      // is_body_present(op) == true
-      req.body.content_type = media_type_to_hdr_value(get_content_type(op), ctparams);
-    }
-  }
   req.path = make_path<Op>(op);
   if constexpr (has_query_params<Op>) {
     application_x_www_form_urlencoded query;
@@ -233,13 +269,10 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
   }
 
   if constexpr (has_body<Op>) {
-    if (is_body_present(op)) {
-      visit_body(op, [&]<typename B>(const B& x) {
-        // а парсить нужно не включая параметры
-        req.body.data = serialize_body(op.body, ctparams);
-      });
-    }
-    // если боди обязательно, то is_body_present вернёт true
+    noexport::serialize_body_of(op, ctparams, [&](std::string ct, http_body_bytes data) {
+      req.body.content_type = std::move(ct);
+      req.body.data = std::move(data);
+    });
   }
 
   return req;
@@ -345,16 +378,7 @@ template <an_operation Op>
   }
 
   if constexpr (has_body<Op>) {
-    std::string_view content_type = req.body.content_type;
-    auto do_parse_body = [&]<typename B>() -> error_code {
-      if constexpr (std::is_void_v<B>) {
-        return parse_error("content type `{}` not matched any body in operation `{}`", content_type,
-                           type_name<Op>());
-      } else {
-        return parse_from<get_content_type<B>()>(req.body.strview(), op.body.template emplace<B>());
-      }
-    };
-    ec = select_body_type<Op>(content_type, do_parse_body);
+    ec = noexport::parse_body_of(req.body.content_type, req.body.strview(), op);
     if (ec)
       return ec;
   }
@@ -363,16 +387,40 @@ template <an_operation Op>
 }
 
 template <a_response R>
-[[nodiscard]] http_response make_response(R&& rsp, const content_type_params& ctparams = {}) {
+[[nodiscard]] http_response make_response(const R& rsp, const content_type_params& ctparams = {}) {
   http_response rawrsp;
   assert(rsp.status != 0);  // unset
   rawrsp.status = rsp.status;
-  serialize_headers_of(std::forward<R>(rsp), rawrsp.headers);
+  serialize_headers_of(rsp, rawrsp.headers);
 
   if constexpr (has_body<R>) {
-    rawrsp.body = serialize_body(rsp.body, ctparams);
+    noexport::serialize_body_of(rsp, ctparams, [&](std::string ct, http_body_bytes data) {
+      rawrsp.headers.emplace_back(std::string(content_type_hdr), std::move(ct));
+      rawrsp.body = std::move(data);
+    });
   }
   return rawrsp;
+}
+
+// true, если `R` один из ответов операции `Op`
+template <an_operation Op, typename R>
+constexpr bool is_response_of = [] {
+  using result = typename Op::result_t;
+  if constexpr (std::is_same_v<result, R>)
+    return true;
+  else if constexpr (requires { result::data; })
+    return []<typename... Ts>(std::type_identity<std::variant<Ts...>>) {
+      return (std::is_same_v<Ts, R> || ...);
+    }(std::type_identity<decltype(result::data)>{});
+  else
+    return false;
+}();
+
+// `op` только для проверки на этапе компиляции, что ответ принадлежит операции
+template <an_operation Op, a_response R>
+[[nodiscard]] http_response make_response(const Op&, const R& rsp, const content_type_params& ctparams = {}) {
+  static_assert(is_response_of<Op, R>, "response is not declared for this operation");
+  return make_response(rsp, ctparams);
 }
 
 template <a_response R>
@@ -391,22 +439,27 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
     rsp.status = rawrsp.status;
   }
 
-  std::string_view content_type;
+  [[maybe_unused]] std::string_view content_type;
+  auto unparsed = [] {
+    if constexpr (has_header_params<R>)
+      return get_required_bits_mask<headers_t<R>>();
+    else
+      return std::monostate{};
+  }();
 
-  if constexpr (has_header_params<R>) {
-    std::bitset unparsed = get_required_bits_mask<headers_t<R>>();
-
-    for (auto&& [name, value] : rawrsp.headers) {
-      if (!is_lowered(name)) {
-        return validate_error("HTTP/2 requires all header names to be lowercase, name `{}` is not lowercase",
-                              name);
+  for (auto&& [name, value] : rawrsp.headers) {
+    if (!is_lowered(name)) {
+      return validate_error("HTTP/2 requires all header names to be lowercase, name `{}` is not lowercase",
+                            name);
+    }
+    if constexpr (has_body<R>) {
+      // первый хедер content-type выигрывает
+      if (content_type.empty() && name == content_type_hdr) {
+        content_type = value;
+        continue;
       }
-      if constexpr (has_body<R>) {
-        // первый хедер content_type выигрывает (чтобы поведение было одинаковым has_body/!has_body)
-        if (content_type.empty() && name == content_type_hdr) {
-          content_type = value;
-        }
-      }
+    }
+    if constexpr (has_header_params<R>) {
       std::optional index = get_field_index<headers_t<R>>(name);
       if (index) {
         unparsed.set(*index, false);
@@ -416,46 +469,13 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
           return ec;
       }
     }
-
+  }
+  if constexpr (has_header_params<R>) {
     if (unparsed.any())
       return noexport::unparsed_error(unparsed, "header");
   }
   if constexpr (has_body<R>) {
-    if constexpr (!has_header_params<R>) {
-      // иначе уже искали в хедерах content_type
-      for (auto&& [name, value] : rawrsp.headers) {
-        if (!is_lowered(name)) {
-          return validate_error(
-              "HTTP/2 requires all header names to be lowercase, name `{}` is not lowercase", name);
-        }
-        if (name == content_type_hdr) {
-          content_type = value;
-          break;
-        }
-      }
-    }
-
-    auto do_parse_body = [&]<typename B>() -> error_code {
-      if constexpr (std::is_void_v<B>) {
-        return parse_error("content type `{}` not matched any body in response `{}`", content_type,
-                           type_name<R>());
-      } else {
-        auto get_ct = [](std::string_view ct) {
-          content_type_e c;
-          if (!efromstr(ct, c))
-            throw "error";
-          return c;
-        };
-        if constexpr (has_single_body<R>()) {
-          return parse_from<get_ct(get_content_type<B>())>(rawrsp.body_strview(),
-                                                           get_special_field(rsp.body));
-        } else {
-          return parse_from<get_ct(get_content_type<B>())>(rawrsp.body_strview(),
-                                                           get_special_field(rsp.body).template emplace<B>());
-        }
-      }
-    };
-    ec = select_body_type<R>(content_type, do_parse_body);
+    ec = noexport::parse_body_of(content_type, rawrsp.body_strview(), rsp);
     if (ec)
       return ec;
   }
