@@ -895,7 +895,7 @@ ir::response_desc lowering_context::response_lowering(std::optional<std::string_
       ir::content_type_t content_type = content_type_;
       // для респонса все body требуемые, так как если указан тип контента и статус код, дальше указано тело,
       // то ожидается что оно придёт
-      result.bodies->insert(media_type_object_lowering(bodydesc, file, jp / "content" / content_type.str(),
+      result.bodies->insert(media_type_object_lowering(bodydesc, file, jp / "content" / content_type_,
                                                        content_type.str(), /*is_required_body=*/true));
     }
   }
@@ -921,8 +921,7 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
     if (!mediaobj.schema)
       throw validate_error("parameter schema not setted. Both `schema` and `content/schema` not setted");
     result.schema =
-        resolve_schema(*mediaobj.schema, file, jp / "content" / result.encoding->str() / "schema", *this)
-            .ir_schema;
+        resolve_schema(*mediaobj.schema, file, jp / "content" / content_type_ / "schema", *this).ir_schema;
   }
   if (param.in == parameter_location::path) {
     // валидация уже была
@@ -947,7 +946,7 @@ std::set<ir::body> lowering_context::request_body_lowering(request_body_object o
   for (auto& [content_type_, mediaobj] : obj.content) {
     ir::content_type_t content_type = content_type_;
     ir::body b =
-        media_type_object_lowering(mediaobj, file, jp / "content" / content_type.str(), content_type.str(),
+        media_type_object_lowering(mediaobj, file, jp / "content" / content_type_, content_type.str(),
                                    /*is_required_body=*/obj.required.value_or(false));
     result.insert(std::move(b));
   }
