@@ -96,7 +96,7 @@ static std::string make_file_path(const ir::schema_ref& ref, const render_option
 static std::string make_file_path(const ir::operation& ref, const render_options& options, bool is_webhook) {
   std::string path = ref.spec + (is_webhook ? "/webhooks" : "/operations");
   path += '/';
-  path += ref.id;
+  path += make_cxx_ident(ref.id, options);
   path += ".hpp";
   return path;
 }
