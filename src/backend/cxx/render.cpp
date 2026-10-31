@@ -553,6 +553,12 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           result += render_parse_tag(cxx_support::parse_tag_e::string_enum);
           result += std::format("static constexpr inline std::array<std::string_view, {}> values = {{",
                                 e.values.size());
+          // строковое значение - как есть, остальное (см. ниже) - сериализованным
+          auto as_text = [](const boost::json::value& v) -> std::string {
+            if (v.is_string())
+              return std::string(v.get_string());
+            return boost::json::serialize(v);
+          };
           /*
           сериализация вместо .as_string обходит такое:
 
@@ -567,14 +573,13 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
             Т.е. по сути сериализация вместо .as_string убирает требование кавычек вокруг значений
           */
           for (auto&& v : e.values)
-            result += std::format("{}, ", render_string(std::string_view(boost::json::serialize(v.value))));
+            result += std::format("{}, ", render_string(as_text(v.value)));
           result += "};\n";  // end values
           result += "enum struct values_e {";
           for (auto&& v : e.values) {
             // боюсь представить идентификатор созданный из какого-то объекта, но ты сам виноват если такое
             // делаешь
-            result += std::format("{},",
-                                  make_cxx_ident(std::string_view(boost::json::serialize(v.value)), options));
+            result += std::format("{},", make_cxx_ident(as_text(v.value), options));
           }
           result += "};\nusing enum values_e;\n\n";  // end values_e
           // возможное пересечение имён using enum / special_field_name игнорируется
