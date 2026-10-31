@@ -707,6 +707,12 @@ render_result renderer::render_schema(const ir::schema& s) const {
     deps = dealias(std::move(deps));
     for (auto& ref : deps)
       file_begin += std::format("#include \"{}\"\n", make_file_path(ref, options));
+    // при взаимной рекурсии схем (A -> массив B -> A) include одной из них пропускается pragma once,
+    // поэтому зависимости объявляются заранее (массивы и box допускают неполный тип)
+    for (auto& ref : deps) {
+      file_begin += std::format("\nnamespace {} {{ struct {}; }}", make_namespace(ref.spec, *ref.jsonptr),
+                                get_schema_name(ref, options));
+    }
     file_begin += std::format("\nnamespace {} {{\n\n", make_namespace(s.spec, s.jsonptr));
   }
   std::string schema_render;
