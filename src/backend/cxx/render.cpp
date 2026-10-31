@@ -104,7 +104,7 @@ static std::string make_file_path(const ir::operation& ref, const render_options
 // у инлайн-схемы имя - последний сегмент её json pointer (свойство, индекс, "schema"...)
 static std::string get_schema_name(const ir::schema_ref& s, const render_options& options) {
   if (s.name)
-    return std::string(*s.name);
+    return make_cxx_ident(*s.name, options);
   if (s.jsonptr->segments_count() == 0)
     return std::string(inline_schema_name);
   return make_cxx_ident(s.jsonptr->last_segment(), options);  // last_segment уже без экранирования
