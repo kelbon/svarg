@@ -17,13 +17,23 @@ namespace svarg {
 
 template <typename... Types>
 struct from_json_value<cxx_support::oneof<Types...>> {
+  // значение должно подходить ровно под одну схему
   static error_code operator()(const boost::json::value& j, cxx_support::oneof<Types...>& v) {
     size_t success = 0;
-    ((success += !try_from_json(j, v.template get<Types>()).failed()), ...);
+    auto parse_one = [&]<typename T>(std::type_identity<T>) {
+      T x;
+      if (try_from_json(j, x).failed())
+        return;
+      if (++success == 1)
+        v.template emplace<T>(std::move(x));
+    };
+    (parse_one(std::type_identity<Types>{}), ...);
     if (success == 0)
       return parse_error("oneOf failed to parse any schema in list");
-    if (success > 1)
-      return parse_error("oneOf parse failed, two or more schemas parsed");
+    if (success > 1) {
+      v = nullptr;
+      return parse_error("oneOf parse failed, {} schemas parsed", success);
+    }
     return {};
   }
 };
