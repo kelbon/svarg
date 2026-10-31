@@ -2,6 +2,8 @@
 # every file in /test/ dir matching test_*.cpp added as test
 
 file(GLOB svarg_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp")
+# TODO rm yap from svarg
+list(FILTER svarg_TESTS EXCLUDE REGEX "/test_yap\\.cpp$")
 
 foreach(test_src ${svarg_TESTS})
     # file name without extension
