@@ -240,11 +240,42 @@ struct not_schema {
   schema_ref type;
 };
 
+// ограничения JSON Schema, которые проверяются по уже разобранному значению (без повторного парсинга)
+// встречается только как требование (в schema::required), на представление типа не влияет
+// как и в JSON Schema, ограничение применяется только к значению подходящего типа:
+// minLength только к строкам, minimum только к числам и так далее
+struct constraints_schema {
+  SVARG_IR_TYPE;
+
+  // строки, длина в символах Unicode
+  std::optional<uint64_t> minLength;
+  std::optional<uint64_t> maxLength;
+  // регулярное выражение ECMA-262, не привязано к началу и концу строки
+  std::optional<string> pattern;
+
+  // числа
+  std::optional<number> minimum;
+  std::optional<number> maximum;
+  std::optional<number> exclusiveMinimum;
+  std::optional<number> exclusiveMaximum;
+  // > 0
+  std::optional<number> multipleOf;
+
+  // массивы
+  std::optional<uint64_t> minItems;
+  std::optional<uint64_t> maxItems;
+  std::optional<bool> uniqueItems;
+
+  // объекты
+  std::optional<uint64_t> minProperties;
+  std::optional<uint64_t> maxProperties;
+};
+
 struct schema_type {
   SVARG_IR_TYPE;
 
   std::variant<fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema, object_schema,
-               array_schema, not_schema>
+               array_schema, not_schema, constraints_schema>
       data;
 
   bool is_fundamental() const noexcept {
@@ -271,6 +302,9 @@ struct schema_type {
   bool is_not() const noexcept {
     return std::holds_alternative<not_schema>(data);
   }
+  bool is_constraints() const noexcept {
+    return std::holds_alternative<constraints_schema>(data);
+  }
 
   auto* if_fundamental() noexcept {
     return std::get_if<fundamental_e>(&data);
@@ -295,6 +329,9 @@ struct schema_type {
   }
   auto* if_not() noexcept {
     return std::get_if<not_schema>(&data);
+  }
+  auto* if_constraints() noexcept {
+    return std::get_if<constraints_schema>(&data);
   }
 
   auto* if_fundamental() const noexcept {
@@ -321,6 +358,9 @@ struct schema_type {
   auto* if_not() const noexcept {
     return std::get_if<not_schema>(&data);
   }
+  auto* if_constraints() const noexcept {
+    return std::get_if<constraints_schema>(&data);
+  }
 
   std::string_view discriminator() const noexcept {
     return std::visit(
@@ -328,7 +368,8 @@ struct schema_type {
             [](const not_schema&) { return "not"; }, [](const array_schema&) { return "array"; },
             [](const object_schema&) { return "object"; }, [](const allof_schema&) { return "allOf"; },
             [](const anyof_schema&) { return "anyOf"; }, [](const oneof_schema&) { return "oneOf"; },
-            [](const enum_schema&) { return "enum"; }, [](const fundamental_e&) { return "fundamental"; }),
+            [](const enum_schema&) { return "enum"; }, [](const fundamental_e&) { return "fundamental"; },
+            [](const constraints_schema&) { return "constraints"; }),
         data);
   }
   void set_type_from_discriminator(std::string_view s) {
@@ -336,6 +377,8 @@ struct schema_type {
       data.emplace<not_schema>();
     else if (s == "array")
       data.emplace<array_schema>();
+    else if (s == "constraints")
+      data.emplace<constraints_schema>();
     else if (s == "object")
       data.emplace<object_schema>();
     else if (s == "allOf")

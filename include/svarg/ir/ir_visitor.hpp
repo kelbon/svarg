@@ -67,6 +67,8 @@ struct ir_visitor_base {
   }
   void operator()(this auto&& self, const uint64_t&) {
   }
+  void operator()(this auto&& self, const number&) {
+  }
 
  public:
   void visit(this auto&& self, auto&& x) {

@@ -1,5 +1,17 @@
 "schemas":
   - "spec": "api-a"
+    "jsonptr": "/components/parameters/LimitParam/schema"
+    "type":
+      "fundamental": "integer"
+    "required":
+      - "spec": "api-a"
+        "jsonptr": "/components/parameters/LimitParam/schema/constraints"
+  - "spec": "api-a"
+    "jsonptr": "/components/parameters/LimitParam/schema/constraints"
+    "type":
+      "constraints":
+        "minimum": 0
+  - "spec": "api-a"
     "jsonptr": "/components/schemas/User"
     "name": "User"
     "type":
@@ -15,7 +27,8 @@
             "name": "id"
             "required": true
           - "type":
-              "spec": "@string@"
+              "spec": "api-a"
+              "jsonptr": "/components/schemas/User/properties/name"
             "name": "name"
             "required": true
           - "type":
@@ -30,8 +43,28 @@
     "jsonptr": "/components/schemas/User/properties/id"
     "type":
       "fundamental": "string"
+    "required":
+      - "spec": "api-a"
+        "jsonptr": "/components/schemas/User/properties/id/constraints"
     "meta":
       "x-format-hint": "uuid"
+  - "spec": "api-a"
+    "jsonptr": "/components/schemas/User/properties/id/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-a"
+    "jsonptr": "/components/schemas/User/properties/name"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-a"
+        "jsonptr": "/components/schemas/User/properties/name/constraints"
+  - "spec": "api-a"
+    "jsonptr": "/components/schemas/User/properties/name/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Error"
     "name": "Error"
@@ -39,15 +72,41 @@
       "object":
         "fields":
           - "type":
-              "spec": "@integer@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Error/properties/code"
             "name": "code"
             "required": false
           - "type":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Error/properties/message"
             "name": "message"
             "required": false
         "additional_properties":
           "spec": "@never@"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Error/properties/code"
+    "type":
+      "fundamental": "integer"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Error/properties/code/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Error/properties/code/constraints"
+    "type":
+      "constraints":
+        "minimum": 0
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Error/properties/message"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Error/properties/message/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Error/properties/message/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Item"
     "name": "Item"
@@ -55,7 +114,8 @@
       "object":
         "fields":
           - "type":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Item/properties/id"
             "name": "id"
             "required": true
           - "type":
@@ -64,7 +124,8 @@
             "name": "tags"
             "required": false
           - "type":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Item/properties/title"
             "name": "title"
             "required": true
           - "type":
@@ -76,11 +137,48 @@
         "additional_properties":
           "spec": "@never@"
   - "spec": "api-b"
+    "jsonptr": "/components/schemas/Item/properties/id"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Item/properties/id/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Item/properties/id/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Item/properties/tags"
     "type":
       "array":
         "element":
-          "spec": "@string@"
+          "spec": "api-b"
+          "jsonptr": "/components/schemas/Item/properties/tags/items"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Item/properties/tags/items"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Item/properties/tags/items/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Item/properties/tags/items/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Item/properties/title"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Item/properties/title/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Item/properties/title/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Money"
     "name": "Money"
@@ -88,7 +186,8 @@
       "object":
         "fields":
           - "type":
-              "spec": "@number@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Money/properties/amount"
             "name": "amount"
             "required": false
           - "type":
@@ -98,6 +197,18 @@
             "required": false
         "additional_properties":
           "spec": "@never@"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Money/properties/amount"
+    "type":
+      "fundamental": "number"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Money/properties/amount/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Money/properties/amount/constraints"
+    "type":
+      "constraints":
+        "minimum": 0
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Money/properties/currency"
     "type":
@@ -121,7 +232,8 @@
             "name": "buyer"
             "required": false
           - "type":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Order/properties/id"
             "name": "id"
             "required": false
           - "type":
@@ -130,11 +242,24 @@
             "name": "item"
             "required": false
           - "type":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Order/properties/status"
             "name": "status"
             "required": false
         "additional_properties":
           "spec": "@never@"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/id"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Order/properties/id/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/id/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item"
     "type":
@@ -147,7 +272,8 @@
             "name": "price"
             "required": true
           - "type":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Order/properties/item/properties/id"
             "name": "id"
             "required": true
           - "type":
@@ -156,17 +282,67 @@
             "name": "tags"
             "required": false
           - "type":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/components/schemas/Order/properties/item/properties/title"
             "name": "title"
             "required": true
         "additional_properties":
           "spec": "@never@"
   - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/id"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Order/properties/item/properties/id/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/id/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item/properties/tags"
     "type":
       "array":
         "element":
-          "spec": "@string@"
+          "spec": "api-b"
+          "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/tags/items/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/title"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Order/properties/item/properties/title/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/item/properties/title/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/status"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/components/schemas/Order/properties/status/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/components/schemas/Order/properties/status/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Unused"
     "name": "Unused"
@@ -197,6 +373,42 @@
             "required": false
         "additional_properties":
           "spec": "@never@"
+  - "spec": "api-b"
+    "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-b"
+    "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
+  - "spec": "api-b"
+    "jsonptr": "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "api-b"
+        "jsonptr": "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema/constraints"
+  - "spec": "api-b"
+    "jsonptr": "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema/constraints"
+    "type":
+      "constraints":
+        "minLength": 1
 "operations":
   - "id": "getItem"
     "spec": "api-b"
@@ -208,12 +420,14 @@
       - "location": "path"
         "name": "itemId"
         "schema":
-          "spec": "@string@"
+          "spec": "api-b"
+          "jsonptr": "/paths/~1items~1{itemId}/get/parameters/1/schema"
         "required": true
       - "location": "query"
         "name": "limit"
         "schema":
-          "spec": "@integer@"
+          "spec": "api-a"
+          "jsonptr": "/components/parameters/LimitParam/schema"
       - "location": "header"
         "name": "X-Api-Key"
         "schema":
@@ -245,7 +459,8 @@
       - "location": "path"
         "name": "orderId"
         "schema":
-          "spec": "@string@"
+          "spec": "api-b"
+          "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema"
         "required": true
       - "location": "header"
         "name": "X-Api-Key"
@@ -258,6 +473,7 @@
         "bodies":
           - "contentType": "application/json"
             "schema":
-              "spec": "@string@"
+              "spec": "api-b"
+              "jsonptr": "/paths/~1orders~1{orderId}/get/responses/200/content/application~1json/schema"
             "required": true
     "priority": 1

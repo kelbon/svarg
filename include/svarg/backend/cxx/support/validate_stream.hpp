@@ -2,6 +2,7 @@
 
 #include "svarg/backend/cxx/support/stream_parsing.hpp"
 #include "svarg/backend/cxx/support/validate_base.hpp"
+#include "svarg/backend/cxx/support/constraints.hpp"
 
 namespace svarg::cxx_support {
 
@@ -13,7 +14,7 @@ template <typename Schema, typename T>
 [[nodiscard]] error_code validate_schema(std::span<const sax_token_value> saved, const T& result,
                                          std::span<unsigned char> buf) {
   static_assert(!has_recursive_requirements<Schema>());
-  if constexpr (noexport::requirement_needs_tokens_reuse<Schema>) {
+  if constexpr (noexport::requirement_needs_tokens_reuse<Schema>()) {
     Schema schema;
     omo::stream_parser_tokens parser(
         [&](sax_token& token, dd::with_stack_resource r) { return from_tokens_subobject(schema, token, r); },
@@ -52,7 +53,10 @@ error_code validate_required_schemas(std::span<const sax_token_value> saved, con
     (validate_one(metel::typelist<Schemas>{}) && ...);
   };
   do_validate(required_schemas_t<T>{});
-
+  if constexpr (has_constraints<T>) {
+    if (!ec)
+      ec = check_constraints(result);
+  }
   return ec;
 }
 
@@ -74,15 +78,17 @@ tokens_consumer from_tokens_subobject_and_required_schemas(T& v, sax_token& tok,
     throw parse_error("when parsing schema `{}`: parser ends, but not all tokens are eaten", type_name<T>());
   }
   // переиспользуем токены для валидации схем
-  validate_required_schemas<T>(tokens, v);
+  validate_required_schemas<T>(tokens, v).rethrow_if_failed();
 }
 
 template <typename T>
 tokens_consumer from_tokens_subobject_simple_requirements(T& v, sax_token& tok, dd::with_stack_resource r) {
-  static_assert(!noexport::needs_tokens_reuse_for_validation<T> && required_schemas_t<T>::size > 0);
+  static_assert(!noexport::needs_tokens_reuse_for_validation<T> &&
+                (required_schemas_t<T>::size > 0 || has_constraints<T>));
 
   co_yield dd::elements_of(from_tokens_parser(v, tok, r));
-  validate_required_schemas(/*saved=*/{}, v);  // не нужны токены, проверяется просто значение
+  // не нужны токены, проверяется просто значение
+  validate_required_schemas(/*saved=*/{}, v).rethrow_if_failed();
 }
 
 }  // namespace noexport
@@ -93,7 +99,7 @@ tokens_consumer from_tokens_subobject(T& v, sax_token& tok, dd::with_stack_resou
 
   if constexpr (noexport::needs_tokens_reuse_for_validation<T>)
     return noexport::from_tokens_subobject_and_required_schemas(v, tok, r);
-  else if (!noexport::needs_tokens_reuse_for_validation<T> && required_schemas_t<T>::size > 0)
+  else if constexpr (required_schemas_t<T>::size > 0 || has_constraints<T>)
     return noexport::from_tokens_subobject_simple_requirements(v, tok, r);
   else  // нет требований
     return from_tokens_parser(v, tok, r);

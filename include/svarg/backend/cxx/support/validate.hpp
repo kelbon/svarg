@@ -4,13 +4,14 @@
 
 #include "svarg/errors.hpp"
 #include "svarg/backend/cxx/support/validate_base.hpp"
+#include "svarg/backend/cxx/support/constraints.hpp"
 
 namespace svarg::cxx_support {
 
 template <typename RequiredSchema, typename Schema>
-error_code validate_schema(const boost::json::object& json, const Schema& result) {
+error_code validate_schema(const boost::json::value& json, const Schema& result) {
   static_assert(!has_recursive_requirements<RequiredSchema>());
-  if constexpr (noexport::requirement_needs_tokens_reuse<RequiredSchema>) {
+  if constexpr (noexport::requirement_needs_tokens_reuse<RequiredSchema>()) {
     Schema schema;
     return try_from_json(json, schema);
   } else {
@@ -32,7 +33,10 @@ error_code validate_required_schemas(const boost::json::value& json, const T& re
     (void)(validate_one(metel::typelist<Schemas>{}) && ...);
   };
   do_validate(required_schemas_t<T>{});
-
+  if constexpr (has_constraints<T>) {
+    if (!ec)
+      ec = check_constraints(result);
+  }
   return ec;
 }
 

@@ -289,9 +289,38 @@ static ir::fundamental_e detect_enum_type(const arrayof<Any>& values) noexcept {
     return ir::fundamental_e::any;
 }
 
+// ключевые слова, которые превращаются в ir::constraints_schema
+[[nodiscard]] static bool has_constraints(const schema_object& s) noexcept {
+  return s.minLength || s.maxLength || s.pattern || s.minimum || s.maximum || s.exclusiveMinimum ||
+         s.exclusiveMaximum || s.multipleOf || s.minItems || s.maxItems ||
+         (s.uniqueItems && *s.uniqueItems) || s.minProperties || s.maxProperties;
+}
+
+[[nodiscard]] static ir::constraints_schema make_constraints(const schema_object& s) {
+  ir::constraints_schema c;
+  c.minLength = s.minLength;
+  c.maxLength = s.maxLength;
+  c.pattern = s.pattern;
+  c.minimum = s.minimum;
+  c.maximum = s.maximum;
+  c.exclusiveMinimum = s.exclusiveMinimum;
+  c.exclusiveMaximum = s.exclusiveMaximum;
+  c.multipleOf = s.multipleOf;
+  c.minItems = s.minItems;
+  c.maxItems = s.maxItems;
+  // uniqueItems: false ничего не требует
+  if (s.uniqueItems && *s.uniqueItems)
+    c.uniqueItems = true;
+  c.minProperties = s.minProperties;
+  c.maxProperties = s.maxProperties;
+  return c;
+}
+
 [[nodiscard]] static std::optional<ir::schema_ref> try_simple(const schema_object& schema) {
   assert(!schema.allow_always() && !schema.allow_never());
   if (schema.enum_ || schema.const_ || schema.oneOf || schema.anyOf || schema.allOf || schema.not_)
+    return std::nullopt;
+  if (has_constraints(schema))
     return std::nullopt;
   if (schema.if_ || schema.then || schema.else_ || schema.dependentSchemas || schema.dependentRequired)
     return std::nullopt;
@@ -302,14 +331,8 @@ static ir::fundamental_e detect_enum_type(const arrayof<Any>& values) noexcept {
     if (type == "object" || type == "array")
       return std::nullopt;
 
-    if (type == "string") {
-      if (schema.minLength || schema.maxLength || schema.pattern || schema.format)
-        return std::nullopt;
-    } else if (type == "integer" || type == "number") {
-      if (schema.multipleOf || schema.maximum || schema.exclusiveMaximum || schema.minimum ||
-          schema.exclusiveMinimum || schema.format)
-        return std::nullopt;
-    }
+    if ((type == "string" || type == "integer" || type == "number") && schema.format)
+      return std::nullopt;
     if (schema.nullable && *schema.nullable)
       return std::nullopt;
     ir::fundamental_e e;
@@ -520,6 +543,16 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     ir::not_schema t;
     t.type = resolve_schema(*schema.not_, file, jp / "not", *this).ir_schema;
     collect_result("not", std::move(t));
+  }
+  // ограничения всегда требование, на представление типа не влияют
+  if (has_constraints(schema)) {
+    ir::schema c;
+    c.spec = res.spec;
+    c.jsonptr = res.jsonptr / "constraints";
+    c.name = std::nullopt;
+    c.type.data = make_constraints(schema);
+    res.add_requirement(c.ref());
+    result_ir.schemas->insert(std::move(c));
   }
   return ret_schema();
 }

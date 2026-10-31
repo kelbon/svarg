@@ -203,7 +203,7 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
           [&]<size_t I>() {
             if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
               unparsed.set(I, false);
-            ec = try_from_json(j, cxx_support::get_field<I>(v));
+            ec = try_from_json(value, cxx_support::get_field<I>(v));
           },
           *i);
       if (ec)

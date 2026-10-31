@@ -269,6 +269,7 @@ static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_sc
       [](object_schema&) -> maybe_replace { return std::nullopt; },
       [](enum_schema&) -> maybe_replace { return std::nullopt; },
       [](fundamental_e&) -> maybe_replace { return std::nullopt; },
+      [](constraints_schema&) -> maybe_replace { return std::nullopt; },
       [&](allof_schema& af) -> maybe_replace {
         return flatten_allof(this_schema, af, accessor, changes, options);
       },
@@ -408,6 +409,26 @@ pass_result pass_rm_useless_requirements(ir_object ir, const ir_options& options
     schema& s = const_cast<schema&>(_s);
 
     if (s.required) {
+      // требование типа `any` (например allOf: [{pattern: a}, {pattern: b}] рядом с type: string) пропускает
+      // любое значение, поэтому эквивалентно только своим требованиям. Они переносятся во владельца, и
+      // значение не нужно разбирать повторно
+      schema_refs_t flattened;
+      for (size_t i = 0; i < s.required->size();) {
+        const schema_ref r = (*s.required)[i];
+        const fundamental_e* f = r.is_fundamental() ? nullptr : get(r).type.if_fundamental();
+        if (!f || *f != fundamental_e::any || r.refers_to(s)) {
+          ++i;
+          continue;
+        }
+        s.required->erase(s.required->begin() + i);
+        flattened.insert(r);
+        ++count;
+        if (const schema& inner = get(r); inner.has_requirements()) {
+          for (const schema_ref& x : *inner.required)
+            if (!flattened.contains(x) && !std::ranges::contains(*s.required, x))
+              s.required->push_back(x);
+        }
+      }
       while (std::optional i = find_weak(*s.required, get)) {
         s.required->erase(s.required->begin() + *i);
         ++count;
@@ -474,19 +495,35 @@ static void emit_warn(std::format_string<Args...> fmt, Args&&... args) {
         replace_with_never(s, "contains never");
         continue;
       }
-      // any не влияет на представление или требования в allof
-      count += std::erase_if(allof->schemas, is_a_fundamental(fundamental_e::any));
+      // allOf из фундаментальных типов сводится к одному фундаментальному типу, а требования схем (например
+      // ограничения minLength/pattern) складываются, иначе при удалении схемы из allOf они бы потерялись
+      arrayof<schema_ref> requirements;
+      std::vector<fundamental_e> types;
+      for (const schema_ref& r : allof->schemas) {
+        if (!r.is_fundamental() && get(r).has_requirements())
+          append_range(requirements, *get(r).required);
+        types.push_back(get_fundamental(r));
+      }
+      // any не влияет на представление в allof
+      std::erase(types, fundamental_e::any);
       // если что-то integer оно всегда number, но если что-то number оно не всегда integer
-      // т.е. allof<integer, number> всегда сводится к integer. Сводить будет другая оптимизация
-      // здесь просто убираем лишний number
-      if (std::ranges::any_of(allof->schemas, is_a_fundamental(fundamental_e::integer)))
-        count += std::erase_if(allof->schemas, is_a_fundamental(fundamental_e::number));
-      remove_duplicates(allof->schemas);
-      // здесь в allof могли остаться только bool/null/string/number/integer, при этом number+integer
+      // т.е. allof<integer, number> всегда сводится к integer
+      if (std::ranges::contains(types, fundamental_e::integer))
+        std::erase(types, fundamental_e::number);
+      remove_duplicates(types);
+      // здесь могли остаться только bool/null/string/number/integer, при этом number+integer
       // одновременно быть не могут любая комбинация конфликтует, например allOf<bool, null> - эквивалентно
       // never
-      if (allof->schemas.size() > 1)
+      if (types.size() > 1) {
         replace_with_never(s, "has conflicting types");
+        continue;
+      }
+      s.type.data = types.empty() ? fundamental_e::any : types.front();
+      if (!requirements.empty()) {
+        s.add_requirements(requirements);
+        remove_duplicates(*s.required);
+      }
+      ++count;
     } else if (std::ranges::all_of(allof->schemas, is_object_schema)) {
       object_schema obj;
       for (auto& var : allof->schemas) {

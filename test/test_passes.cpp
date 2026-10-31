@@ -681,5 +681,149 @@ TEST("pass transform allofs 2") {
   REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
 }
 
+// allOf из строк с ограничениями: тип сводится к строке, ограничения всех частей сохраняются
+TEST("pass transform allofs keeps constraints") {
+  std::string_view input = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code"
+    "name": "Code"
+    "type":
+      "allOf":
+        "schemas":
+          - "name": "Base"
+            "spec": "testir"
+            "jsonptr": "/components/schemas/Base"
+          - "spec": "testir"
+            "jsonptr": "/components/schemas/Code/allOf/1"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Base"
+    "name": "Base"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Base/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Base/constraints"
+    "type":
+      "constraints":
+        "pattern": "^[0-9]+$"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code/allOf/1"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+    "type":
+      "constraints":
+        "maxLength": 3
+  )";
+  std::string_view output = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code"
+    "name": "Code"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Base/constraints"
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Base"
+    "name": "Base"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Base/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Base/constraints"
+    "type":
+      "constraints":
+        "pattern": "^[0-9]+$"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code/allOf/1"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+    "type":
+      "constraints":
+        "maxLength": 3
+)";
+
+  REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
+}
+
+// type: string + allOf: [{pattern: ...}, {pattern: ...}]: требование типа any заменяется своими требованиями
+TEST("rm useless requirements flattens any requirement") {
+  std::string_view input = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix"
+    "name": "Ipv6Prefix"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Ipv6Prefix/allOf"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix/allOf"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
+    "type":
+      "constraints":
+        "pattern": "^a"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
+    "type":
+      "constraints":
+        "pattern": "b$"
+  )";
+  std::string_view output = R"(
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix"
+    "name": "Ipv6Prefix"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
+    "type":
+      "constraints":
+        "pattern": "^a"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
+    "type":
+      "constraints":
+        "pattern": "b$"
+)";
+
+  ir_options opts;
+  REQUIRE(test_pass(input, output, opts,
+                    make_pipe(&ir::pass_rm_useless_requirements, &ir::pass_rm_unused_schemas)));
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;

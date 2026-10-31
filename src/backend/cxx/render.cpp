@@ -7,6 +7,8 @@
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
 #include "svarg/utils/parse_url.hpp"
 
+#include <limits>
+
 namespace svarg::cxx {
 
 using cxx_support::special_field_name;
@@ -148,6 +150,66 @@ static std::string render_parse_tag(cxx_support::parse_tag_e tag) {
       e2str(tag));
 }
 
+// граница для cxx_support::bound_t
+static std::string render_bound(const number& n) {
+  return std::visit(
+      []<typename T>(T v) -> std::string {
+        if constexpr (std::is_same_v<T, int64_t>) {
+          if (v == std::numeric_limits<int64_t>::min())
+            return "::svarg::cxx_support::bound_t(std::numeric_limits<int64_t>::min())";
+          return std::format("::svarg::cxx_support::bound_t(int64_t({}))", v);
+        } else if constexpr (std::is_same_v<T, uint64_t>) {
+          return std::format("::svarg::cxx_support::bound_t(uint64_t({}u))", v);
+        } else {
+          // {} даёт кратчайшее представление, которое читается обратно в то же значение
+          return std::format("::svarg::cxx_support::bound_t(double({}))", v);
+        }
+      },
+      n.data);
+}
+
+// ограничения рендерятся в тип-владелец, а не отдельными типами
+// поля в порядке объявления cxx_support::constraints_t (designated initializers)
+static std::string render_constraints(const std::vector<const ir::constraints_schema*>& cs) {
+  std::string result = std::format(
+      "static constexpr std::array<::svarg::cxx_support::constraints_t, {}> constraints = {{{{\n", cs.size());
+  for (const ir::constraints_schema* c : cs) {
+    std::string fields;
+    auto add = [&](std::string_view name, std::string value) {
+      fields += std::format(".{} = {},\n", name, value);
+    };
+    if (c->minLength)
+      add("min_length", std::format("{}u", *c->minLength));
+    if (c->maxLength)
+      add("max_length", std::format("{}u", *c->maxLength));
+    if (c->pattern)
+      add("pattern", render_string(*c->pattern));
+    if (c->minimum)
+      add("minimum", render_bound(*c->minimum));
+    if (c->maximum)
+      add("maximum", render_bound(*c->maximum));
+    if (c->exclusiveMinimum)
+      add("exclusive_minimum", render_bound(*c->exclusiveMinimum));
+    if (c->exclusiveMaximum)
+      add("exclusive_maximum", render_bound(*c->exclusiveMaximum));
+    if (c->multipleOf)
+      add("multiple_of", render_bound(*c->multipleOf));
+    if (c->minItems)
+      add("min_items", std::format("{}u", *c->minItems));
+    if (c->maxItems)
+      add("max_items", std::format("{}u", *c->maxItems));
+    if (c->uniqueItems && *c->uniqueItems)
+      add("unique_items", "true");
+    if (c->minProperties)
+      add("min_properties", std::format("{}u", *c->minProperties));
+    if (c->maxProperties)
+      add("max_properties", std::format("{}u", *c->maxProperties));
+    result += std::format("::svarg::cxx_support::constraints_t{{\n{}}},\n", fields);
+  }
+  result += "}};\n";
+  return result;
+}
+
 static arrayof<ir::object_field_info> as_object_fields(auto&& params) {
   arrayof<ir::object_field_info> result;
   for (const ir::operation_parameter& p : params)
@@ -194,6 +256,8 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
       [&](const ir::oneof_schema& a) { return collect_all(a.schemas); },
       [&](const ir::not_schema& a) { return collect(a.type); },
       [&](const ir::enum_schema& a) { return collect(a.type); },
+      // ограничения рендерятся внутрь владельца и ни на что не ссылаются
+      [&](const ir::constraints_schema&) {},
       [&](const ir::object_schema& a) {
         collect(a.additional_properties);
         for (auto& f : a.fields)
@@ -292,6 +356,10 @@ std::string renderer::render_special_field_type(const ir::schema_type& type, std
       },
       [&](const ir::object_schema&) -> std::string {
         // объект всегда не алиас
+        return "";
+      },
+      [&](const ir::constraints_schema&) -> std::string {
+        // рендерится внутрь владельца (см. render_struct_content)
         return "";
       },
   };
@@ -421,10 +489,43 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
   auto make_field_str = [](std::string_view fieldtype) {
     return std::format("{} {};", fieldtype, special_field_name);
   };
+  auto render_requirements = [&]() -> std::string {
+    if (!s.has_requirements())
+      return "";
+    // ограничения проверяются по разобранному значению и рендерятся прямо во владельца,
+    // остальные требования - списком типов, по которым значение разбирается повторно
+    std::string res;
+    arrayof<ir::schema_ref> parsed_requirements;
+    std::vector<const ir::constraints_schema*> constraints;
+    for (const ir::schema_ref& r : *s.required) {
+      if (!r.is_fundamental() && schemaof(r).type.is_constraints())
+        constraints.push_back(schemaof(r).type.if_constraints());
+      else
+        parsed_requirements.push_back(r);
+    }
+    if (!parsed_requirements.empty()) {
+      res += std::format("using required_schemas = {}<{}>;\n", typelist_str,
+                         render_schemas_array(parsed_requirements, s.spec, s.jsonptr));
+    }
+    if (!constraints.empty())
+      res += render_constraints(constraints);
+    return res;
+  };
   // пытаемся алиас, для объектов и енамов возвращает пустую строку
   std::string r = render_special_field_type(s.type, s.spec, s.jsonptr);
-  if (!r.empty())
-    return std::format("{} {};\n", r, special_field_name);
+  if (!r.empty()) {
+    // тип мог бы быть алиасом, но у него есть имя или требования, поэтому это структура с одним полем
+    using enum cxx_support::parse_tag_e;
+    cxx_support::parse_tag_e tag = std::visit(
+        matcher_r<cxx_support::parse_tag_e>(
+            [](const ir::fundamental_e&) { return fundamental; },
+            [](const ir::array_schema&) { return array; }, [](const ir::allof_schema&) { return allof; },
+            [](const ir::anyof_schema&) { return anyof; }, [](const ir::oneof_schema&) { return oneof; },
+            [](const ir::not_schema&) { return not_a; },
+            [](const auto&) -> cxx_support::parse_tag_e { metel::unreachable(); }),
+        s.type.data);
+    return render_parse_tag(tag) + std::format("{} {};\n", r, special_field_name) + render_requirements();
+  }
   matcher vtor{
       [&](const ir::fundamental_e& f) -> std::string { metel::unreachable(); },
       [&](const ir::array_schema& a) -> std::string { metel::unreachable(); },
@@ -432,6 +533,11 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
       [&](const ir::anyof_schema& a) -> std::string { metel::unreachable(); },
       [&](const ir::oneof_schema& a) -> std::string { metel::unreachable(); },
       [&](const ir::not_schema& a) -> std::string { metel::unreachable(); },
+      [&](const ir::constraints_schema&) -> std::string {
+        // встречается только как требование и рендерится внутрь владельца, своего типа нет
+        throw render_error("constraints schema {}#{} is used not as requirement", s.spec,
+                           s.jsonptr.escaped());
+      },
       [&](const ir::enum_schema& e) -> std::string {
         bool is_string_enum = e.type.is_fundamental(ir::fundamental_e::string);
         std::string type = render_schema_ref(e.type, s.spec, s.jsonptr).typeref;
@@ -503,16 +609,14 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         return result;
       },
   };
-  std::string res = std::visit(vtor, s.type.data);
-  if (s.has_requirements()) {
-    res += std::format("using required_schemas = {}<{}>;\n", typelist_str,
-                       render_schemas_array(*s.required, s.spec, s.jsonptr));
-  }
-  return res;
+  return std::visit(vtor, s.type.data) + render_requirements();
 }
 
 render_result renderer::render_schema(const ir::schema& s) const {
   std::string file_begin(schema_file_begin);
+  // ограничения рендерятся внутрь владельца, своего файла нет
+  if (s.type.is_constraints())
+    return {.filename = {}, .rendered = {}};
   const auto sref = s.ref();
   auto [typeref, is_alias] = render_schema_ref(sref, s.spec, s.jsonptr);
   if (is_alias)
