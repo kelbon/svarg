@@ -21,6 +21,12 @@ using integer = int64_t;
 using number = ::svarg::number;
 using ::svarg::arrayof;
 using boolean = bool;
+// схема без ограничений типа (type: true, {} и т.п.) - любое JSON значение
+using any = boost::json::value;
+// схема, которой не удовлетворяет ни одно значение (type: false, not: {}): разбор всегда ошибка
+struct never {
+  bool operator==(const never&) const = default;
+};
 
 template <typename T>
 using additional_properties_t = string_map<T>;
@@ -28,6 +34,20 @@ using additional_properties_t = string_map<T>;
 }  // namespace svarg::cxx_support
 
 namespace svarg {
+
+template <>
+struct from_json_value<cxx_support::never> {
+  static error_code operator()(const boost::json::value& j, cxx_support::never&) {
+    return validate_error("no value matches `never` schema, got `{}`", e2str(j.kind()));
+  }
+};
+
+template <>
+struct to_json_value<cxx_support::never> {
+  [[noreturn]] static boost::json::value operator()(const cxx_support::never&) {
+    throw serialize_error("value of `never` schema cannot be serialized");
+  }
+};
 
 template <>
 struct from_json_value<cxx_support::null> {

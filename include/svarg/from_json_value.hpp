@@ -297,6 +297,15 @@ struct from_json_value<std::set<T, Types...>> {
   }
 };
 
+// любое JSON значение как есть
+template <>
+struct from_json_value<boost::json::value> {
+  error_code operator()(const boost::json::value& v, boost::json::value& out) {
+    out = v;
+    return {};
+  }
+};
+
 template <>
 struct from_json_value<Any> {
   error_code operator()(const boost::json::value& v, Any& out) {

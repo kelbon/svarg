@@ -90,6 +90,13 @@ struct to_json_value<number> {
 };
 
 template <>
+struct to_json_value<boost::json::value> {
+  boost::json::value operator()(const boost::json::value& v) const {
+    return v;
+  }
+};
+
+template <>
 struct to_json_value<Any> {
   boost::json::value operator()(const Any& v) const {
     return v.value;
