@@ -761,7 +761,7 @@ static void visit_path_item_callbacks(const path_item_object& item, auto&& visit
   for (auto&& [methodstr, op] : item.all_operations_with_method()) {
     if (op.callbacks) {
       for (auto& [name, cb] : *op.callbacks)
-        visitor(name, cb, std::move(file), std::move(jp) / methodstr / "callbacks" / name);
+        visitor(name, cb, file, jp / methodstr / "callbacks" / name);
     }
   }
 }
@@ -773,13 +773,13 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
   // components/callbacks
   if (api.components && api.components->callbacks) {
     for (auto& [name, cb] : *api.components->callbacks)
-      visitor(name, cb, file, "/components/callbacks"_jp);
+      visitor(name, cb, file, "/components/callbacks"_jp / name);
   }
 
   // components/pathItems
   if (api.components && api.components->pathItems) {
     for (auto& [name, item] : *api.components->pathItems) {
-      auto [ritem, reffile, refjp] = resolve_ref_and_ret(item, file, "/components/pathItems"_jp, ctx);
+      auto [ritem, reffile, refjp] = resolve_ref_and_ret(item, file, "/components/pathItems"_jp / name, ctx);
       visit_path_item_callbacks(ritem, visitor, std::move(reffile), std::move(refjp));
     }
   }
