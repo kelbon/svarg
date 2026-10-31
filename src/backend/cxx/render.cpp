@@ -1012,7 +1012,7 @@ static ir::schema_refs_t all_schemas_from(const auto& x, bool allow_fundamental 
 
 struct build_path_make_fn_visitor {
   std::string& out;
-  size_t param_index = 0;
+  // в порядке полей path_t, порядок в шаблоне пути может отличаться
   const std::vector<const ir::operation_parameter*>& params;
   const render_options& options;
 
@@ -1022,18 +1022,22 @@ struct build_path_make_fn_visitor {
     out += "static constexpr void visit_path(auto&& vtor) {";
   }
 
+  size_t index_of(std::string_view param_name) const {
+    auto it = std::ranges::find(params, param_name, [](auto* p) -> std::string_view { return p->name; });
+    if (it == params.end())
+      throw render_error("path parameter `{}` is not declared in `parameters`", param_name);
+    return std::distance(params.begin(), it);
+  }
+
   void substr(std::string_view sv) {
     out += std::format("vtor.substr({});\n", render_string(sv));
   }
   void param(std::string_view param_name) {
-    assert(param_name == params[param_index]->name);
-    out += std::format("vtor.param(std::index_sequence<{}>{{}});\n", param_index);
-    ++param_index;
+    out += std::format("vtor.param(std::index_sequence<{}>{{}});\n", index_of(param_name));
   }
   void param(std::string_view param_name, std::string_view sep) {
-    assert(param_name == params[param_index]->name);
-    out += std::format("vtor.param(std::index_sequence<{}>{{}}, {});\n", param_index, render_string(sep));
-    ++param_index;
+    out += std::format("vtor.param(std::index_sequence<{}>{{}}, {});\n", index_of(param_name),
+                       render_string(sep));
   }
 
   void pattern_end() {
