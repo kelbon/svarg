@@ -4,6 +4,7 @@
 
 // сгенерировано из generated_api/api.yaml (см. test/CMakeLists.txt)
 #include "api/server.hpp"
+#include "api/client.hpp"
 
 using namespace svarg::cxx_support;
 
@@ -26,17 +27,15 @@ struct test_server : api::server {
   }
 };
 
-// отправляет запросы по очереди и возвращает ответы
-static std::vector<http_response> exchange(test_server& server, std::vector<http_request> reqs) {
+// поднимает сервер на loopback и выполняет `fn(h2client&)` до завершения
+static void run_with_server(test_server& server, auto fn) {
   hidi::internet_address addr =
       server.listen(hidi::server_endpoint{.addr = {boost::asio::ip::address_v4::loopback(), 0}});
   hidi::h2client client{hidi::endpoint(addr)};
 
-  std::vector<http_response> rsps;
   bool done = false;
   auto run = [&]() -> dd::task<void> {
-    for (auto& r : reqs)
-      rsps.push_back(co_await client.send_request(std::move(r), hidi::deadline_t::never()));
+    co_await fn(client);
     done = true;
   };
   run().start_and_detach();
@@ -47,6 +46,15 @@ static std::vector<http_response> exchange(test_server& server, std::vector<http
     client.ioctx().poll();
   }
   REQUIRE(done);
+}
+
+// отправляет запросы по очереди и возвращает ответы
+static std::vector<http_response> exchange(test_server& server, std::vector<http_request> reqs) {
+  std::vector<http_response> rsps;
+  run_with_server(server, [&](hidi::h2client& client) -> dd::task<void> {
+    for (auto& r : reqs)
+      rsps.push_back(co_await client.send_request(std::move(r), hidi::deadline_t::never()));
+  });
   return rsps;
 }
 
@@ -91,6 +99,41 @@ TEST("generated server") {
   REQUIRE(rsps[4].status == 204);
   REQUIRE(server.uploaded == "data");
   REQUIRE(rsps[5].status == 400);
+}
+
+// middleware: считает запросы и передаёт дальше
+struct counting {
+  any_client next;
+  int* count;
+
+  dd::task<http_response> send_request(http_request req, hidi::deadline_t d) {
+    ++*count;
+    return next.send_request(std::move(req), d);
+  }
+};
+
+TEST("generated client") {
+  test_server server(hidi::server_ssl_context_ptr(nullptr));
+  int count = 0;
+  api::getItem::result_t item;
+  api::upload::result_t uploaded;
+
+  run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
+    api::client cli{counting{any_client(client_ref(h2)), &count}};
+    api::client_upload_example_com_v2 upload_cli{client_ref(h2)};
+
+    api::getItem get;
+    get.path.id._dATA = 7;
+    item = co_await cli.send_getItem(get, hidi::deadline_t::never());
+
+    api::upload up;
+    up.body._dATA._dATA = "file";
+    uploaded = co_await upload_cli.send_upload(up, hidi::deadline_t::never());
+  });
+
+  REQUIRE(count == 1);
+  REQUIRE(item.get_if_200() && item.get_if_200()->body._dATA == "item7");
+  REQUIRE(server.uploaded == "file");
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

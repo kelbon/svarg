@@ -16,14 +16,25 @@ struct example_server : api::server {
 };
 
 int main() {
-  // TODO
-  example_server root;
-  svarg::cxx_support::h2clients_pool pool;
-  // TODO может мне достаточно сделать просто клиента, а уже вокруг накрутят свои пулы если надо и тд?
-  //  я клиента даю, возможность ему адрес сказать и тд. Возможность задать адрес сервера в апи в том числе
-  //  для какой-то функции и мб проверка что адрес совпадает
-  // TODO изучить вопрос что в других фреймворках
-  api::client cli(pool);
-  std::cout << "svarg_simple_cxx_example: generated header included OK\n";
+  example_server server(hidi::server_ssl_context_ptr(nullptr));  // http, без tls
+  hidi::internet_address addr =
+      server.listen(hidi::server_endpoint{.addr = {boost::asio::ip::address_v4::loopback(), 0}});
+
+  hidi::h2client h2{hidi::endpoint(addr)};
+  // транспорт можно обернуть в свои middleware (ретраи, хедеры...), см. any_client.hpp
+  api::client cli{svarg::cxx_support::client_ref(h2)};
+
+  bool done = false;
+  auto ping = [&]() -> dd::task<void> {
+    api::ping::result_t rsp = co_await cli.send_ping(api::ping{}, hidi::deadline_t::never());
+    std::cout << "ping: " << rsp.body._dATA.status << std::endl;
+    done = true;
+  };
+  ping().start_and_detach();
+  // сервер и клиент в одном потоке
+  while (!done) {
+    server.ioctx().poll();
+    h2.ioctx().poll();
+  }
   return 0;
 }

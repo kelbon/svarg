@@ -753,7 +753,8 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
     write_file(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
   }
 
-  // server.hpp только если есть операции, один сервер на спеку (адрес сервера определяется listen)
+  // server.hpp и client.hpp только если есть операции
+  // один сервер на спеку (адрес сервера определяется listen), клиент на каждый набор серверов
   if (ir.operations) {
     string_map<std::vector<const ir::operation*>> spec2ops;
     for (auto& op : *ir.operations) {
@@ -761,30 +762,10 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
       if (op.servers)
         spec2ops[op.spec].push_back(&op);
     }
-    for (auto& [spec, ops] : spec2ops)
+    for (auto& [spec, ops] : spec2ops) {
       write_file(output_dir / spec / "server.hpp", render_server(ops, spec));
-  }
-
-  if (ir.operations) {
-    // по одному клиенту на каждую спеку
-
-    // spec -> all operations
-    string_map<std::vector<const ir::operation*>> clients;
-    for (auto& op : *ir.operations) {
-      assert(op.has_path() || !op.servers);  // у вебхуков не должно быть серверов
-      if (op.servers) {
-        for (auto& s : *op.servers)
-          clients[op.spec].push_back(&op);
-      }
+      write_file(output_dir / spec / "client.hpp", render_client(ops, spec));
     }
-    // file -> rendered
-    string_map<std::string> client_files;
-
-    for (auto& [spec, ops] : clients)
-      client_files[spec] = render_client(ops, spec);
-
-    for (auto& [spec, rendered] : client_files)
-      write_file(output_dir / spec / "client.hpp", rendered);
   }
   remove_duplicates(generated);
   std::stable_sort(generated.begin(), generated.end(),
@@ -1366,34 +1347,49 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
   std::string res;
 
   res += "#pragma once\n\n#include \"common_types.hpp\"\n\n";
-  // include необходимых операций
   for (auto* op : operations)
     res += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
 
-  res += std::format("namespace {}\n {{", make_namespace(spec, {}, options));
+  res += std::format("namespace {} {{\n\n", make_namespace(spec, {}, options));
 
-  // клиент один и он в неймспейсе спеки
-  res += "struct client {";
-  res += "svarg::cxx_support::h2clients_pool& pool;\n";
+  // клиент отправляет на один адрес, поэтому операции группируются по набору серверов
+  std::map<std::set<server_object>, std::vector<const ir::operation*>> groups;
+  for (auto* op : operations)
+    groups[*op->servers].push_back(op);
+  // группа с наибольшим числом операций (обычно глобальные `servers`) - просто `client`
+  auto main_group = std::ranges::max_element(groups, std::less{}, [](auto& g) { return g.second.size(); });
 
-  for (auto* op : operations) {
-    auto name = make_cxx_ident(op->id, options);
-    // TODO нормальный url + дефолтное значение
-    std::string get_addr = std::format("{{ hidi::endpoint(host), {{}} }}");
-    res += std::format(
-        "dd::task<svarg::cxx_support::operation_result<{}>> send_{}({} op, std::string host, "
-        "hidi::deadline_t "
-        "deadline, "
-        "svarg::content_type_params ctp "
-        "= {{}}) const {{\n return "
-        "svarg::cxx_support::send_request<{}>(*pool.get_connection_to({}), "
-        "svarg::cxx_support::make_request(op, "
-        "ctp), deadline); "
-        "}}\n",
-        name, name, name, name, get_addr);
+  for (auto it = groups.begin(); it != groups.end(); ++it) {
+    auto& [servers, ops] = *it;
+    const server_object& first = *servers.begin();
+    res += "// servers:\n";
+    for (auto& srv : servers)
+      res += std::format("//   {}\n", srv.url);
+    std::string name = "client";
+    if (it != main_group) {
+      // без схемы: client_upload_example_com_v2
+      std::string_view url = first.url;
+      if (auto pos = url.find("://"); pos != url.npos)
+        url.remove_prefix(pos + 3);
+      name = std::format("client_{}", make_cxx_ident(url, options));
+    }
+    res += std::format("struct {} {{\n", name);
+    res += "svarg::cxx_support::any_client transport;\n";
+    res += "// путь из url сервера, добавляется перед путём каждой операции\n";
+    res += std::format("std::string base_path = {};\n\n", render_string(server_base_path(first)));
+
+    for (auto* op : ops) {
+      auto opname = make_cxx_ident(op->id, options);
+      res += std::format(
+          "dd::task<{0}::result_t> send_{0}(const {0}& op, hidi::deadline_t deadline, "
+          "const svarg::content_type_params& ctp = {{}}) {{\n"
+          "return svarg::cxx_support::send_request<{0}>(transport, "
+          "svarg::cxx_support::make_request(op, ctp, base_path), deadline);\n"
+          "}}\n\n",
+          opname);
+    }
+    res += "};\n\n";
   }
-
-  res += "};\n\n";  // end struct
 
   res += "}\n";  // end namespace
   return res;

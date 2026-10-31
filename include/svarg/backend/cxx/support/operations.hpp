@@ -8,8 +8,9 @@
 
 #include "svarg/utils/path_tools.hpp"
 
+#include "svarg/backend/cxx/support/any_client.hpp"
+
 #include <hidi/http_base.hpp>
-#include <hidi/h2client.hpp>
 
 namespace svarg::cxx_support {
 
@@ -225,11 +226,14 @@ template <typename T>
 // не заполняет req.path, если у операции нет пути (вебхук...)
 // складывает content_type не в headers, а в req.body.content_type
 // не выставляет req.scheme и req.authority, это должно заполняться уже клиентом при отправке
+// `base_path` - путь из url сервера (например "/v1"), добавляется перед путём операции
 template <an_operation Op>
-http_request make_request(const Op& op, const content_type_params& ctparams = {}) {
+http_request make_request(const Op& op, const content_type_params& ctparams = {},
+                          std::string_view base_path = {}) {
   http_request req;
 
-  req.path = make_path<Op>(op);
+  req.path = base_path;
+  req.path += make_path<Op>(op);
   if constexpr (has_query_params<Op>) {
     application_x_www_form_urlencoded query;
     FOR_EACH_FIELD_INDEX_OF(query_t<Op>) {
@@ -489,9 +493,22 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
 template <an_operation Op>
 using operation_result = typename Op::result_t;
 
+namespace noexport {
+
+// result_t - либо сам ответ, либо структура с вариантом ответов
+template <typename T, typename Result>
+[[nodiscard]] T& emplace_result(Result& r) {
+  if constexpr (std::is_same_v<Result, T>)
+    return r;
+  else
+    return r.data.template emplace<T>();
+}
+
+}  // namespace noexport
+
 // отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
 template <an_operation Op>
-[[nodiscard]] dd::task<operation_result<Op>> send_request(h2client& client, http_request req,
+[[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
                                                           deadline_t deadline) {
   static_assert(metel::is_decayed_v<Op>);
   http_response rsp = co_await client.send_request(std::move(req), deadline);
@@ -502,9 +519,7 @@ template <an_operation Op>
       throw parse_error("status `{}` do not match any response for operation `{}`", rsp.status,
                         type_name<Op>());
     } else {
-      T v;
-      from_response(rsp, v).rethrow_if_failed();
-      result = std::move(v);
+      from_response(rsp, noexport::emplace_result<T>(result)).rethrow_if_failed();
     }
   };
   Op::visit_response_status(rsp.status, do_parse);

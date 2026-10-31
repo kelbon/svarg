@@ -48,11 +48,12 @@ file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_api" DESTINATION "${CMAKE_CURRENT_BI
 # test_generated использует код, сгенерированный svarg из generated_api/api.yaml
 set(SVARG_TEST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_custom_command(
-    OUTPUT "${SVARG_TEST_GENERATED_DIR}/api/server.hpp"
+    OUTPUT "${SVARG_TEST_GENERATED_DIR}/api/server.hpp" "${SVARG_TEST_GENERATED_DIR}/api/client.hpp"
     COMMAND svarg --out "${SVARG_TEST_GENERATED_DIR}" --specs-dir "${CMAKE_CURRENT_SOURCE_DIR}/generated_api" api.yaml
     DEPENDS svarg "${CMAKE_CURRENT_SOURCE_DIR}/generated_api/api.yaml"
     VERBATIM
 )
-target_sources(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}/api/server.hpp")
+target_sources(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}/api/server.hpp"
+                                      "${SVARG_TEST_GENERATED_DIR}/api/client.hpp")
 target_include_directories(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}")
 target_link_libraries(test_generated PRIVATE svarg_cxx_supportlib)
