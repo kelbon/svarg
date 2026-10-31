@@ -73,7 +73,7 @@ template <typename... Types>
 struct from_json_value<cxx_support::allof<Types...>> {
   static error_code operator()(const boost::json::value& j, cxx_support::allof<Types...>& v) {
     error_code ec;
-    auto parse_one = [&]<typename T>(std::type_identity_t<T>) -> bool {
+    auto parse_one = [&]<typename T>(std::type_identity<T>) -> bool {
       ec = try_from_json(j, v.template get<T>());
       return !ec.failed();
     };

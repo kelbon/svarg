@@ -27,5 +27,14 @@ TEST("anyOf: every matching schema") {
   REQUIRE(svarg::try_from_json(boost::json::parse("true"), v).failed());
 }
 
+TEST("allOf: every schema") {
+  using T = allof<integer, number>;
+  T v;
+  REQUIRE(!svarg::try_from_json(boost::json::parse("5"), v).failed());
+  REQUIRE(v.get<integer>() == 5);
+  REQUIRE(svarg::to_json(v) == boost::json::parse("5"));
+  REQUIRE(svarg::try_from_json(boost::json::parse("1.5"), v).failed());
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;
