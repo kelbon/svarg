@@ -10,7 +10,7 @@ using svarg::arrayof;
 struct name_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
 
-  std::string _dATA;
+  std::string _implfield;
 
   // два ограничения: например после allOf<Base, {...}> требования обеих частей складываются
   static constexpr std::array<constraints_t, 2> constraints = {{
@@ -22,7 +22,7 @@ struct name_t {
 struct utf8_name_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
 
-  std::string _dATA;
+  std::string _implfield;
 
   static constexpr std::array<constraints_t, 1> constraints = {{
       constraints_t{.max_length = 3u},
@@ -32,7 +32,7 @@ struct utf8_name_t {
 struct even_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
 
-  integer _dATA;
+  integer _implfield;
 
   static constexpr std::array<constraints_t, 1> constraints = {{
       constraints_t{
@@ -46,7 +46,7 @@ struct even_t {
 struct ratio_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
 
-  number _dATA;
+  number _implfield;
 
   static constexpr std::array<constraints_t, 1> constraints = {{
       constraints_t{
@@ -60,7 +60,7 @@ struct ratio_t {
 struct ids_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::array;
 
-  arrayof<integer> _dATA;
+  arrayof<integer> _implfield;
 
   static constexpr std::array<constraints_t, 1> constraints = {{
       constraints_t{.min_items = 1u, .max_items = 3u, .unique_items = true},
@@ -90,7 +90,7 @@ struct patch_t {
 struct short_name_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
 
-  std::string _dATA;
+  std::string _implfield;
 
   using required_schemas = metel::typelist<name_t>;
 
@@ -107,7 +107,7 @@ struct color_t {
 
   static constexpr std::array<std::string_view, 2> values = {"red", "green"};
 
-  values_e _dATA;
+  values_e _implfield;
 };
 
 struct level_t {
@@ -115,7 +115,7 @@ struct level_t {
 
   static constexpr std::array<integer, 2> values = {1, 3};
 
-  integer _dATA;
+  integer _implfield;
 };
 
 template <typename T>
@@ -194,7 +194,7 @@ static bool parses_nonbody(std::string_view str) {
 TEST("nonbody string") {
   name_t v;
   REQUIRE(!parse_nonbody_from("abc", v).failed());
-  REQUIRE(v._dATA == "abc");
+  REQUIRE(v._implfield == "abc");
   REQUIRE(!parses_nonbody<name_t>(R"("ab")"));  // кавычки - часть значения
   REQUIRE(!parses_nonbody<name_t>("a"));        // minLength
   REQUIRE(!parses_nonbody<name_t>("AB"));       // pattern
@@ -224,7 +224,7 @@ TEST("nonbody numbers") {
 TEST("nonbody enums") {
   color_t c;
   REQUIRE(!parse_nonbody_from("green", c).failed());
-  REQUIRE(c._dATA == color_t::green);
+  REQUIRE(c._implfield == color_t::green);
   REQUIRE(!parses_nonbody<color_t>("blue"));
   REQUIRE(serialize_nonbody_into(c) == "green");
 
@@ -236,7 +236,7 @@ TEST("nonbody enums") {
 TEST("nonbody optional") {
   std::optional<even_t> v;
   REQUIRE(!parse_nonbody_from("4", v).failed());
-  REQUIRE(v && v->_dATA == 4);
+  REQUIRE(v && v->_implfield == 4);
   REQUIRE(serialize_nonbody_into(v) == "4");
 }
 

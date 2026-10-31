@@ -40,3 +40,17 @@ paths:
       responses:
         "204":
           description: done
+  /notes:
+    post:
+      operationId: addNote
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+          application/problem+json:
+            schema:
+              type: integer
+      responses:
+        "204":
+          description: added

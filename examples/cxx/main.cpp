@@ -9,7 +9,7 @@ struct example_server : api::server {
 
   dd::task<hidi::http_response> do_ping(api::ping, hidi::http_request, hidi::request_context) override {
     api::ping::response_200 rsp;
-    rsp.body._dATA.status = "ok";
+    rsp.body.status = "ok";
     co_return svarg::cxx_support::make_response(rsp);
   }
 };
@@ -26,7 +26,7 @@ int main() {
   bool done = false;
   auto ping = [&]() -> dd::task<void> {
     api::ping::result_t rsp = co_await cli.send_ping(api::ping{}, hidi::deadline_t::never());
-    std::cout << "ping: " << rsp.body._dATA.status << std::endl;
+    std::cout << "ping: " << rsp.body.status << std::endl;
     done = true;
   };
   ping().start_and_detach();

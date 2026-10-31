@@ -485,11 +485,17 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
   return result;
 }
 
+// единственное поле типа с одним значением и доступ к нему через get()
+static std::string render_special_field(std::string_view type) {
+  return std::format(
+      "{0} {1};\n\n"
+      "[[nodiscard]] constexpr {0}& get() noexcept {{ return {1}; }}\n"
+      "[[nodiscard]] constexpr const {0}& get() const noexcept {{ return {1}; }}\n\n",
+      type, special_field_name);
+}
+
 // `typeref` - тип поля, если s полутривиальный объект
 std::string renderer::render_struct_content(const ir::schema& s, std::string typeref) const {
-  auto make_field_str = [](std::string_view fieldtype) {
-    return std::format("{} {};", fieldtype, special_field_name);
-  };
   auto render_requirements = [&]() -> std::string {
     if (!s.has_requirements())
       return "";
@@ -525,7 +531,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
             [](const ir::not_schema&) { return not_a; },
             [](const auto&) -> cxx_support::parse_tag_e { metel::unreachable(); }),
         s.type.data);
-    return render_parse_tag(tag) + std::format("{} {};\n", r, special_field_name) + render_requirements();
+    return render_parse_tag(tag) + render_special_field(r) + render_requirements();
   }
   matcher vtor{
       [&](const ir::fundamental_e& f) -> std::string { metel::unreachable(); },
@@ -572,7 +578,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           }
           result += "};\nusing enum values_e;\n\n";  // end values_e
           // возможное пересечение имён using enum / special_field_name игнорируется
-          result += std::format("values_e {};\n\n", special_field_name);
+          result += render_special_field("values_e");
         } else {
           result += render_parse_tag(cxx_support::parse_tag_e::enum_);
           result += std::format("static const inline std::array<{}, {}> values = {{", type, e.values.size());
@@ -599,7 +605,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
             //                         render_string(boost::json::serialize(v.value)));
           }
           result += "};\n";  // end values
-          result += std::format("{} {};\n\n", type, special_field_name);
+          result += render_special_field(type);
         }
         return result;
       },
@@ -788,7 +794,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   assert(is_lowered(body.contentType.str()));
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
                         render_string(body.contentType));
-  result += std::format("{} {};\n", render_schema_ref(body.schema, spec, jp).typeref, special_field_name);
+  result += render_special_field(render_schema_ref(body.schema, spec, jp).typeref);
   if (body.membersEncoding && !body.membersEncoding->empty()) {
     std::string encoding;
     for (auto& [prop_name, content_type] : *body.membersEncoding) {
@@ -858,14 +864,31 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     result += std::format("return vtor.template operator()<void>();\n");
     result += "}\n\n";
   } else {
-    // одно тело
+    // одно тело: без обёртки, свойства тела - статические члены владельца
     auto& body = *bodies.begin();
-    auto [struct_name, str] = render_body(body, spec, jp);
-    result += str;
+    assert(is_lowered(body.contentType.str()));
+    result += std::format("static constexpr std::string_view body_content_type = {};\n",
+                          render_string(body.contentType));
+    result += std::format("static constexpr bool body_is_required = {};\n", body.required);
+    if (body.streaming && *body.streaming)
+      result += "static constexpr bool body_is_streaming = true;\n";
+    if (body.membersEncoding && !body.membersEncoding->empty()) {
+      std::string encoding;
+      for (auto& [prop_name, content_type] : *body.membersEncoding) {
+        encoding +=
+            std::format("if (str == {}) return {};\n", render_string(make_cxx_ident(prop_name, options)),
+                        render_string(content_type));
+      }
+      result += std::format(
+          "[[nodiscard]] static constexpr std::string_view body_encoding_for(std::string_view str) noexcept"
+          "{{ {} return \"\";\n}}\n",
+          encoding);
+    }
+    std::string type = render_schema_ref(body.schema, spec, jp).typeref;
     if (body.required)
-      result += std::format("\n{} body;\n", struct_name);
+      result += std::format("\n{} body;\n", type);
     else
-      result += std::format("\n{}<{}> body;\n", optional_str, struct_name);
+      result += std::format("\n{}<{}> body;\n", optional_str, type);
   }
 
   return result;

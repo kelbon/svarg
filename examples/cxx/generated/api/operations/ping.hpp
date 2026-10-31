@@ -24,17 +24,10 @@ struct ping {
 
     static constexpr int status = 200;
 
-    struct application_json_body {
-      static constexpr bool is_required = true;
+    static constexpr std::string_view body_content_type = "application/json";
+    static constexpr bool body_is_required = true;
 
-      static constexpr svarg::cxx_support::parse_tag_e parse_tag = svarg::cxx_support::parse_tag_e::body;
-
-      static constexpr std::string_view content_type = "application/json";
-
-      paths::_ping::get::responses::_200::content::application_json::_schema _dATA;
-    };
-
-    application_json_body body;
+    paths::_ping::get::responses::_200::content::application_json::_schema body;
   };
 
   static constexpr decltype(auto) visit_response_status(int status, auto&& vtor) {

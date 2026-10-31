@@ -12,18 +12,28 @@ struct test_server : api::server {
   using api::server::server;
 
   std::string uploaded;
+  std::vector<std::string> notes;
 
   dd::task<hidi::http_response> do_getItem(api::getItem op, hidi::http_request,
                                            hidi::request_context) override {
     api::getItem::response_200 rsp;
-    rsp.body._dATA = std::format("item{}", op.path.id._dATA);
+    rsp.body = std::format("item{}", op.path.id.get());
     co_return make_response(rsp);
   }
 
   dd::task<hidi::http_response> do_upload(api::upload op, hidi::http_request,
                                           hidi::request_context) override {
-    uploaded = op.body._dATA._dATA;
+    uploaded = op.body.get();
     co_return make_response(api::upload::response_204{});
+  }
+
+  dd::task<hidi::http_response> do_addNote(api::addNote op, hidi::http_request,
+                                           hidi::request_context) override {
+    if (auto* text = std::get_if<api::addNote::application_json_body>(&op.body))
+      notes.push_back(text->get());
+    else if (auto* n = std::get_if<api::addNote::application_problem_json_body>(&op.body))
+      notes.push_back(std::to_string(n->get()));
+    co_return make_response(api::addNote::response_204{});
   }
 };
 
@@ -65,9 +75,9 @@ static http_request with_base_path(http_request req, std::string_view base_path)
 
 TEST("generated server") {
   api::getItem get;
-  get.path.id._dATA = 5;
+  get.path.id.get() = 5;
   api::upload up;
-  up.body._dATA._dATA = "data";
+  up.body.get() = "data";
 
   http_request bad_get = with_base_path(make_request(get), "/v1");
   bad_get.path = "/v1/items/0";  // minimum, клиент такое не сериализует
@@ -91,7 +101,7 @@ TEST("generated server") {
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
   REQUIRE(!from_response(rsps[0], item).failed());
-  REQUIRE(item.body._dATA == "item5");
+  REQUIRE(item.body == "item5");
 
   REQUIRE(rsps[1].status == 404);
   REQUIRE(rsps[2].status == 404);
@@ -123,16 +133,24 @@ TEST("generated client") {
     api::client_upload_example_com_v2 upload_cli{client_ref(h2)};
 
     api::getItem get;
-    get.path.id._dATA = 7;
+    get.path.id.get() = 7;
     item = co_await cli.send_getItem(get, hidi::deadline_t::never());
 
     api::upload up;
-    up.body._dATA._dATA = "file";
+    up.body.get() = "file";
     uploaded = co_await upload_cli.send_upload(up, hidi::deadline_t::never());
+
+    // несколько тел: выбирается по content type
+    api::addNote note;
+    note.body.emplace<api::addNote::application_json_body>().get() = "text";
+    co_await cli.send_addNote(note, hidi::deadline_t::never());
+    note.body.emplace<api::addNote::application_problem_json_body>().get() = 42;
+    co_await cli.send_addNote(note, hidi::deadline_t::never());
   });
 
-  REQUIRE(count == 1);
-  REQUIRE(item.get_if_200() && item.get_if_200()->body._dATA == "item7");
+  REQUIRE(count == 3);
+  REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
+  REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7");
   REQUIRE(server.uploaded == "file");
 }
 

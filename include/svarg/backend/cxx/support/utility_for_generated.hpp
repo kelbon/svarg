@@ -13,13 +13,13 @@ namespace svarg::cxx_support {
 // cxx_support
 
 // имя максимально кривое для наименьшей вероятности пересечения с другими именами
-static constexpr std::string_view special_field_name = "_dATA";
+static constexpr std::string_view special_field_name = "_implfield";
 
 template <typename T>
 [[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
   static_assert(fields_count<std::remove_const_t<T>>() == 1);
   // <special_field_name>
-  return in._dATA;
+  return in._implfield;
 }
 
 // additional_properties

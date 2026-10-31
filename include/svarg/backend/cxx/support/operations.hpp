@@ -183,24 +183,36 @@ void serialize_headers_of(T&& v, http_headers_t& out) {
 
 namespace noexport {
 
-// тело типа `B` внутри операции/ответа `x`, создаётся если его нет
-template <typename B, typename T>
-[[nodiscard]] B& emplace_body(T& x) {
-  if constexpr (!has_single_body<T>())
-    return x.body.template emplace<B>();
-  else if constexpr (is_body_required<T>())
-    return x.body;
-  else
-    return x.body.emplace();
+// вызывает vtor.template operator()<ContentType>(значение тела), если тело присутствует
+template <typename T, typename Vtor>
+void visit_body(const T& x, Vtor&& vtor) {
+  if (!is_body_present(x)) {
+    if constexpr (is_body_required<T>())
+      throw serialize_error("body is required for `{}`, but not present", type_name<T>());
+    return;
+  }
+  if constexpr (has_single_body<T>()) {
+    constexpr content_type_e C = content_type_enum(T::body_content_type);
+    if constexpr (is_body_required<T>())
+      vtor.template operator()<C>(x.body);
+    else
+      vtor.template operator()<C>(*x.body);
+  } else {
+    std::visit(metel::matcher{
+                   [](std::monostate) { metel::unreachable(); },
+                   [&]<typename B>(const B& b) {
+                     vtor.template operator()<content_type_enum(get_content_type<B>())>(get_special_field(b));
+                   },
+               },
+               x.body);
+  }
 }
 
 // вызывает `out(content_type_header_value, bytes)`, если тело присутствует
 template <typename T>
 void serialize_body_of(const T& x, const content_type_params& ctparams, auto&& out) {
-  if (!is_body_present(x))
-    return;
-  visit_body(x, [&]<typename B>(const B& b) {
-    out(media_type_to_hdr_value(get_content_type_enum<B>(), ctparams), serialize_body(b, ctparams));
+  visit_body(x, [&]<content_type_e C>(const auto& value) {
+    out(media_type_to_hdr_value(C, ctparams), serialize_body<C>(value, ctparams));
   });
 }
 
@@ -213,12 +225,27 @@ template <typename T>
     else
       return {};
   }
-  return select_body_type<T>(content_type, [&]<typename B>() -> error_code {
-    if constexpr (std::is_void_v<B>)
-      return parse_error("content type `{}` not matched any body of `{}`", content_type, type_name<T>());
+  auto not_matched = [&] {
+    return parse_error("content type `{}` not matched any body of `{}`", content_type, type_name<T>());
+  };
+  if constexpr (has_single_body<T>()) {
+    // учитывает регистр и параметры (application/json; charset=utf-8)
+    if (!match_content_type(T::body_content_type, content_type))
+      return not_matched();
+    constexpr content_type_e C = content_type_enum(T::body_content_type);
+    if constexpr (is_body_required<T>())
+      return parse_from<C>(data, x.body);
     else
-      return parse_from<get_content_type_enum<B>()>(data, emplace_body<B>(x));
-  });
+      return parse_from<C>(data, x.body.emplace());
+  } else {
+    return T::select_body_type(content_type, [&]<typename B>() -> error_code {
+      if constexpr (std::is_void_v<B>)
+        return not_matched();
+      else
+        return parse_from<content_type_enum(get_content_type<B>())>(
+            data, get_special_field(x.body.template emplace<B>()));
+    });
+  }
 }
 
 }  // namespace noexport

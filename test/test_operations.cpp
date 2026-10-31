@@ -10,7 +10,7 @@ using namespace svarg::cxx_support;
 struct name_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
 
-  std::string _dATA;
+  std::string _implfield;
 
   static constexpr std::array<constraints_t, 1> constraints = {{
       constraints_t{.min_length = 2u, .pattern = "^[a-z]+$"},
@@ -20,7 +20,7 @@ struct name_t {
 struct even_t {
   static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
 
-  integer _dATA;
+  integer _implfield;
 
   static constexpr std::array<constraints_t, 1> constraints = {{
       constraints_t{.multiple_of = bound_t(int64_t(2))},
@@ -35,7 +35,7 @@ struct color_t {
 
   static constexpr std::array<std::string_view, 2> values = {"red", "green"};
 
-  values_e _dATA;
+  values_e _implfield;
 };
 
 // GET /v1/{id}/items/{n}
@@ -120,14 +120,9 @@ struct item_response {
   };
   headers_t headers;
 
-  struct application_json_body {
-    static constexpr bool is_required = true;
-    static constexpr parse_tag_e parse_tag = parse_tag_e::body;
-    static constexpr std::string_view content_type = "application/json";
-
-    even_t _dATA;
-  };
-  application_json_body body;
+  static constexpr std::string_view body_content_type = "application/json";
+  static constexpr bool body_is_required = true;
+  even_t body;
 };
 
 // PUT /name с необязательным телом
@@ -137,25 +132,20 @@ struct put_name {
   static constexpr inline std::string_view method = "PUT";
   static constexpr std::string_view path_expr = "/name";
 
-  struct application_json_body {
-    static constexpr bool is_required = false;
-    static constexpr parse_tag_e parse_tag = parse_tag_e::body;
-    static constexpr std::string_view content_type = "application/json";
-
-    name_t _dATA;
-  };
-  std::optional<application_json_body> body;
+  static constexpr std::string_view body_content_type = "application/json";
+  static constexpr bool body_is_required = false;
+  std::optional<name_t> body;
 
   using result_t = item_response;
 };
 
 static get_item make_op() {
   get_item op;
-  op.path.id._dATA = "abc";
-  op.path.n._dATA = 4;
-  op.query.q._dATA = "xy";
+  op.path.id._implfield = "abc";
+  op.path.n._implfield = 4;
+  op.query.q._implfield = "xy";
   op.query.s = "a&b c";
-  op.headers.x_even._dATA = 2;
+  op.headers.x_even._implfield = 2;
   op.headers.x_color = color_t{color_t::green};
   op.cookies.b = name_t{"zz"};
   return op;
@@ -196,10 +186,10 @@ TEST("request roundtrip") {
 
   get_item out;
   REQUIRE(!from_request(req, out).failed());
-  REQUIRE(out.path.id._dATA == "abc" && out.path.n._dATA == 4);
-  REQUIRE(out.query.q._dATA == "xy" && out.query.s == "a&b c" && !out.query.c);
-  REQUIRE(out.headers.x_even._dATA == 2 && out.headers.x_color->_dATA == color_t::green);
-  REQUIRE(out.cookies.a == "1" && out.cookies.b->_dATA == "zz");
+  REQUIRE(out.path.id._implfield == "abc" && out.path.n._implfield == 4);
+  REQUIRE(out.query.q._implfield == "xy" && out.query.s == "a&b c" && !out.query.c);
+  REQUIRE(out.headers.x_even._implfield == 2 && out.headers.x_color->_implfield == color_t::green);
+  REQUIRE(out.cookies.a == "1" && out.cookies.b->_implfield == "zz");
 }
 
 TEST("invalid request") {
@@ -231,14 +221,14 @@ static bool parses(const http_request& req, put_name& op) {
 
 TEST("request body") {
   put_name op;
-  op.body.emplace()._dATA._dATA = "abc";
+  op.body.emplace()._implfield = "abc";
   http_request req = make_request(op);
   REQUIRE(req.body.content_type == "application/json");
   REQUIRE(req.body.strview() == R"("abc")");
 
   put_name out;
   REQUIRE(parses(req, out));
-  REQUIRE(out.body && out.body->_dATA._dATA == "abc");
+  REQUIRE(out.body && out.body->_implfield == "abc");
 
   req.body.content_type = "Application/JSON; charset=utf-8";
   REQUIRE(parses(req, out));
@@ -262,14 +252,14 @@ TEST("request body") {
 
 TEST("response") {
   item_response rsp;
-  rsp.headers.x_name._dATA = "ok";
-  rsp.body._dATA._dATA = 6;
+  rsp.headers.x_name._implfield = "ok";
+  rsp.body._implfield = 6;
   http_response raw = make_response(rsp);
   REQUIRE(raw.status == 200);
 
   item_response out;
   REQUIRE(!from_response(raw, out).failed());
-  REQUIRE(out.headers.x_name._dATA == "ok" && out.body._dATA._dATA == 6);
+  REQUIRE(out.headers.x_name._implfield == "ok" && out.body._implfield == 6);
 
   http_response bad = raw;
   bad.headers.front().hvalue = "NO";

@@ -219,11 +219,10 @@ consteval std::string_view get_content_type() {
   return std::decay_t<T>::content_type;
 }
 
-// ошибка компиляции, если content type тела не поддерживается
-template <a_body T>
-consteval content_type_e get_content_type_enum() {
+// ошибка компиляции, если content type не поддерживается
+consteval content_type_e content_type_enum(std::string_view content_type) {
   content_type_e e;
-  if (!efromstr(get_content_type<T>(), e))
+  if (!efromstr(content_type, e))
     throw "unsupported content type";
   return e;
 }
@@ -283,37 +282,25 @@ using headers_t = typename std::decay_t<T>::headers_t;
 template <typename T>
 constexpr bool has_body = requires { std::decay_t<T>::body; };
 
-template <typename T>
-using body_t = decltype(std::declval<T>().body);
-
+// единственное тело: `body` имеет тип самой схемы, а content type и прочее - статические члены владельца
+// body_content_type, body_is_required. Несколько тел: variant<monostate, тела...>, где каждое тело
+// a_body со своим content_type
 template <typename T>
 constexpr bool has_single_body() noexcept {
-  if constexpr (!has_body<T>)
-    return false;
-  else  // у variant/box_union не будет .body
-    return has_parse_tag<svarg::noexport::deoptional_type_t<body_t<T>>>;
-}
-
-template <typename T>
-constexpr bool has_many_bodies() noexcept {
-  if constexpr (!has_body<T>)
-    return false;
-  else
-    return !has_single_body<std::decay_t<T>>();
+  return requires { std::decay_t<T>::body_content_type; };
 }
 
 template <typename T>
 [[nodiscard]] constexpr bool is_body_required() noexcept {
   if constexpr (!has_body<T>)
     return false;
+  else if constexpr (has_single_body<T>())
+    return std::decay_t<T>::body_is_required;
   else {
-    if constexpr (has_single_body<T>())
-      return svarg::noexport::deoptional_type_t<body_t<T>>::is_required;  // TODO обработать опшнл
-    else {
-      return []<template <typename...> typename X, typename... Bodies>(X<std::monostate, Bodies...>) {
-        return (Bodies::is_required && ...);
-      }();
-    }
+    return []<template <typename...> typename X, typename... Bodies>(
+               std::type_identity<X<std::monostate, Bodies...>>) {
+      return (Bodies::is_required && ...);
+    }(std::type_identity<std::decay_t<decltype(std::declval<T>().body)>>{});
   }
 }
 
@@ -328,54 +315,6 @@ template <typename T>
       return !!op.body;
   } else {
     return !std::holds_alternative<std::monostate>(op.body);
-  }
-}
-
-// ожидает что is_body_present(op) == true
-template <typename T, typename Vtor>
-constexpr void visit_body(T&& op, Vtor&& vtor) {
-  static_assert(has_body<T>);
-  if constexpr (has_single_body<T>()) {
-    if constexpr (is_body_required<T>()) {
-      std::forward<Vtor>(vtor)(noadl::forwardLike<T>(op.body));
-      return;
-    } else {
-      if (!is_body_present(op))
-        throw serialize_error("body for operation `{}` is required, but not present", type_name<T>());
-      std::forward<Vtor>(vtor)(*noadl::forwardLike<T>(op.body));
-      return;
-    }
-  } else {
-    if constexpr (is_body_required<T>()) {
-      if (!is_body_present(op))
-        throw serialize_error("body for operation `{}` is required, but not present", type_name<T>());
-    }
-    std::visit(metel::matcher{
-                   [](std::monostate) { metel::unreachable(); },
-                   [&]<typename B>(B&& b) { std::forward<Vtor>(vtor)(noadl::forwardLike<T>(b)); },
-               },
-               std::forward_like<T>(op.body));
-    return;
-  }
-}
-
-// pre: `content_type` в нижнем регистре
-// вызывает `vtor` передавая тип body которому соответствует `content_type`
-// если такого нет - передаёт void
-template <typename T, typename Vtor>
-constexpr decltype(auto) select_body_type(std::string_view content_type, Vtor&& vtor) {
-  static_assert(has_body<T>);
-
-  if constexpr (has_single_body<T>()) {
-    using body_type = svarg::noexport::deoptional_type_t<body_t<T>>;
-
-    // учитывает регистр и параметры (application/json; charset=utf-8)
-    if (match_content_type(get_content_type<body_type>(), content_type))
-      return vtor.template operator()<body_type>();
-    else
-      return vtor.template operator()<void>();
-  } else {
-    return std::decay_t<T>::select_body_type(content_type, std::forward<Vtor>(vtor));
   }
 }
 
@@ -406,9 +345,8 @@ inline void serialize_impl(http_body_bytes& out, boost::json::serializer& sr) {
 
 }  // namespace noexport
 
-template <a_body B>
-[[nodiscard]] http_body_bytes serialize_body(const B& body, const content_type_params&) {
-  constexpr content_type_e C = get_content_type_enum<B>();
+template <content_type_e C, typename T>
+[[nodiscard]] http_body_bytes serialize_body(const T& body, const content_type_params&) {
   if constexpr (is_json_content_type<C>) {
     boost::json::value v = to_json(body);
     unsigned char tmpbuf[256];
