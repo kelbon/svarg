@@ -578,9 +578,9 @@ std::vector<fs::path> renderer::render_all(fs::path output_dir, dd::generator<re
 }
 
 std::vector<fs::path> renderer::render_all_schemas(fs::path output_dir) const {
-  auto foo = [this](this auto) -> dd::generator<render_result> {
-    for (auto&& s : schemas()) {
-      auto rr = render_schema(s);
+  auto foo = [r = this](this auto) -> dd::generator<render_result> {
+    for (auto&& s : r->schemas()) {
+      auto rr = r->render_schema(s);
       if (!rr.filename.empty())  // алиас, файл не нужен
         co_yield std::move(rr);
     }
@@ -592,10 +592,10 @@ std::vector<fs::path> renderer::render_all_schemas(fs::path output_dir) const {
 
 std::vector<fs::path> renderer::render_all_operations(fs::path output_dir, const std::set<ir::operation>& ops,
                                                       bool is_webhooks) const {
-  auto foo = [&](this auto) -> dd::generator<render_result> {
+  auto foo = [&, r = this](this auto) -> dd::generator<render_result> {
     for (auto&& op : ops) {
       // workaround gcc ICE
-      auto rr = render_operation(op, is_webhooks);
+      auto rr = r->render_operation(op, is_webhooks);
       co_yield std::move(rr);
     }
   };
@@ -746,8 +746,8 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   return {std::move(name), std::move(result)};
 }
 
-static std::string render_parameters(const auto& params, std::string_view relspec,
-                                     const json_pointer& relative, const renderer& ren) {
+std::string render_parameters(const auto& params, std::string_view relspec, const json_pointer& relative,
+                              const renderer& ren) {
   string s;
 
   s += ren.render_object_fields(as_object_fields(params), relspec, relative, /*fields_owner=*/std::nullopt,

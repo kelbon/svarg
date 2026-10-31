@@ -358,7 +358,8 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       res.meta = schema.SVARG_META_KEYFIELD;
       if (!res.name && res.meta->contains(x_name_hint))
         res.name = from_json<std::string>((*res.meta)[std::string(x_name_hint)].value);
-      res.meta->erase(x_name_hint);
+      if (auto it = res.meta->find(x_name_hint); it != res.meta->end())
+        res.meta->erase(it);
       if (res.meta->empty())
         res.meta.reset();
     }

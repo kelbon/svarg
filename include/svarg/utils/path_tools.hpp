@@ -507,7 +507,7 @@ void visit_query(std::string_view query, auto&& vtor) {
 
     std::string_view name;
     try {
-      name = eat_token(pair);
+      name = noexport::eat_token(pair);
     } catch (validate_error& e) {
       return std::move(e);
     }
