@@ -99,6 +99,25 @@ struct short_name_t {
   }};
 };
 
+struct color_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::string_enum;
+
+  enum struct values_e { red, green };
+  using enum values_e;
+
+  static constexpr std::array<std::string_view, 2> values = {"red", "green"};
+
+  values_e _dATA;
+};
+
+struct level_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::enum_;
+
+  static constexpr std::array<integer, 2> values = {1, 3};
+
+  integer _dATA;
+};
+
 template <typename T>
 static bool parses(std::string_view json) {
   T v;
@@ -162,6 +181,63 @@ TEST("parsed value is kept") {
   patch_t v;
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"b": "y"})"), v).failed());
   REQUIRE(!v.a && v.b == "y");
+}
+
+// path/query/header/cookie: значение без JSON кодирования, затем проверка требований и ограничений
+
+template <typename T>
+static bool parses_nonbody(std::string_view str) {
+  T v;
+  return !parse_nonbody_from(str, v).failed();
+}
+
+TEST("nonbody string") {
+  name_t v;
+  REQUIRE(!parse_nonbody_from("abc", v).failed());
+  REQUIRE(v._dATA == "abc");
+  REQUIRE(!parses_nonbody<name_t>(R"("ab")"));  // кавычки - часть значения
+  REQUIRE(!parses_nonbody<name_t>("a"));        // minLength
+  REQUIRE(!parses_nonbody<name_t>("AB"));       // pattern
+  REQUIRE(!parses_nonbody<short_name_t>("abcd"));
+  REQUIRE(!parses_nonbody<short_name_t>("AB"));  // pattern требования
+  REQUIRE(serialize_nonbody_into(v) == "abc");
+  bool thrown = false;
+  try {
+    (void)serialize_nonbody_into(name_t{"A"});
+  } catch (svarg::validate_error&) {
+    thrown = true;
+  }
+  REQUIRE(thrown);
+}
+
+TEST("nonbody numbers") {
+  REQUIRE(parses_nonbody<even_t>("4"));
+  REQUIRE(!parses_nonbody<even_t>("3"));
+  REQUIRE(!parses_nonbody<even_t>("4.0"));
+  REQUIRE(parses_nonbody<ratio_t>("0.7"));
+  REQUIRE(parses_nonbody<ratio_t>("1"));
+  REQUIRE(!parses_nonbody<ratio_t>("0.5"));
+  REQUIRE(!parses_nonbody<ratio_t>("x"));
+  REQUIRE(serialize_nonbody_into(even_t{4}) == "4");
+}
+
+TEST("nonbody enums") {
+  color_t c;
+  REQUIRE(!parse_nonbody_from("green", c).failed());
+  REQUIRE(c._dATA == color_t::green);
+  REQUIRE(!parses_nonbody<color_t>("blue"));
+  REQUIRE(serialize_nonbody_into(c) == "green");
+
+  REQUIRE(parses_nonbody<level_t>("3"));
+  REQUIRE(!parses_nonbody<level_t>("2"));
+  REQUIRE(serialize_nonbody_into(level_t{3}) == "3");
+}
+
+TEST("nonbody optional") {
+  std::optional<even_t> v;
+  REQUIRE(!parse_nonbody_from("4", v).failed());
+  REQUIRE(v && v->_dATA == 4);
+  REQUIRE(serialize_nonbody_into(v) == "4");
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

@@ -461,10 +461,11 @@ inline std::string_view get_query(std::string_view path) {
 }
 
 // WwwUrlEncoded=true для application/x-www-form-urlencoded и false для query из хедера path
-// вызывает vtor(std::string_view name, std::string_view value) для каждой пары
+// вызывает vtor(std::string_view name, std::string_view value) -> error_code для каждой пары,
+// первая ошибка прерывает обход и возвращается
 // Пара без '=' даёт пустой value, пустые пары (&<ПУСТО>&) пропускаются
 template <bool WwwUrlEncoded>
-void visit_query(std::string_view query, auto&& vtor) {
+[[nodiscard]] error_code visit_query(std::string_view query, auto&& vtor) {
   std::string name_buf, value_buf;  // переиспользуются между итерациями
 
   while (!query.empty()) {
@@ -483,8 +484,11 @@ void visit_query(std::string_view query, auto&& vtor) {
     query_decode<WwwUrlEncoded>(raw_name, std::back_inserter(name_buf));
     query_decode<WwwUrlEncoded>(raw_value, std::back_inserter(value_buf));
 
-    vtor(std::string_view{name_buf}, std::string_view{value_buf});
+    error_code ec = vtor(std::string_view{name_buf}, std::string_view{value_buf});
+    if (ec)
+      return ec;
   }
+  return {};
 }
 
 // TODO test

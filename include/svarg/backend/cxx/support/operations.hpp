@@ -1,6 +1,7 @@
 #pragma once
 
 #include "svarg/backend/cxx/support/concepts.hpp"
+#include "svarg/backend/cxx/support/nonbody.hpp"
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
 #include "svarg/backend/cxx/support/x_www_form_urlencoded.hpp"
 #include "svarg/backend/cxx/support/names.hpp"
@@ -118,7 +119,7 @@ struct parse_path_visitor {
   template <size_t I>
   void param(std::index_sequence<I> field_index) {
     static_assert(has_path_params<Op>);
-    parse_nonbody_from(path, get_field<I>(op.path));
+    ec = parse_nonbody_from(path, get_field<I>(op.path));
     path = {};
   }
   template <size_t I>
@@ -188,7 +189,7 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
     application_x_www_form_urlencoded query;
     FOR_EACH_FIELD_INDEX_OF(query_t<Op>) {
       if (is_field_present<I>(op.query))
-        query.arg<default_content_type>(get_field_name<I, query_t<Op>>, get_presented_field<I>(op.query));
+        query.nonbody_arg(get_field_name<I, query_t<Op>>(), serialize_nonbody_field<I>(op.query));
     };
     // TODO вынести в отдельную функцию по работе с квери
     std::string q = query.take();
@@ -255,13 +256,13 @@ template <an_operation Op>
 
   if constexpr (has_query_params<Op>) {
     std::bitset unparsed = cxx_support::get_required_bits_mask<query_t<Op>>();
-    auto on_query_arg = [&](std::string_view name, std::string_view value) {
+    auto on_query_arg = [&](std::string_view name, std::string_view value) -> error_code {
       std::optional index = get_field_index<query_t<Op>>(name);
       if (!index)
-        return;  // игнорируем дополнительные аргументы
+        return {};  // игнорируем дополнительные аргументы
       unparsed.set(*index, false);
       return metel::visit_index<fields_count<query_t<Op>>() - 1>(
-          [&]<size_t I>() { return parse_nonbody_from(get_field<I>(op.query)); }, *index);
+          [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(op.query)); }, *index);
     };
     ec = visit_query</*WwwUrlEncoded=*/false>(get_query(query), on_query_arg);
     if (ec)
@@ -299,7 +300,7 @@ template <an_operation Op>
             return error_code{};  // игнорируем дополнительные аргументы
           unparsed_cookies.set(*index, false);
           return metel::visit_index<fields_count<cookies_t<Op>>() - 1>(
-              [&]<size_t I>() { return parse_nonbody_from(get_field<I>(op.cookies)); }, *index);
+              [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(op.cookies)); }, *index);
         };
         ec = visit_cookies(value, on_cookie_arg);
         if (ec)
@@ -312,7 +313,7 @@ template <an_operation Op>
       if (index) {
         unparsed_headers.set(*index, false);
         ec = metel::visit_index<fields_count<headers_t<Op>>() - 1>(
-            [&]<size_t I>() { return parse_nonbody_from(get_field<I>(op.headers)); }, *index);
+            [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(op.headers)); }, *index);
         if (ec)
           return ec;
       }
@@ -395,7 +396,7 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
       if (index) {
         unparsed.set(*index, false);
         ec = metel::visit_index<fields_count<headers_t<R>>() - 1>(
-            [&]<size_t I>() { return parse_nonbody_from(get_field<I>(rsp.headers)); }, *index);
+            [&]<size_t I>() { return parse_nonbody_from(value, get_field<I>(rsp.headers)); }, *index);
         if (ec)
           return ec;
       }

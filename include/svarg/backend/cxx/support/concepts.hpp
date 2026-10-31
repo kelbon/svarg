@@ -382,19 +382,6 @@ template <an_operation Op>
   }
 }
 
-// для cookie/headers/query
-template <typename T>
-std::string serialize_nonbody_into(const T& value) {
-  if constexpr (std::is_same_v<T, std::string>)
-    return value;
-  else if constexpr (std::is_same_v<T, bool>)
-    return value == true ? "true" : "false";
-  else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
-    return std::format("{}", value);
-  else
-    return boost::json::serialize(to_json(value));
-}
-
 template <content_type_e C, typename T>
 [[nodiscard]] std::string serialize_into(const T& value) {
   if constexpr (C == content_type_e::application_json) {
@@ -456,31 +443,6 @@ template <a_body B>
     return bytes;
   } else {
     static_assert(false, "unsupported content type");
-  }
-}
-
-// парсинг для headers/cookies/queries которые не привязаны к конкретному content_type
-template <typename T>
-[[nodiscard]] error_code parse_nonbody_from(std::string_view str, T& out) {
-  using U = std::remove_cv_t<T>;
-  if constexpr (std::is_same_v<U, std::string>) {
-    out = str;
-    return {};
-  } else if constexpr (std::is_same_v<U, bool>) {
-    if (str == "true")
-      out = true;
-    else if (str == "false")
-      out = false;
-    else
-      return parse_error("cannot parse boolean from `{}`", str);
-    return {};
-  } else if constexpr (std::is_integral_v<U> || std::is_floating_point_v<U>) {
-    if (!try_from_chars(str, out))
-      return parse_error("cannot parse `{}` from `{}`", type_name<U>(), str);
-    return {};
-  } else {
-    boost::json::value v = boost::json::parse(str);
-    return from_json(v, out);
   }
 }
 

@@ -31,6 +31,14 @@ struct application_x_www_form_urlencoded {
     body += serialize_into<C>(value);
     body.push_back('&');
   }
+
+  // значение уже сериализовано (параметры query), только percent-encoding
+  void nonbody_arg(std::string_view k, std::string_view value) {
+    svarg::query_encode(k, std::back_inserter(body));
+    body.push_back('=');
+    svarg::query_encode(value, std::back_inserter(body));
+    body.push_back('&');
+  }
 };
 
 }  // namespace svarg::cxx_support
