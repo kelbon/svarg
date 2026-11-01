@@ -12,12 +12,14 @@
 // trie шаблонов пути: "/items/{id}/data" -> id маршрута
 //
 // Сегмент шаблона (между '/') - литерал или параметр целиком ("{id}"). Смешанные сегменты ("{name}.{ext}")
-// не поддерживаются, параметр - ровно один сегмент без '/'. Имена параметров не хранятся: /a/{x} и /a/{y} -
-// одна и та же форма.
+// не поддерживаются. Параметр - ровно один сегмент без '/', кроме последнего: он забирает остаток пути вместе
+// с '/' (хвост, GitHub /repos/{owner}/{repo}/contents/{path} с path = src/main.cpp). Имена параметров не
+// хранятся: /a/{x} и /a/{y} - одна и та же форма.
 //
 // При нескольких подходящих шаблонах выигрывает тот, у кого литерал раньше: /a/b/{y} у /a/{x}/b. Поиск -
-// рекурсия по уровням, на каждом не больше двух вариантов: литерал, затем параметр, если литеральная ветка
-// не дошла до конца (/items/special/info и /items/{id}/details: запрос /items/special/details находит второй)
+// рекурсия по уровням, на каждом по порядку: литерал, параметр, если литеральная ветка не дошла до конца
+// (/items/special/info и /items/{id}/details: запрос /items/special/details находит второй), и хвост, если
+// не дошла и ветка параметра (/items/{id} и /items/{id}/details: /items/5/x находит первый с id = 5/x)
 
 namespace svarg::cxx_support {
 
@@ -41,10 +43,12 @@ struct route_trie {
   struct node {
     std::unordered_map<std::string, std::unique_ptr<node>, str_hash, str_equal_to> literals;
     std::unique_ptr<node> param;
+    // маршрут, у которого параметр после этого узла последний: забирает остаток пути
+    std::optional<id_t> tail;
     std::optional<id_t> id;
 
     bool empty() const noexcept {
-      return literals.empty() && !param && !id;
+      return literals.empty() && !param && !tail && !id;
     }
   };
   node root;

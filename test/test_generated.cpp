@@ -283,6 +283,9 @@ TEST("generated server") {
   http_request custom_lit = with_base_path(make_request(get), "/v1");
   custom_lit.path = "/v1/items/custom";
   http_request custom_before = custom_lit;
+  // последний параметр забирает остаток пути с '/' как есть, так шлют клиенты GitHub
+  http_request cell_tail = cell_bad;
+  cell_tail.path = "/v1/cells/row=1,col=2/a/b";
   custom_before.path = "/v1/items/5.json";
   std::vector rsps = exchange(server, {
                                           with_base_path(make_request(get), "/v1"),
@@ -308,8 +311,9 @@ TEST("generated server") {
                                           kv_req,
                                           custom_lit,
                                           custom_before,
+                                          cell_tail,
                                       });
-  REQUIRE(rsps.size() == 23);
+  REQUIRE(rsps.size() == 24);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
@@ -386,6 +390,7 @@ TEST("generated server") {
 
   REQUIRE(rsps[21].status == 200 && rsps[21].body_strview() == "user0 /v1/items/custom");
   REQUIRE(rsps[22].status == 200 && rsps[22].body_strview() == "user1 /v1/items/5.json");
+  REQUIRE(rsps[23].status == 200 && rsps[23].body_strview() == "1:2 a/b");
 
   // поле типа самого объекта
   REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);

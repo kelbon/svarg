@@ -32,9 +32,7 @@ TEST("route_trie: parameters") {
   t.add("/cells/{x}/", 3);
   REQUIRE(find_id(t, "/items/5") == 1);
   REQUIRE(find_id(t, "/items/5/data/x") == 2);
-  REQUIRE(find_id(t, "/items/5/x") == -1);
   REQUIRE(find_id(t, "/items") == -1);
-  REQUIRE(find_id(t, "/items/5/") == -1);
   REQUIRE(find_id(t, "/items/a%2Fb") == 1);  // значение не декодируется
   REQUIRE(find_id(t, "/items/") == 1);       // пустое значение проверит разбор параметра
   REQUIRE(find_id(t, "/cells/1/") == 3);
@@ -46,6 +44,25 @@ TEST("route_trie: literal branch dead end falls back to parameter") {
   t.add("/items/{id}/details", 2);
   REQUIRE(find_id(t, "/items/special/details") == 2);
   REQUIRE(find_id(t, "/items/special/info") == 1);
+}
+
+TEST("route_trie: last parameter takes the rest of the path") {
+  route_trie t;
+  t.add("/repos/{owner}/{repo}/contents/{path}", 1);
+  t.add("/items/{id}", 2);
+  t.add("/items/{id}/details", 3);
+  t.add("/items/{id}/data/{part}", 4);
+  REQUIRE(find_id(t, "/repos/me/svarg/contents/src/main.cpp") == 1);
+  REQUIRE(find_id(t, "/repos/me/svarg/contents/README.md") == 1);
+  REQUIRE(find_id(t, "/repos/me/svarg/contents/") == 1);  // пустое значение проверит разбор параметра
+  REQUIRE(find_id(t, "/repos/me/svarg/contents") == -1);
+  REQUIRE(find_id(t, "/repos/me/svarg/x/y") == -1);  // не последний параметр - один сегмент
+  // точнее - выигрывает, хвост - только если ничего не дошло до конца
+  REQUIRE(find_id(t, "/items/5/details") == 3);
+  REQUIRE(find_id(t, "/items/5/data/a/b") == 4);
+  REQUIRE(find_id(t, "/items/5/x") == 2);
+  REQUIRE(find_id(t, "/items/5/") == 2);
+  REQUIRE(find_id(t, "/items/5/data") == 2);
 }
 
 TEST("route_trie: earlier literal segment wins") {
@@ -62,8 +79,13 @@ TEST("route_trie: conflicts, mixed segments, remove") {
   REQUIRE(throws([&] { t.add("/a/{y}", 2); }));
   REQUIRE(throws([&] { t.add("/files/{name}.{ext}", 3); }));
   REQUIRE(throws([&] { t.add("no-slash/{x}", 4); }));
+  t.add("/a/{x}/b", 6);  // хвост и параметр в одном узле не конфликтуют
+  REQUIRE(find_id(t, "/a/1/b") == 6);
+  REQUIRE(find_id(t, "/a/1/c") == 1);
   t.remove("/a/{z}");  // форма та же
   REQUIRE(find_id(t, "/a/1") == -1);
+  REQUIRE(find_id(t, "/a/1/b") == 6);
+  t.remove("/a/{x}/b");
   REQUIRE(t.empty());  // опустевшие узлы удалены
   t.add("/a/{y}", 5);
   REQUIRE(find_id(t, "/a/1") == 5);

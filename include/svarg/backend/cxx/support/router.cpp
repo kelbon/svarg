@@ -36,6 +36,9 @@ void route_trie::add(std::string_view pattern, id_t id) {
   for (std::string_view seg : segments)
     if (!is_param_segment(seg) && (seg.contains('{') || seg.contains('}')))
       throw validate_error("route pattern `{}`: segment `{}` mixes literal and parameter", pattern, seg);
+  bool is_tail = is_param_segment(segments.back());
+  if (is_tail)
+    segments.pop_back();
   node* n = &root;
   for (std::string_view seg : segments) {
     if (is_param_segment(seg)) {
@@ -49,17 +52,22 @@ void route_trie::add(std::string_view pattern, id_t id) {
       n = child.get();
     }
   }
-  // все узлы уже были (иначе n->id пуст), поэтому ничего не создано зря
-  if (n->id)
+  // все узлы уже были (иначе id пуст), поэтому ничего не создано зря
+  std::optional<id_t>& slot = is_tail ? n->tail : n->id;
+  if (slot)
     throw validate_error("route pattern `{}` conflicts with an existing route of the same shape", pattern);
-  n->id = id;
+  slot = id;
 }
 
 void route_trie::remove(std::string_view pattern) {
+  std::vector<std::string_view> segments = split_path_segments(pattern);
+  bool is_tail = is_param_segment(segments.back());
+  if (is_tail)
+    segments.pop_back();
   // путь от корня, чтобы удалить опустевшие узлы снизу вверх
   std::vector<std::pair<node*, std::string_view>> path;
   node* n = &root;
-  for (std::string_view seg : split_path_segments(pattern)) {
+  for (std::string_view seg : segments) {
     path.emplace_back(n, seg);
     if (is_param_segment(seg)) {
       n = n->param.get();
@@ -70,7 +78,7 @@ void route_trie::remove(std::string_view pattern) {
     if (!n)
       return;
   }
-  n->id.reset();
+  (is_tail ? n->tail : n->id).reset();
   while (!path.empty() && n->empty()) {
     auto [parent, seg] = path.back();
     path.pop_back();
@@ -95,8 +103,10 @@ std::optional<route_trie::id_t> route_trie::match(const node& n, std::string_vie
   // литеральная ветка не дошла до конца - параметр. Пустой сегмент тоже значение: пустая строка или пустой
   // массив (/cells/x/), его проверит разбор параметра
   if (n.param)
-    return match(*n.param, next, next_has_more);
-  return std::nullopt;
+    if (std::optional id = match(*n.param, next, next_has_more))
+      return id;
+  // ничего точнее не подошло - хвост забирает `rest` целиком, вместе с '/'
+  return n.tail;
 }
 
 std::optional<route_trie::id_t> route_trie::find(std::string_view path) const {
