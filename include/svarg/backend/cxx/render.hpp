@@ -17,6 +17,9 @@ struct render_options {
   // инлайн-подсхемы типа `X` лежат в неймспейсе `X<suffix>`, например Item_::properties::kind,
   // чтобы неймспейс не конфликтовал с самим типом
   std::string inline_scope_suffix = "_";
+  // вставляется в начало каждого сгенерированного заголовка после рантайма, например
+  // `#include "my_codecs.hpp"` со специализациями media_codec (см. support/codec.hpp)
+  std::string file_prefix;
 };
 
 // то, что попадает в field_info поля помимо имени и обязательности
@@ -66,6 +69,7 @@ struct renderer {
   std::map<std::pair<std::string, std::string>, const ir::body*> body_encodings;
 
   void collect_body_encodings();
+  std::string render_file_begin() const;
   std::string render_part_headers(const string_map<std::set<ir::header>>& part_headers,
                                   std::string_view relspec, const json_pointer& relative) const;
   const ir::body* find_body_encodings(const ir::schema& s) const;

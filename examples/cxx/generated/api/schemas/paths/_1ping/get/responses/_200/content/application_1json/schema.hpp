@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "common_types.hpp"

@@ -28,22 +28,9 @@ static constexpr std::string_view array_str = "::svarg::cxx_support::arrayof";
 static constexpr std::string_view not_str = "::svarg::cxx_support::not_a";
 // для схемы без имени. Она будет в отдельном уникальном неймспейсе с этим именем
 static constexpr std::string_view inline_schema_name = "_schema";
-// добавляется в начале каждой схемы
-static constexpr std::string_view schema_file_begin = R"(
-#pragma once
-
-#include "common_types.hpp"
-
-)";
 // добавляется в конце каждой схемы
 static constexpr std::string_view schema_file_end = "";
-static constexpr std::string_view operation_file_begin = R"(
-#pragma once
-
-#include "common_types.hpp"
-
-)";
-// добавляется в конце каждой схемы
+// добавляется в конце каждой операции
 static constexpr std::string_view operation_file_end = "";
 static constexpr std::string_view typelist_str = "::metel::typelist";
 
@@ -72,6 +59,14 @@ static ir::operation_parameter header_as_parameter(const ir::header& h) {
 
 std::string render_parameters(const auto& params, std::string_view relspec, const json_pointer& relative,
                               const renderer& ren);
+
+// начало каждого сгенерированного заголовка: рантайм и file_prefix пользователя (его кодеки и т.п.)
+std::string renderer::render_file_begin() const {
+  std::string r = "#pragma once\n\n#include \"common_types.hpp\"\n";
+  if (!options.file_prefix.empty())
+    r += std::format("\n{}\n", options.file_prefix);
+  return r + "\n";
+}
 
 std::string renderer::make_namespace(std::string_view spec, json_pointer jp) const {
   if (jp.segments_count() > 0)
@@ -813,7 +808,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
 }
 
 render_result renderer::render_schema(const ir::schema& s) const {
-  std::string file_begin(schema_file_begin);
+  std::string file_begin = render_file_begin();
   // ограничения рендерятся внутрь владельца, своего файла нет
   if (s.type.is_constraints())
     return {.filename = {}, .rendered = {}};
@@ -1227,7 +1222,7 @@ std::string renderer::render_instantiations(const ir::operation& op, bool is_ext
 }
 
 render_result renderer::render_operation(const ir::operation& op, bool is_webhook) const {
-  std::string result(operation_file_begin);
+  std::string result = render_file_begin();
 
   // обращения все из root, так как обращаемся из /paths в /components/schemas
   json_pointer paths("/paths");
@@ -1538,7 +1533,7 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
                                     std::string_view spec, std::string& source) const {
   assert(!operations.empty());
 
-  std::string result = "#pragma once\n\n#include \"common_types.hpp\"\n\n";
+  std::string result = render_file_begin();
   for (auto* op : operations)
     result += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
   result += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
@@ -1622,7 +1617,7 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
   assert(!operations.empty());
   std::string res;
 
-  res += "#pragma once\n\n#include \"common_types.hpp\"\n\n";
+  res += render_file_begin();
   for (auto* op : operations)
     res += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
 

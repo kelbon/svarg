@@ -133,6 +133,7 @@ int main(int argc, char* argv[]) try {
   cxx::render_options renoptions;
   renoptions.dry_run = cliopts.dry_run;
   renoptions.simple_cxx_identifiers = cliopts.simple_identifiers;
+  renoptions.file_prefix = cliopts.file_prefix;
   cxx::renderer r(ir, renoptions);
   std::vector generated = r.render2cxx(cliopts.out);
   if (cliopts.dry_run) {

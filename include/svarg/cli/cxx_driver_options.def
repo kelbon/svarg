@@ -38,4 +38,9 @@ TAG(ignore_requirements, "removes all requirements before generating."
                          " Reducing count of schemas, generates much less, but validation is not complete")
 RENAME(ignore_requirements, "ignore-requirements")
 
+OPTION(std::string, file_prefix, "text inserted at the beginning of every generated header, e.g. "
+       "'#include \"my_codecs.hpp\"' with svarg::cxx_support::media_codec specializations",
+       default_value(std::string{}))
+RENAME(file_prefix, "file-prefix")
+
 ALIAS(h, help)
