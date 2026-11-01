@@ -3,7 +3,7 @@
 // регистрации. Всё, что ниже, - обычный код поверх сгенерированных типов: разбор, проверка схем,
 // маршрутизация и сериализация уже сделаны svarg
 
-#include <iostream>
+#include <print>
 #include <map>
 
 #include "TS29510_Nnrf_NFManagement/client.hpp"
@@ -175,7 +175,7 @@ struct nrf_server : nrf::server {
       n.body.emplace().event = event;
       n.body->nfInstanceUri = std::format("{}/nf-instances/{}", api_root, nf.nfInstanceId.get());
       hidi::http_request req = svarg::cxx_support::make_request(n);
-      std::cout << "  -> " << sub.nfStatusNotificationUri << ": " << req.body.strview() << '\n';
+      std::println("  -> {}: {}", sub.nfStatusNotificationUri, req.body.strview());
     }
   }
 };
@@ -205,7 +205,7 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
   sub.body.subscrCond.get().emplace<NfTypeCond>(NfTypeCond{.nfType = NFType::AMF});
   nrf::CreateSubscription::result_t subscribed = co_await cli.send(sub, never);
   if (auto* created = subscribed.get_if_201())
-    std::cout << "subscribed: " << created->headers.location << '\n';
+    std::println("subscribed: {}", created->headers.location);
 
   // регистрация двух NF
   for (auto [id, type, name] :
@@ -215,8 +215,8 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
     reg.body = make_profile(id, type, name);
     nrf::RegisterNFInstance::result_t r = co_await cli.send(reg, never);
     if (auto* created = r.get_if_201())
-      std::cout << "registered " << name << ": " << created->headers.location << ", heartbeat "
-                << created->body.heartBeatTimer->get() << "s\n";
+      std::println("registered {}: {}, heartbeat {}s", name, created->headers.location,
+                   created->body.heartBeatTimer->get());
   }
 
   // heartbeat: JSON Patch со сменой статуса
@@ -225,13 +225,13 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
   hb.body.get().push_back(PatchItem{
       .path = "/nfStatus", .op = PatchOperation::replace, .value = boost::json::string("SUSPENDED")});
   nrf::UpdateNFInstance::result_t updated = co_await cli.send(hb, never);
-  std::cout << "heartbeat: " << (updated.get_if_204() ? "204" : "?") << '\n';
+  std::println("heartbeat: {}", updated.get_if_204() ? "204" : "?");
 
   nrf::GetNFInstance get;
   get.path.nfInstanceID.get() = amf;
   nrf::GetNFInstance::result_t amf_profile = co_await cli.send(get, never);
   if (auto* ok = amf_profile.get_if_200())
-    std::cout << "amf status: " << ok->body.nfStatus.value << '\n';
+    std::println("amf status: {}", ok->body.nfStatus.value);
 
   // поиск по типу: ссылки HAL
   nrf::GetNFInstances list;
@@ -240,7 +240,7 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
   if (auto* ok = found.get_if_200()) {
     auto& items = get_additional_properties(*ok->body._links).at("items").get();
     for (const Link& link : items.get_if<LinksValueSchema_::oneOf::_0>()->get())
-      std::cout << "found SMF: " << *link.href << '\n';
+      std::println("found SMF: {}", *link.href);
   }
 
   // снятие с регистрации и ошибка в application/problem+json
@@ -250,11 +250,11 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
   get.path.nfInstanceID.get() = smf;
   nrf::GetNFInstance::result_t gone = co_await cli.send(get, never);
   if (auto* not_found = gone.get_if_404())
-    std::cout << "smf: " << not_found->body.status.value() << ' ' << *not_found->body.cause << '\n';
+    std::println("smf: {} {}", not_found->body.status.value(), *not_found->body.cause);
 
   // свой маршрут - обычный запрос hidi
   hidi::http_response health = co_await h2.send_request(hidi::http_request{.path = "/health"}, never);
-  std::cout << "health: " << health.status << ' ' << health.body_strview() << '\n';
+  std::println("health: {} {}", health.status, health.body_strview());
 }
 
 int main() {
@@ -272,7 +272,7 @@ int main() {
     try {
       co_await scenario(cli, h2);
     } catch (std::exception& e) {
-      std::cout << "error: " << e.what() << std::endl;
+      std::println("error: {}", e.what());
     }
     done = true;
   };

@@ -1,4 +1,4 @@
-#include <iostream>
+#include <print>
 
 #include "generated/api/client.hpp"
 
@@ -26,7 +26,7 @@ int main() {
   bool done = false;
   auto ping = [&]() -> dd::task<void> {
     api::ping::result_t rsp = co_await cli.send(api::ping{}, hidi::deadline_t::never());
-    std::cout << "ping: " << rsp.body.status << std::endl;
+    std::println("ping: {}", rsp.body.status);
     done = true;
   };
   ping().start_and_detach();

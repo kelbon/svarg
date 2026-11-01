@@ -1,88 +1,66 @@
 #pragma once
 
-#include <iostream>
+#include <format>
+#include <string>
+
 #include <boost/json.hpp>
-#include <sstream>
 
 namespace svarg {
-// TODO переписать
-inline void pretty_print(std::ostream& os, const boost::json::value& jv, std::string* indent = nullptr) {
+
+namespace noexport {
+
+inline void pretty_print_into(std::string& out, const boost::json::value& jv, size_t indent) {
   namespace json = boost::json;
-  std::string indent_;
-  if (!indent)
-    indent = &indent_;
+  auto newline = [&](size_t n) {
+    out += '\n';
+    out.append(n, ' ');
+  };
   switch (jv.kind()) {
     case json::kind::object: {
-      os << "{\n";
-      indent->append(4, ' ');
-      const auto& obj = jv.get_object();
-      if (!obj.empty()) {
-        auto it = obj.begin();
-        for (;;) {
-          os << *indent << json::serialize(it->key()) << " : ";
-          pretty_print(os, it->value(), indent);
-          if (++it == obj.end())
-            break;
-          os << ",\n";
-        }
+      const json::object& obj = jv.get_object();
+      out += '{';
+      for (bool first = true; auto& [key, value] : obj) {
+        if (!first)
+          out += ',';
+        first = false;
+        newline(indent + 4);
+        out += json::serialize(key);
+        out += " : ";
+        pretty_print_into(out, value, indent + 4);
       }
-      os << "\n";
-      indent->resize(indent->size() - 4);
-      os << *indent << "}";
+      newline(indent);
+      out += '}';
       break;
     }
-
     case json::kind::array: {
-      os << "[\n";
-      indent->append(4, ' ');
-      const auto& arr = jv.get_array();
-      if (!arr.empty()) {
-        auto it = arr.begin();
-        for (;;) {
-          os << *indent;
-          pretty_print(os, *it, indent);
-          if (++it == arr.end())
-            break;
-          os << ",\n";
-        }
+      const json::array& arr = jv.get_array();
+      out += '[';
+      for (bool first = true; const json::value& v : arr) {
+        if (!first)
+          out += ',';
+        first = false;
+        newline(indent + 4);
+        pretty_print_into(out, v, indent + 4);
       }
-      os << "\n";
-      indent->resize(indent->size() - 4);
-      os << *indent << "]";
+      newline(indent);
+      out += ']';
       break;
     }
-
-    case json::kind::string: {
-      os << json::serialize(jv.get_string());
-      break;
-    }
-
-    case json::kind::uint64:
-    case json::kind::int64:
-    case json::kind::double_:
-      os << jv;
-      break;
-
-    case json::kind::bool_:
-      if (jv.get_bool())
-        os << "true";
-      else
-        os << "false";
-      break;
-
-    case json::kind::null:
-      os << "null";
+    default:
+      // строки, числа, bool и null - как в компактном JSON
+      out += json::serialize(jv);
       break;
   }
-
-  if (indent->empty())
-    os << "\n";
 }
 
+}  // namespace noexport
+
+// JSON с отступами в 4 пробела, с переводом строки в конце
 [[nodiscard]] inline std::string pretty_print(const boost::json::value& j) {
-  std::stringstream ss;
-  pretty_print(ss, j);
-  return std::move(ss).str();
+  std::string out;
+  noexport::pretty_print_into(out, j, 0);
+  out += '\n';
+  return out;
 }
 
 }  // namespace svarg

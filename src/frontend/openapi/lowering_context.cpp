@@ -615,10 +615,9 @@ struct schemas_collector {
     throw EXTYPE("{}/{}", INFO, e.what());     \
   }
   void dbgprint(std::string_view name) {
-    // auto& ss = std::cout;
     // for (std::string_view s : currentjp.segments())
-    //   ss << s << '.';
-    // ss << name << '\n';
+    //   std::print("{}.", s);
+    // std::println("{}", name);
   }
   template <typename T>
   void operator()(std::string_view name, const arrayof<T>& f) try {

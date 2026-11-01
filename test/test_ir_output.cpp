@@ -375,8 +375,8 @@ TEST("json pointers are correct (optimized + rm unused)") {
 
 TEST("json repr") {
   openapi_options opts{.ir_opts{.allow_rm_unused = svarg::ir::remove_category_e::noone}};
-  // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-a.yaml"}, opts));
-  // std::cout << to_yaml_string(openapi2ir("./test_api", {"api-b.yaml"}));
+  // std::print("{}", to_yaml_string(openapi2ir("./test_api", {"api-a.yaml"}, opts)));
+  // std::print("{}", to_yaml_string(openapi2ir("./test_api", {"api-b.yaml"})));
   // return;
   ir::ir_object ir = openapi2ir("./test_api", {"api-a.yaml"}, opts);
   // cxx::renderer r(ir, {});
