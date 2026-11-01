@@ -7,6 +7,7 @@
 #include <clinok/cli_interface.hpp>
 
 #include "svarg/ir/optimization_passes.hpp"
+#include "svarg/utils/media_types.hpp"
 #include "svarg/utils/clang_format_dir.hpp"
 
 #include <svarg/ir/ir_object.hpp>
@@ -134,6 +135,11 @@ int main(int argc, char* argv[]) try {
   renoptions.dry_run = cliopts.dry_run;
   renoptions.simple_cxx_identifiers = cliopts.simple_identifiers;
   renoptions.file_prefix = cliopts.file_prefix;
+  for (const std::string& ct : cliopts.stream_content_types.args) {
+    std::string mt(without_media_type_parameters(monomorph_media_type(ct)));
+    if (!std::ranges::contains(renoptions.stream_content_types, mt))
+      renoptions.stream_content_types.push_back(std::move(mt));
+  }
   cxx::renderer r(ir, renoptions);
   std::vector generated = r.render2cxx(cliopts.out);
   if (cliopts.dry_run) {

@@ -52,9 +52,9 @@ set(SVARG_TEST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_custom_command(
     OUTPUT "${SVARG_TEST_GENERATED_DIR}/api/server.hpp" "${SVARG_TEST_GENERATED_DIR}/api/client.hpp"
            "${SVARG_TEST_GENERATED_DIR}/api/api.cpp"
-    # свои кодеки (test_codecs.hpp) подключаются в каждый сгенерированный файл
+    # свои кодеки (test_codecs.hpp) подключаются в каждый сгенерированный файл, text/event-stream - поток
     COMMAND svarg --out "${SVARG_TEST_GENERATED_DIR}" --specs-dir "${CMAKE_CURRENT_SOURCE_DIR}/generated_api"
-            --file-prefix "#include \"test_codecs.hpp\"" api.yaml
+            --file-prefix "#include \"test_codecs.hpp\"" --stream-content-type text/event-stream api.yaml
     DEPENDS svarg "${CMAKE_CURRENT_SOURCE_DIR}/generated_api/api.yaml"
     VERBATIM
 )

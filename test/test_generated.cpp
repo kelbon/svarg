@@ -115,10 +115,26 @@ struct test_server : api::server {
   }
 
   // бинарное тело ответа: байты как есть, в том числе '\0'
-  dd::task<hidi::http_response> handle(api::getBlob op, hidi::http_request, hidi::request_context) override {
+  // ответ потоком: 1000 частей по name + "\0\xff"
+  dd::task<hidi::http_response> handle(api::getBlob op, hidi::http_request,
+                                       hidi::request_context ctx) override {
     if (op.path.name == "missing")
       co_return make_response(api::getBlob::response_404{.body = "no " + op.path.name});
-    co_return make_response(api::getBlob::response_200{.body = op.path.name + std::string("\0\xff", 2)});
+    api::getBlob::response_200 rsp;
+    co_return ctx.stream_response(rsp.status, make_response_headers(rsp),
+                                  repeat_parts(op.path.name + std::string("\0\xff", 2), 1000));
+  }
+
+  dd::task<hidi::http_response> handle(api::getEvents, hidi::http_request,
+                                       hidi::request_context ctx) override {
+    api::getEvents::response_200 rsp;
+    rsp.headers.x_count = 3;
+    co_return ctx.stream_response(rsp.status, make_response_headers(rsp), repeat_parts("data: x\n\n", 3));
+  }
+
+  static hidi::streaming_body_t repeat_parts(std::string part, int n) {
+    for (int i = 0; i < n; ++i)
+      co_yield std::span<const hidi::byte_t>((const hidi::byte_t*)part.data(), part.size());
   }
 
   dd::task<hidi::http_response> handle(api::putBlob op, hidi::http_request, hidi::request_context) override {
@@ -421,6 +437,9 @@ TEST("generated client") {
   api::login::result_t greeting;
   api::uploadFiles::result_t summary;
   api::getBlob::result_t blob, no_blob;
+  api::getEvents::result_t events;
+  std::string blob_data, events_data;
+  int blob_parts = 0;
   api::putBlob::result_t put_blob;
 
   run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
@@ -455,10 +474,46 @@ TEST("generated client") {
     summary = co_await cli.send(files, hidi::deadline_t::never());
 
     api::getBlob get_blob;
+    // ответы потоком: svarg ничего не разбирает. Тело потокового медиа типа читается по мере прихода,
+    // остальное собирается в http_response и разбирается parse_response. Статус hidi сообщает только в
+    // конце, поэтому во время приёма поток определяется по content-type
+    hidi::http_response rsp;
+    bool streaming = false;
+    auto on_header = [&](std::string_view name, std::string_view value) {
+      if (name == "content-type" &&
+          svarg::match_content_type(api::getBlob::response_200::stream_content_type, value))
+        streaming = true;
+      rsp.headers.emplace_back(std::string(name), std::string(value));
+    };
+    auto on_data = [&](std::span<const hidi::byte_t> part, bool) {
+      if (streaming) {
+        blob_data.append((const char*)part.data(), part.size());
+        ++blob_parts;
+      } else {
+        rsp.body.insert(rsp.body.end(), part.begin(), part.end());
+      }
+    };
     get_blob.path.name = "b";
-    blob = co_await cli.send(get_blob, hidi::deadline_t::never());
+    rsp.status = co_await cli.send(get_blob, &on_header, &on_data, hidi::deadline_t::never());
+    blob = parse_response<api::getBlob>(rsp);
+    rsp = {};
+    streaming = false;
     get_blob.path.name = "missing";
-    no_blob = co_await cli.send(get_blob, hidi::deadline_t::never());
+    rsp.status = co_await cli.send(get_blob, &on_header, &on_data, hidi::deadline_t::never());
+    no_blob = parse_response<api::getBlob>(rsp);  // 404: JSON тело собрано и разобрано
+
+    // хедеры потокового ответа типизированы: parse_response разбирает их без тела
+    hidi::http_response events_rsp;
+    auto on_events_header = [&](std::string_view name, std::string_view value) {
+      events_rsp.headers.emplace_back(std::string(name), std::string(value));
+    };
+    auto on_events = [&](std::span<const hidi::byte_t> part, bool) {
+      events_data.append((const char*)part.data(), part.size());
+    };
+    events_rsp.status =
+        co_await cli.send(api::getEvents{}, &on_events_header, &on_events, hidi::deadline_t::never());
+    events = parse_response<api::getEvents>(events_rsp);
+
     api::putBlob put;
     put.path.name = "b";
     put.body = std::string("\0\x01\x02", 3);
@@ -476,9 +531,16 @@ TEST("generated client") {
     }
   });
 
-  REQUIRE(count == 8);
-  REQUIRE(blob.get_if_200() && blob.get_if_200()->body == std::string("b\0\xff", 3));
+  REQUIRE(count == 9);
+  REQUIRE(blob.get_if_200());
+  std::string expected_blob;
+  for (int i = 0; i < 1000; ++i)
+    expected_blob += std::string("b\0\xff", 3);
+  REQUIRE(blob_data == expected_blob);
+  REQUIRE(blob_parts > 1);
   REQUIRE(no_blob.get_if_404() && no_blob.get_if_404()->body == "no missing");
+  REQUIRE(events.headers.x_count == 3);
+  REQUIRE(events_data == "data: x\n\ndata: x\n\ndata: x\n\n");
   REQUIRE(put_blob.body == 3);
   REQUIRE(greeting.body == "u&=/true/-/x y");
   REQUIRE(summary.body == std::format("t \"q\"/-1/m/{}", std::string("\r\n--\0", 5)));

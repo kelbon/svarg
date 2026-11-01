@@ -43,4 +43,9 @@ OPTION(std::string, file_prefix, "text inserted at the beginning of every genera
        default_value(std::string{}))
 RENAME(file_prefix, "file-prefix")
 
+OPTION(clinok::multiarg<std::string>, stream_content_types, "response media type whose body is a stream "
+       "(in addition to application/octet-stream): server sends it with ctx.stream_response, client receives "
+       "parts in a callback", default_value(clinok::multiarg<std::string>{}))
+RENAME(stream_content_types, "stream-content-type")
+
 ALIAS(h, help)

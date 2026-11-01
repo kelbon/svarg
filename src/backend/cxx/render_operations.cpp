@@ -81,6 +81,22 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
 //   body_A, body_B... // если есть боди
 //   body_t body;
 // };
+std::string_view renderer::stream_content_type_of(const ir::response_desc& rsp) const {
+  if (rsp.bodies)
+    for (const ir::body& b : *rsp.bodies)
+      if (std::ranges::contains(options.stream_content_types, b.contentType.str()))
+        return b.contentType.str();
+  return {};
+}
+
+bool renderer::has_stream_responses(const ir::operation& op) const {
+  if (op.defaultResponse && !stream_content_type_of(*op.defaultResponse).empty())
+    return true;
+  return op.responses && std::ranges::any_of(*op.responses, [&](const ir::response_desc& r) {
+           return !stream_content_type_of(r).empty();
+         });
+}
+
 rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::string_view spec,
                                              const json_pointer& jp) const {
   std::string result;
@@ -110,8 +126,16 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
     result += "};\n";
     result += "headers_t headers;\n";
   }
-  if (rsp.bodies)
+  // ответ с потоковым медиа типом - поток целиком, его тела (и непотоковые) не генерируются
+  if (std::string_view stream_ct = stream_content_type_of(rsp); !stream_ct.empty()) {
+    result += std::format(
+        "// тело - поток: сервер отправляет ctx.stream_response(rsp.status, make_response_headers(rsp), "
+        "body), клиент получает send(op, on_header, on_data_part, ...)\n"
+        "static constexpr std::string_view stream_content_type = {};\n",
+        render_string(stream_ct));
+  } else if (rsp.bodies) {
     result += render_bodies(*rsp.bodies, spec, jp);
+  }
   result += "};\n\n";
   return {std::move(struct_name), std::move(result)};
 }
@@ -187,17 +211,25 @@ std::string renderer::render_instantiations(const ir::operation& op, bool is_ext
       "{1}&, std::string_view);\n",
       ext, opname);
   if (op.servers) {
-    r += std::format(
-        "{0}template dd::task<{1}::result_t> svarg::cxx_support::send_request<{1}>("
-        "::svarg::cxx_support::any_client&, ::hidi::http_request, ::hidi::deadline_t);\n",
-        ext, opname);
+    // ответы операции с ответами потоком пользователь разбирает сам
+    if (has_stream_responses(op))
+      r += std::format(
+          "{0}template {1}::result_t svarg::cxx_support::parse_response<{1}>(::hidi::http_response&);\n", ext,
+          opname);
+    else
+      r += std::format(
+          "{0}template dd::task<{1}::result_t> svarg::cxx_support::send_request<{1}>("
+          "::svarg::cxx_support::any_client&, ::hidi::http_request, ::hidi::deadline_t);\n",
+          ext, opname);
   }
-  auto response = [&](std::string_view struct_name) {
+  auto response = [&](std::string_view struct_name, const ir::response_desc& rsp) {
     std::string t = std::format("{}::{}", opname, struct_name);
-    r += std::format(
-        "{0}template ::hidi::http_response svarg::cxx_support::make_response<{1}>(const {1}&, "
-        "const ::svarg::content_type_params&);\n",
-        ext, t);
+    // ответ потоком сервер отправляет сам (ctx.stream_response)
+    if (stream_content_type_of(rsp).empty())
+      r += std::format(
+          "{0}template ::hidi::http_response svarg::cxx_support::make_response<{1}>(const {1}&, "
+          "const ::svarg::content_type_params&);\n",
+          ext, t);
     r += std::format(
         "{0}template ::svarg::error_code svarg::cxx_support::from_response<{1}>(const "
         "::hidi::http_response&, "
@@ -205,10 +237,10 @@ std::string renderer::render_instantiations(const ir::operation& op, bool is_ext
         ext, t);
   };
   if (op.defaultResponse)
-    response("default_response");
+    response("default_response", *op.defaultResponse);
   if (op.responses)
     for (auto& rsp : *op.responses)
-      response(std::format("response_{}", rsp.status.to_string()));
+      response(std::format("response_{}", rsp.status.to_string()), rsp);
   return r;
 }
 

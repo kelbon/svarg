@@ -10,6 +10,8 @@
 #       OUT_DIR          ${CMAKE_SOURCE_DIR}/generated/users_api
 #       SPECS            users.yaml admin/*
 #       INCLUDE_DIRS     ${CMAKE_SOURCE_DIR}/openapi/common     # optional, each becomes "-I <dir>"
+#       STREAM_CONTENT_TYPES text/event-stream                   # optional, response media types streamed
+#                                                               # besides application/octet-stream
 #       SVARG_EXECUTABLE ${CMAKE_SOURCE_DIR}/tools/bin/svarg    # optional, defaults to "svarg" (PATH)
 #   )
 #
@@ -20,7 +22,7 @@ include_guard(GLOBAL)
 
 function(svarg_generate_cxx)
     set(oneValueArgs TARGET SPECS_DIR OUT_DIR SVARG_EXECUTABLE)
-    set(multiValueArgs SPECS INCLUDE_DIRS)
+    set(multiValueArgs SPECS INCLUDE_DIRS STREAM_CONTENT_TYPES)
     cmake_parse_arguments(ARGS "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT ARGS_TARGET)
@@ -61,8 +63,13 @@ function(svarg_generate_cxx)
         list(APPEND include_args -I "${dir_abs}")
     endforeach()
 
+    set(stream_args "")
+    foreach(ct IN LISTS ARGS_STREAM_CONTENT_TYPES)
+        list(APPEND stream_args --stream-content-type "${ct}")
+    endforeach()
+
     # Arguments shared between the discovery (--dry-run) and the real run.
-    set(svarg_args "--out" "${out_dir}" "--specs-dir" "${specs_dir}" ${include_args} ${ARGS_SPECS})
+    set(svarg_args "--out" "${out_dir}" "--specs-dir" "${specs_dir}" ${include_args} ${stream_args} ${ARGS_SPECS})
 
     # --- 1. Auto re-run configure when a spec changes ---------------------
     # Expand "dir/*" masks too, so files matched only through a mask are tracked.

@@ -389,8 +389,27 @@ template <an_operation Op>
   return ec;
 }
 
+// ответ, тело которого - поток (медиа тип из --stream-content-type): в структуре нет тела
+template <typename R>
+constexpr bool is_stream_response = requires { R::stream_content_type; };
+
+// хедеры ответа и content-type тела потоком: для ctx.stream_response(rsp.status, make_response_headers(rsp),
+// body)
+template <a_response R>
+[[nodiscard]] http_headers_t make_response_headers(const R& rsp) {
+  http_headers_t headers;
+  serialize_headers_of(rsp, headers);
+  if constexpr (is_stream_response<R>)
+    headers.emplace_back(std::string(content_type_hdr), std::string(R::stream_content_type));
+  return headers;
+}
+
 template <a_response R>
 [[nodiscard]] http_response make_response(const R& rsp, const content_type_params& ctparams = {}) {
+  static_assert(
+      !is_stream_response<R>,
+      "response body is a stream: return ctx.stream_response(rsp.status, make_response_headers(rsp), "
+      "body)");
   http_response rawrsp;
   assert(rsp.status != 0);  // unset
   rawrsp.status = rsp.status;
@@ -491,15 +510,15 @@ template <typename Result, typename T>
 
 }  // namespace noexport
 
-// отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
-// бросает исключение при ошибке транспорта, неразобранном ответе и unexpected_response
+// разбирает ответ операции: выбирает описанный в спецификации ответ по статусу и разбирает его. У ответа
+// потоком (is_stream_response) разбираются статус и хедеры, тела в структуре нет. Статус < 0 (ошибка
+// транспорта) - исключение, неописанный статус - unexpected_response.
+// Для операций с ответами потоком (send с колбэками) пользователь собирает http_response сам
 template <an_operation Op>
-[[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
-                                                          deadline_t deadline) {
-  static_assert(metel::is_decayed_v<Op>);
-  http_response rsp = co_await send_buffered(client, std::move(req), deadline);
-  // TODO sax parsing
-  co_return Op::visit_response_status(rsp.status, [&]<typename T>() -> operation_result<Op> {
+[[nodiscard]] operation_result<Op> parse_response(http_response& rsp) {
+  if (rsp.status < 0)
+    throw_transport_error(rsp.status);
+  return Op::visit_response_status(rsp.status, [&]<typename T>() -> operation_result<Op> {
     if constexpr (std::is_void_v<T>) {
       throw unexpected_response(std::move(rsp), type_name<Op>());
     } else {
@@ -508,6 +527,17 @@ template <an_operation Op>
       return noexport::make_result<operation_result<Op>>(std::move(v));
     }
   });
+}
+
+// отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
+// бросает исключение при ошибке транспорта, неразобранном ответе и unexpected_response
+template <an_operation Op>
+[[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
+                                                          deadline_t deadline) {
+  static_assert(metel::is_decayed_v<Op>);
+  http_response rsp = co_await send_buffered(client, std::move(req), deadline);
+  // TODO sax parsing
+  co_return parse_response<Op>(rsp);
 }
 
 }  // namespace svarg::cxx_support

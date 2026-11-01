@@ -20,6 +20,9 @@ struct render_options {
   // вставляется в начало каждого сгенерированного заголовка после рантайма, например
   // `#include "my_codecs.hpp"` со специализациями media_codec (см. support/codec.hpp)
   std::string file_prefix;
+  // медиа типы тела ответа, которое передаётся потоком (в нижнем регистре, без параметров). Структура такого
+  // ответа без тела: сервер отправляет его ctx.stream_response, клиент получает частями в колбэк
+  std::vector<std::string> stream_content_types = {"application/octet-stream"};
 };
 
 // то, что попадает в field_info поля помимо имени и обязательности
@@ -197,6 +200,10 @@ struct renderer {
   // явные инстанциации make_request/from_request/send_request и make_response/from_response:
   // extern - в заголовке операции, определения - в .cpp спеки
   std::string render_instantiations(const ir::operation& op, bool is_extern) const;
+  // потоковый медиа тип тела ответа (render_options::stream_content_types), пусто - ответ не поток
+  std::string_view stream_content_type_of(const ir::response_desc&) const;
+  // у операции есть ответ потоком
+  bool has_stream_responses(const ir::operation&) const;
 
   // ===== render_server_client.cpp: сервер и клиенты =====
 

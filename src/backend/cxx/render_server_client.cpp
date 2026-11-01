@@ -265,7 +265,26 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
 
     for (auto* op : ops) {
       auto opname = make_cxx_ident(op->id, options);
-      // перегрузки send по типу операции
+      // перегрузки send по типу операции. Если среди ответов есть поток, вся операция - поток: ответ не
+      // разбирается, хедеры и тело любого ответа отдаются колбэками, как у hidi (разбор - parse_response)
+      if (has_stream_responses(*op)) {
+        res += std::format(
+            "// ответ потоком: результат - статус или < 0 (reqerr_e), разбор - "
+            "svarg::cxx_support::parse_response<{0}>\n"
+            "dd::task<int> send(const {0}& op, hidi::on_header_fn_ptr on_header, "
+            "hidi::on_data_part_fn_ptr on_data_part, hidi::deadline_t deadline, "
+            "const svarg::content_type_params& ctp = {{}});\n",
+            opname);
+        source += std::format(
+            "dd::task<int> {1}::send(const {0}& op, hidi::on_header_fn_ptr on_header, "
+            "hidi::on_data_part_fn_ptr on_data_part, hidi::deadline_t deadline, "
+            "const svarg::content_type_params& ctp) {{\n"
+            "return transport.send_request(on_header, on_data_part, "
+            "svarg::cxx_support::make_request(op, ctp, base_path), deadline);\n"
+            "}}\n\n",
+            opname, name);
+        continue;
+      }
       res += std::format(
           "dd::task<{0}::result_t> send(const {0}& op, hidi::deadline_t deadline, "
           "const svarg::content_type_params& ctp = {{}});\n",
