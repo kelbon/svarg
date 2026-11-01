@@ -424,6 +424,17 @@ components:
           $ref: "#/components/schemas/Item"
         color:
           $ref: "#/components/schemas/Color"
+        filter:
+          $ref: "#/components/schemas/Filter"
+    # not как требование (как NfTypeCond в 3GPP TS 29.510): поля other быть не должно
+    Filter:
+      type: object
+      required: [kind]
+      not:
+        required: [other]
+      properties:
+        kind:
+          type: string
     # расширяемое перечисление: известные значения + любая строка (открытый enum)
     Color:
       anyOf:

@@ -504,12 +504,14 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     } else {
       ir::schema s;
       s.spec = res.spec;
-      // создаём что-то типа abc/anyOf
-      s.jsonptr = res.jsonptr / fieldname;
+      // создаём что-то типа abc/anyOf. Под abc/not уже лежит сама схема из not (её указатель), поэтому
+      // обёртка not - отдельный указатель, иначе требование молча ссылалось бы на схему без отрицания
+      s.jsonptr = res.jsonptr / (fieldname == "not" ? "@not" : fieldname);
       s.name = std::nullopt;
       s.type.data = std::move(schema);
       ir::schema_ref r = s.ref();
-      result_ir.schemas->insert(std::move(s));
+      if (!result_ir.schemas->insert(std::move(s)).second)
+        throw validate_error("schema {}#{} already exists", r.spec, r.jsonptr->escaped());
       res.add_requirement(std::move(r));
     }
   };
