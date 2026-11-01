@@ -40,3 +40,16 @@ struct ping {
 };
 
 }  // namespace api
+
+// определены в .cpp спеки
+extern template ::hidi::http_request svarg::cxx_support::make_request<::api::ping>(
+    const ::api::ping&, const ::svarg::content_type_params&, std::string_view);
+extern template ::svarg::error_code svarg::cxx_support::from_request<::api::ping>(const ::hidi::http_request&,
+                                                                                  ::api::ping&,
+                                                                                  std::string_view);
+extern template dd::task<::api::ping::result_t> svarg::cxx_support::send_request<::api::ping>(
+    ::svarg::cxx_support::any_client&, ::hidi::http_request, ::hidi::deadline_t);
+extern template ::hidi::http_response svarg::cxx_support::make_response<::api::ping::response_200>(
+    const ::api::ping::response_200&, const ::svarg::content_type_params&);
+extern template ::svarg::error_code svarg::cxx_support::from_response<::api::ping::response_200>(
+    const ::hidi::http_response&, ::api::ping::response_200&);

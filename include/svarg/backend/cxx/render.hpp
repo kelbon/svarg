@@ -161,9 +161,13 @@ struct renderer {
                                        const renderer&);
 
   // один сервер на спеку со всеми операциями
-  std::string render_server(const std::vector<const ir::operation*>& operations, std::string_view spec) const;
+  // `source` получает определения для .cpp спеки
+  std::string render_server(const std::vector<const ir::operation*>& operations, std::string_view spec,
+                            std::string& source) const;
+  std::string render_instantiations(const ir::operation& op, bool is_extern) const;
 
-  std::string render_client(const std::vector<const ir::operation*>& operations, std::string_view spec) const;
+  std::string render_client(const std::vector<const ir::operation*>& operations, std::string_view spec,
+                            std::string& source) const;
 
   // убирает из схем все ссылки на алиасы или фундаменталы, заменяя их их зависимостями
   [[nodiscard]] ir::schema_refs_t dealias(ir::schema_refs_t) const;

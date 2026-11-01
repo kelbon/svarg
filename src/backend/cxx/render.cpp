@@ -959,6 +959,7 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
     write_file(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
   }
 
+  string_map<std::string> spec_sources, spec_instantiations;
   // server.hpp и client.hpp только если есть операции
   // один сервер на спеку (адрес сервера определяется listen), клиент на каждый набор серверов
   if (ir.operations) {
@@ -969,10 +970,26 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
         spec2ops[op.spec].push_back(&op);
     }
     for (auto& [spec, ops] : spec2ops) {
-      write_file(output_dir / spec / "server.hpp", render_server(ops, spec));
-      write_file(output_dir / spec / "client.hpp", render_client(ops, spec));
+      std::string server_source, client_source;
+      write_file(output_dir / spec / "server.hpp", render_server(ops, spec, server_source));
+      write_file(output_dir / spec / "client.hpp", render_client(ops, spec, client_source));
+      spec_sources[spec] = std::format("#include \"{0}/server.hpp\"\n#include \"{0}/client.hpp\"\n\n{1}\n{2}\n",
+                                       spec, server_source, client_source);
     }
   }
+  // один .cpp на спеку: определения сервера и клиента, явные инстанциации (де)сериализации операций
+  for (auto* ops : {&ir.operations, &ir.webhooks}) {
+    if (!*ops)
+      continue;
+    for (auto& op : **ops) {
+      std::string& src = spec_sources[op.spec];
+      src += std::format("#include \"{}\"\n", make_file_path(op, options, /*is_webhook=*/ops == &ir.webhooks));
+      spec_instantiations[op.spec] += render_instantiations(op, /*is_extern=*/false);
+    }
+  }
+  for (auto& [spec, src] : spec_sources)
+    write_file(output_dir / spec / std::format("{}.cpp", make_cxx_ident(spec, options)),
+               std::format("{}\n{}", src, spec_instantiations[spec]));
   remove_duplicates(generated);
   std::stable_sort(generated.begin(), generated.end(),
                    [](const fs::path& a, const fs::path& b) { return a.extension() < b.extension(); });
@@ -1166,6 +1183,46 @@ struct build_path_make_fn_visitor {
   }
 };
 
+// явные инстанциации функций (де)сериализации операции и её ответов. В заголовке операции - extern (не
+// инстанцируются у пользователя), определения - в .cpp спеки
+std::string renderer::render_instantiations(const ir::operation& op, bool is_extern) const {
+  std::string opname =
+      std::format("::{}::{}", make_namespace(op.spec, json_pointer("/paths")), make_cxx_ident(op.id, options));
+  std::string_view ext = is_extern ? "extern " : "";
+  std::string r;
+  r += std::format(
+      "{0}template ::hidi::http_request svarg::cxx_support::make_request<{1}>(const {1}&, "
+      "const ::svarg::content_type_params&, std::string_view);\n",
+      ext, opname);
+  r += std::format(
+      "{0}template ::svarg::error_code svarg::cxx_support::from_request<{1}>(const ::hidi::http_request&, "
+      "{1}&, std::string_view);\n",
+      ext, opname);
+  if (op.servers) {
+    r += std::format(
+        "{0}template dd::task<{1}::result_t> svarg::cxx_support::send_request<{1}>("
+        "::svarg::cxx_support::any_client&, ::hidi::http_request, ::hidi::deadline_t);\n",
+        ext, opname);
+  }
+  auto response = [&](std::string_view struct_name) {
+    std::string t = std::format("{}::{}", opname, struct_name);
+    r += std::format(
+        "{0}template ::hidi::http_response svarg::cxx_support::make_response<{1}>(const {1}&, "
+        "const ::svarg::content_type_params&);\n",
+        ext, t);
+    r += std::format(
+        "{0}template ::svarg::error_code svarg::cxx_support::from_response<{1}>(const ::hidi::http_response&, "
+        "{1}&);\n",
+        ext, t);
+  };
+  if (op.defaultResponse)
+    response("default_response");
+  if (op.responses)
+    for (auto& rsp : *op.responses)
+      response(std::format("response_{}", rsp.status.to_string()));
+  return r;
+}
+
 render_result renderer::render_operation(const ir::operation& op, bool is_webhook) const {
   std::string result(operation_file_begin);
 
@@ -1353,6 +1410,8 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   result += "};\n\n";  // struct
   result += after_op;
   result += "}\n";  // namespace
+  result += "\n// определены в .cpp спеки\n";
+  result += render_instantiations(op, /*is_extern=*/true);
   result += operation_file_end;
   return {make_file_path(op, options, is_webhook), std::move(result)};
 }
@@ -1473,7 +1532,7 @@ static string_map<std::vector<route>> order_routes_for_path_matching(std::vector
 }
 
 std::string renderer::render_server(const std::vector<const ir::operation*>& operations,
-                                    std::string_view spec) const {
+                                    std::string_view spec, std::string& source) const {
   assert(!operations.empty());
 
   std::string result = "#pragma once\n\n#include \"common_types.hpp\"\n\n";
@@ -1510,9 +1569,17 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
       "hidi::request_context) {\n"
       "co_return hidi::http_response{.status = 400};\n}\n\n";
 
+  // определение в .cpp спеки, чтобы разбор всех операций не инстанцировался у пользователя
   result +=
       "dd::task<hidi::http_response> handle_request(hidi::http_request req, hidi::request_context ctx) "
-      "override {\n"
+      "override;\n";
+  result += "};\n\n}\n";  // end struct, namespace
+
+  std::string& impl = source;
+  impl += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
+  impl +=
+      "dd::task<hidi::http_response> server::handle_request(hidi::http_request req, hidi::request_context ctx) "
+      "{\n"
       "std::string_view path = svarg::path_and_query(req.path).first;\n";
 
   // операция доступна по base path каждого своего сервера
@@ -1525,11 +1592,11 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
       routes.push_back(route{.op = op, .base_path = bp, .path = bp + deescape_path(op->path)});
   }
 
-  result += "switch(req.method) {\n";
+  impl += "switch(req.method) {\n";
   for (auto& [method, rs] : order_routes_for_path_matching(std::move(routes))) {
-    result += std::format("case hidi::http_method_e::{}:\n", method);
+    impl += std::format("case hidi::http_method_e::{}:\n", method);
     for (auto& r : rs) {
-      result += std::format(
+      impl += std::format(
           "if (svarg::match_path_pattern<{}>(path)) {{\n"
           "{} op;\n"
           "svarg::error_code ec = svarg::cxx_support::from_request(req, op, {});\n"
@@ -1539,17 +1606,16 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
           render_string(r.path), make_cxx_ident(r.op->id, options), render_string(r.base_path),
           make_handler_method_name(*r.op));
     }
-    result += "break;\n";
+    impl += "break;\n";
   }
-  result += "default: break;\n}\n";  // end switch
-  result += "return on_unknown_operation(std::move(req), std::move(ctx));\n";
-  result += "}\n";        // end fn
-  result += "};\n\n}\n";  // end struct, namespace
+  impl += "default: break;\n}\n";  // end switch
+  impl += "return on_unknown_operation(std::move(req), std::move(ctx));\n";
+  impl += "}\n\n}\n";  // end fn, namespace
   return result;
 }
 
 std::string renderer::render_client(const std::vector<const ir::operation*>& operations,
-                                    std::string_view spec) const {
+                                    std::string_view spec, std::string& source) const {
   assert(!operations.empty());
   std::string res;
 
@@ -1558,6 +1624,7 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
     res += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
 
   res += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
+  source += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
 
   // клиент отправляет на один адрес, поэтому операции группируются по набору серверов
   std::map<std::set<server_object>, std::vector<const ir::operation*>> groups;
@@ -1589,16 +1656,22 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
       auto opname = make_cxx_ident(op->id, options);
       res += std::format(
           "dd::task<{0}::result_t> send_{0}(const {0}& op, hidi::deadline_t deadline, "
-          "const svarg::content_type_params& ctp = {{}}) {{\n"
+          "const svarg::content_type_params& ctp = {{}});\n",
+          opname);
+      // определение в .cpp спеки
+      source += std::format(
+          "dd::task<{0}::result_t> {1}::send_{0}(const {0}& op, hidi::deadline_t deadline, "
+          "const svarg::content_type_params& ctp) {{\n"
           "return svarg::cxx_support::send_request<{0}>(transport, "
           "svarg::cxx_support::make_request(op, ctp, base_path), deadline);\n"
           "}}\n\n",
-          opname);
+          opname, name);
     }
     res += "};\n\n";
   }
 
   res += "}\n";  // end namespace
+  source += "}\n";
   return res;
 }
 

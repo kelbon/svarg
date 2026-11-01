@@ -13,10 +13,7 @@ struct client {
   std::string base_path = "";
 
   dd::task<ping::result_t> send_ping(const ping& op, hidi::deadline_t deadline,
-                                     const svarg::content_type_params& ctp = {}) {
-    return svarg::cxx_support::send_request<ping>(
-        transport, svarg::cxx_support::make_request(op, ctp, base_path), deadline);
-  }
+                                     const svarg::content_type_params& ctp = {});
 };
 
 }  // namespace api
