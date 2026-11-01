@@ -323,6 +323,28 @@ paths:
             text/plain:
               schema:
                 type: string
+  /kv:
+    post:
+      operationId: postKv
+      requestBody:
+        required: true
+        content:
+          application/vnd.test+kv:
+            schema:
+              type: object
+              required: [a]
+              properties:
+                a:
+                  type: string
+                n:
+                  type: integer
+      responses:
+        "200":
+          description: свои кодеки (test_codecs.hpp)
+          content:
+            application/x-upper:
+              schema:
+                type: string
 components:
   schemas:
     Item:

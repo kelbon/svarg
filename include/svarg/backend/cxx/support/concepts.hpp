@@ -329,9 +329,10 @@ template <size_t I, typename T>
   return get_field_info<I, T>().name;
 }
 
-// медиа тип значения поля, пусто если не задан или поля не описаны
+// медиа тип значения поля, пусто если не задан или поля не описаны. constexpr, а не consteval: передаётся
+// указателем в codec_of
 template <size_t I, typename T>
-[[nodiscard]] consteval std::string_view get_field_encoding() noexcept {
+[[nodiscard]] constexpr std::string_view get_field_encoding() noexcept {
   if constexpr (has_named_fields<std::decay_t<T>>)
     return get_field_info<I, T>().encoding;
   else

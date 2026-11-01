@@ -52,7 +52,9 @@ set(SVARG_TEST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_custom_command(
     OUTPUT "${SVARG_TEST_GENERATED_DIR}/api/server.hpp" "${SVARG_TEST_GENERATED_DIR}/api/client.hpp"
            "${SVARG_TEST_GENERATED_DIR}/api/api.cpp"
-    COMMAND svarg --out "${SVARG_TEST_GENERATED_DIR}" --specs-dir "${CMAKE_CURRENT_SOURCE_DIR}/generated_api" api.yaml
+    # свои кодеки (test_codecs.hpp) подключаются в каждый сгенерированный файл
+    COMMAND svarg --out "${SVARG_TEST_GENERATED_DIR}" --specs-dir "${CMAKE_CURRENT_SOURCE_DIR}/generated_api"
+            --file-prefix "#include \"test_codecs.hpp\"" api.yaml
     DEPENDS svarg "${CMAKE_CURRENT_SOURCE_DIR}/generated_api/api.yaml"
     VERBATIM
 )
@@ -60,5 +62,6 @@ add_custom_command(
 target_sources(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}/api/server.hpp"
                                       "${SVARG_TEST_GENERATED_DIR}/api/client.hpp"
                                       "${SVARG_TEST_GENERATED_DIR}/api/api.cpp")
-target_include_directories(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}")
+target_include_directories(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}"
+                                                  "${CMAKE_CURRENT_SOURCE_DIR}/generated_api")
 target_link_libraries(test_generated PRIVATE svarg_cxx_supportlib)

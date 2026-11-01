@@ -100,6 +100,13 @@ struct test_server : api::server {
     co_return make_response(rsp);
   }
 
+  dd::task<hidi::http_response> do_postKv(api::postKv op, hidi::http_request,
+                                          hidi::request_context) override {
+    api::postKv::response_200 rsp;
+    rsp.body = std::format("{}-{}", op.body.a, op.body.n.value_or(0));
+    co_return make_response(rsp);
+  }
+
   dd::task<hidi::http_response> do_putItem(api::putItem op, hidi::http_request,
                                            hidi::request_context) override {
     api::putItem::response_200 rsp;
@@ -251,6 +258,12 @@ TEST("generated server") {
   http_request search_raw;
   search_raw.method = hidi::http_method_e::GET;
   search_raw.path = "/v1/search?ids=7&y=3";  // у point обязателен x
+  // свои кодеки: тело по суффиксу +kv, ответ по точному медиа типу
+  api::postKv kv;
+  kv.body.a = "hi";
+  kv.body.n = 3;
+  http_request kv_req = with_base_path(make_request(kv), "/v1");
+  REQUIRE(kv_req.body.strview() == "a=hi;n=3");
   std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
@@ -276,8 +289,9 @@ TEST("generated server") {
                                           with_base_path(cell_req, "/v1"),
                                           cell_bad,
                                           search_raw,
+                                          kv_req,
                                       });
-  REQUIRE(rsps.size() == 20);
+  REQUIRE(rsps.size() == 21);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
@@ -345,6 +359,12 @@ TEST("generated server") {
   REQUIRE(rsps[17].body_strview() == "1:2 x.y z,w");
   REQUIRE(rsps[18].status == 400);
   REQUIRE(rsps[19].status == 400);
+
+  REQUIRE(rsps[20].status == 200);
+  REQUIRE(rsps[20].body_strview() == "HI-3");
+  api::postKv::response_200 kv_rsp;
+  REQUIRE(!from_response(rsps[20], kv_rsp).failed());
+  REQUIRE(kv_rsp.body == "hi-3");
 
   // поле типа самого объекта
   REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);

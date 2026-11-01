@@ -23,28 +23,6 @@
 
 namespace svarg::cxx_support {
 
-// свойство multipart тела, у которого в encoding описаны хедеры части. Вне multipart (JSON) это просто
-// `value`, хедеры игнорируются
-template <typename T, typename Headers>
-struct part {
-  Headers headers;
-  T value;
-
-  bool operator==(const part&) const = default;
-};
-
-template <typename T>
-constexpr bool is_part = false;
-
-template <typename T, typename H>
-constexpr bool is_part<part<T, H>> = true;
-
-template <typename T>
-struct part_value : std::type_identity<T> {};
-
-template <typename T, typename H>
-struct part_value<part<T, H>> : std::type_identity<T> {};
-
 namespace noexport {
 
 [[nodiscard]] inline std::string make_multipart_boundary() {
@@ -96,18 +74,10 @@ template <typename H>
   return {};
 }
 
-// медиа тип свойства I: encoding.contentType или по умолчанию
+// значение части кодируется кодеком медиа типа свойства (field_media_type)
 template <an_object T, size_t I>
-consteval std::string_view part_media_type() {
-  if constexpr (constexpr std::string_view enc = get_field_encoding<I, T>(); !enc.empty())
-    return enc;
-  using F = svarg::noexport::deoptional_type_t<decltype(get_field<I>(std::declval<T&>()))>;
-  return default_media_type<typename part_value<F>::type>;
-}
-
-template <an_object T, size_t I>
-void serialize_part(const T& obj, std::string_view boundary, bool form_data, std::string& out) {
-  constexpr std::string_view media_type = part_media_type<T, I>();
+void serialize_part(const T& obj, std::string_view boundary, bool form_data, http_body_bytes& body) {
+  constexpr std::string_view media_type = field_media_type<T, I>();
   const auto& field = get_field<I>(obj);
   const auto& f = [&]() -> decltype(auto) {
     if constexpr (requires { field.has_value(); })
@@ -115,7 +85,7 @@ void serialize_part(const T& obj, std::string_view boundary, bool form_data, std
     else
       return field;
   }();
-  out += std::format("--{}\r\n", boundary);
+  std::string out = std::format("--{}\r\n", boundary);
   if (form_data) {
     // имя свойства в кавычках, `"` и `\` экранируются
     out += "Content-Disposition: form-data; name=\"";
@@ -127,20 +97,24 @@ void serialize_part(const T& obj, std::string_view boundary, bool form_data, std
     out += "\"\r\n";
   }
   out += std::format("Content-Type: {}\r\n", media_type);
-  if constexpr (is_part<std::remove_cvref_t<decltype(f)>>) {
-    serialize_part_headers(f.headers, out);
-    out += "\r\n";
-    out += serialize_value<body_format_of(media_type)>(f.value);
-  } else {
-    out += "\r\n";
-    out += serialize_value<body_format_of(media_type)>(f);
-  }
+  const auto& value = [&]() -> decltype(auto) {
+    if constexpr (is_part<std::remove_cvref_t<decltype(f)>>) {
+      serialize_part_headers(f.headers, out);
+      return (f.value);
+    } else {
+      return (f);
+    }
+  }();
   out += "\r\n";
+  append(body, out);
+  content_type_params unused;
+  codec_of<&field_media_type<T, I>>::serialize(value, media_type, unused, body);
+  append(body, "\r\n");
 }
 
 template <an_object T, size_t I>
 [[nodiscard]] error_code parse_part(const part_headers_view& headers, std::string_view data, T& obj) {
-  constexpr std::string_view media_type = part_media_type<T, I>();
+  constexpr std::string_view media_type = field_media_type<T, I>();
   auto& field = get_field<I>(obj);
   auto& f = [&]() -> decltype(auto) {
     if constexpr (requires { field.emplace(); })
@@ -151,9 +125,9 @@ template <an_object T, size_t I>
   if constexpr (is_part<std::remove_cvref_t<decltype(f)>>) {
     if (error_code ec = parse_part_headers(headers, f.headers))
       return ec;
-    return parse_value<body_format_of(media_type)>(data, f.value);
+    return codec_of<&field_media_type<T, I>>::parse(media_type, data, f.value);
   } else {
-    return parse_value<body_format_of(media_type)>(data, f);
+    return codec_of<&field_media_type<T, I>>::parse(media_type, data, f);
   }
 }
 
@@ -210,34 +184,44 @@ template <an_object T, size_t I>
 
 }  // namespace noexport
 
-// `params` получает boundary (и type корневой части для multipart/related)
-template <an_object T>
-[[nodiscard]] std::string multipart_encode(const T& obj, std::string_view media_type,
-                                           content_type_params& params) {
-  static_assert(!has_additional_properties<T>, "multipart with additionalProperties is not supported");
-  std::string boundary = noexport::make_multipart_boundary();
-  bool form_data = media_type == "multipart/form-data";
-  std::string out;
-  std::string_view root_type;
-  FOR_EACH_FIELD_INDEX_OF(T) {
-    if (is_field_present<I>(obj)) {
-      if (root_type.empty())
-        root_type = noexport::part_media_type<T, I>();
-      noexport::serialize_part<T, I>(obj, boundary, form_data, out);
-    }
-  };
-  out += std::format("--{}--\r\n", boundary);
-  // RFC 2387: у multipart/related обязателен type - медиа тип корневой (первой) части
-  if (media_type == "multipart/related" && !root_type.empty())
-    params.try_emplace("type", root_type);
-  params.insert_or_assign("boundary", std::move(boundary));
-  return out;
-}
+struct multipart_codec {
+  // `params` получает boundary (и type корневой части для multipart/related)
+  template <typename T>
+  static void serialize(const T& obj, std::string_view media_type, content_type_params& params,
+                        http_body_bytes& out) {
+    check<T>();
+    std::string boundary = noexport::make_multipart_boundary();
+    bool form_data = media_type == "multipart/form-data";
+    std::string_view root_type;
+    FOR_EACH_FIELD_INDEX_OF(T) {
+      if (is_field_present<I>(obj)) {
+        if (root_type.empty())
+          root_type = field_media_type<T, I>();
+        noexport::serialize_part<T, I>(obj, boundary, form_data, out);
+      }
+    };
+    append(out, std::format("--{}--\r\n", boundary));
+    // RFC 2387: у multipart/related обязателен type - медиа тип корневой (первой) части
+    if (media_type == "multipart/related" && !root_type.empty())
+      params.try_emplace("type", root_type);
+    params.insert_or_assign("boundary", std::move(boundary));
+  }
 
-// `content_type` - значение хедера целиком, с boundary
-template <an_object T>
-[[nodiscard]] error_code multipart_decode(std::string_view content_type, std::string_view data, T& out) {
-  static_assert(!has_additional_properties<T>, "multipart with additionalProperties is not supported");
+  // `content_type` - значение хедера целиком, с boundary
+  template <typename T>
+  [[nodiscard]] static error_code parse(std::string_view content_type, std::string_view data, T& out);
+
+ private:
+  template <typename T>
+  static consteval void check() {
+    static_assert(an_object<T>, "multipart requires object schema");
+    static_assert(!has_additional_properties<T>, "multipart with additionalProperties is not supported");
+  }
+};
+
+template <typename T>
+error_code multipart_codec::parse(std::string_view content_type, std::string_view data, T& out) {
+  check<T>();
   content_type_params params;
   std::string_view media_type;
   try {
@@ -276,7 +260,7 @@ template <an_object T>
           if (is_wildcard_content_type(part_type))
             return parse_error("multipart part content type `{}` is a range", part_type);
           FOR_EACH_FIELD_INDEX_OF(T) {
-            if (!index && !filled.test(I) && match_content_type(noexport::part_media_type<T, I>(), part_type))
+            if (!index && !filled.test(I) && match_content_type(field_media_type<T, I>(), part_type))
               index = I;
           };
           if (!index)

@@ -146,7 +146,18 @@ void serialize_headers_of(T&& v, http_headers_t& out) {
 
 namespace noexport {
 
-// вызывает vtor.template operator()<формат>(медиа тип, значение тела), если тело присутствует
+template <typename T>
+constexpr std::string_view single_body_media_type() {
+  return T::body_content_type;
+}
+
+template <typename B>
+constexpr std::string_view body_wrapper_media_type() {
+  return get_content_type<B>();
+}
+
+// вызывает vtor.template operator()<MediaTypeFn>(значение тела), если тело присутствует. MediaTypeFn -
+// `constexpr std::string_view()`, медиа тип тела (см. codec_of)
 template <typename T, typename Vtor>
 void visit_body(const T& x, Vtor&& vtor) {
   if (!is_body_present(x)) {
@@ -155,17 +166,15 @@ void visit_body(const T& x, Vtor&& vtor) {
     return;
   }
   if constexpr (has_single_body<T>()) {
-    constexpr body_format_e F = body_format_of(T::body_content_type);
     if constexpr (is_body_required<T>())
-      vtor.template operator()<F>(T::body_content_type, x.body);
+      vtor.template operator()<&single_body_media_type<T>>(x.body);
     else
-      vtor.template operator()<F>(T::body_content_type, *x.body);
+      vtor.template operator()<&single_body_media_type<T>>(*x.body);
   } else {
     std::visit(metel::matcher{
                    [](std::monostate) { metel::unreachable(); },
                    [&]<typename B>(const B& b) {
-                     vtor.template operator()<body_format_of(get_content_type<B>())>(get_content_type<B>(),
-                                                                                     get_special_field(b));
+                     vtor.template operator()<&body_wrapper_media_type<B>>(get_special_field(b));
                    },
                },
                x.body);
@@ -175,16 +184,11 @@ void visit_body(const T& x, Vtor&& vtor) {
 // вызывает `out(content_type_header_value, bytes)`, если тело присутствует
 template <typename T>
 void serialize_body_of(const T& x, const content_type_params& ctparams, auto&& out) {
-  visit_body(x, [&]<body_format_e F>(std::string_view media_type, const auto& value) {
-    if constexpr (F == body_format_e::multipart) {
-      content_type_params params = ctparams;
-      http_body_bytes bytes = serialize_body<F>(value, media_type, params);
-      out(media_type_to_hdr_value(media_type, params), std::move(bytes));
-    } else {
-      content_type_params unused;
-      http_body_bytes bytes = serialize_body<F>(value, media_type, unused);
-      out(media_type_to_hdr_value(media_type, ctparams), std::move(bytes));
-    }
+  visit_body(x, [&]<auto MediaTypeFn>(const auto& value) {
+    // кодек может дополнить параметры хедера (boundary у multipart)
+    content_type_params params = ctparams;
+    http_body_bytes bytes = serialize_body<MediaTypeFn>(value, params);
+    out(media_type_to_hdr_value(MediaTypeFn(), params), std::move(bytes));
   });
 }
 
@@ -204,18 +208,17 @@ template <typename T>
     // учитывает регистр и параметры (application/json; charset=utf-8)
     if (!match_content_type(T::body_content_type, content_type))
       return not_matched();
-    constexpr body_format_e F = body_format_of(T::body_content_type);
     if constexpr (is_body_required<T>())
-      return parse_body<F>(content_type, data, x.body);
+      return parse_body<&single_body_media_type<T>>(content_type, data, x.body);
     else
-      return parse_body<F>(content_type, data, x.body.emplace());
+      return parse_body<&single_body_media_type<T>>(content_type, data, x.body.emplace());
   } else {
     return T::select_body_type(content_type, [&]<typename B>() -> error_code {
       if constexpr (std::is_void_v<B>)
         return not_matched();
       else
-        return parse_body<body_format_of(get_content_type<B>())>(
-            content_type, data, get_special_field(x.body.template emplace<B>()));
+        return parse_body<&body_wrapper_media_type<B>>(content_type, data,
+                                                       get_special_field(x.body.template emplace<B>()));
     });
   }
 }
