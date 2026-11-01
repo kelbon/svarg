@@ -313,6 +313,7 @@ pass_result pass_combinators_flatten(ir_object ir, const ir_options& options) {
     }
     if (!changes)
       break;
+    count += changes;
   }
   if (ir.schemas->empty())
     ir.schemas.reset();
