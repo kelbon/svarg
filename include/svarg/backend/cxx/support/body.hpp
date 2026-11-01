@@ -49,11 +49,8 @@ using field_value_t = svarg::noexport::deoptional_type_t<decltype(get_field<I>(s
 // медиа тип поля form/multipart тела: encoding.contentType или по умолчанию
 template <an_object T, size_t I>
 consteval std::string_view field_media_type() {
-  if constexpr (has_encodings<T>) {
-    constexpr std::string_view enc = T::encoding_for(get_field_name<I, T>());
-    if constexpr (!enc.empty())
-      return enc;
-  }
+  if constexpr (constexpr std::string_view enc = get_field_encoding<I, T>(); !enc.empty())
+    return enc;
   return default_media_type<field_value_t<T, I>>;
 }
 

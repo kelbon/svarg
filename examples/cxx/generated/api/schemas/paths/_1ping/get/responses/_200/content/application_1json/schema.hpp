@@ -12,15 +12,9 @@ struct schema {
 
   using additional_properties_type = void;
 
-  [[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {
-    if (str == "status")
-      return true;
-    return false;
-  }
-
-  static constexpr std::array<std::string_view, 1> field_names = {
-      "status",
-  };
+  static constexpr std::array<::svarg::cxx_support::field_info, 1> fields = {{
+      {.name = "status", .required = true},
+  }};
 
   static constexpr bool has_svarg_field = true;
   template <size_t I>

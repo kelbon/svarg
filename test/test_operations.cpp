@@ -57,10 +57,8 @@ struct get_item {
 
     using additional_properties_type = void;
 
-    [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
-      return true;
-    }
-    static constexpr std::array<std::string_view, 2> field_names = {"id", "n"};
+    static constexpr std::array<field_info, 2> fields = {
+        {{.name = "id", .required = true}, {.name = "n", .required = true}}};
   };
   struct query_t {
     name_t q;
@@ -69,10 +67,8 @@ struct get_item {
 
     using additional_properties_type = void;
 
-    [[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {
-      return str == "q";
-    }
-    static constexpr std::array<std::string_view, 3> field_names = {"q", "s", "c"};
+    static constexpr std::array<field_info, 3> fields = {
+        {{.name = "q", .required = true}, {.name = "s"}, {.name = "c"}}};
   };
   struct headers_t {
     even_t x_even;
@@ -80,10 +76,8 @@ struct get_item {
 
     using additional_properties_type = void;
 
-    [[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {
-      return str == "x-even";
-    }
-    static constexpr std::array<std::string_view, 2> field_names = {"x-even", "x-color"};
+    static constexpr std::array<field_info, 2> fields = {
+        {{.name = "x-even", .required = true}, {.name = "x-color"}}};
   };
   struct cookies_t {
     std::optional<std::string> a;
@@ -91,10 +85,7 @@ struct get_item {
 
     using additional_properties_type = void;
 
-    [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
-      return false;
-    }
-    static constexpr std::array<std::string_view, 2> field_names = {"a", "b"};
+    static constexpr std::array<field_info, 2> fields = {{{.name = "a"}, {.name = "b"}}};
   };
 
   path_t path;
@@ -113,10 +104,7 @@ struct item_response {
 
     using additional_properties_type = void;
 
-    [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
-      return true;
-    }
-    static constexpr std::array<std::string_view, 1> field_names = {"x-name"};
+    static constexpr std::array<field_info, 1> fields = {{{.name = "x-name", .required = true}}};
   };
   headers_t headers;
 

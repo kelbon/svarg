@@ -78,26 +78,22 @@ template <body_format_e F, typename T>
   }
 }
 
-// параметр с `content:` (encoding_for не пуст) кодируется в этом content type, остальные - как текст
+// параметр с `content:` (encoding поля не пуст) кодируется в этом content type, остальные - как текст
 template <size_t FieldIndex, typename T>
 std::string serialize_nonbody_field(const T& f, std::index_sequence<FieldIndex> = {}) {
-  if constexpr (has_encodings<T>) {
-    constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
-    if constexpr (!enc.empty())
-      return serialize_value<body_format_of(enc)>(get_field<FieldIndex>(f));
-  }
-  return serialize_nonbody_into(get_field<FieldIndex>(f));
+  if constexpr (constexpr std::string_view enc = get_field_encoding<FieldIndex, T>(); !enc.empty())
+    return serialize_value<body_format_of(enc)>(get_field<FieldIndex>(f));
+  else
+    return serialize_nonbody_into(get_field<FieldIndex>(f));
 }
 
 // обратное к serialize_nonbody_field
 template <size_t FieldIndex, typename T>
 [[nodiscard]] error_code parse_nonbody_field(std::string_view value, T& f) {
-  if constexpr (has_encodings<T>) {
-    constexpr std::string_view enc = T::encoding_for(get_field_name<FieldIndex, T>());
-    if constexpr (!enc.empty())
-      return parse_value<body_format_of(enc)>(value, get_field<FieldIndex>(f));
-  }
-  return parse_nonbody_from(value, get_field<FieldIndex>(f));
+  if constexpr (constexpr std::string_view enc = get_field_encoding<FieldIndex, T>(); !enc.empty())
+    return parse_value<body_format_of(enc)>(value, get_field<FieldIndex>(f));
+  else
+    return parse_nonbody_from(value, get_field<FieldIndex>(f));
 }
 
 }  // namespace svarg::cxx_support

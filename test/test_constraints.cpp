@@ -75,11 +75,7 @@ struct patch_t {
 
   using additional_properties_type = void;
 
-  [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
-    return false;
-  }
-
-  static constexpr std::array<std::string_view, 2> field_names = {"a", "b"};
+  static constexpr std::array<field_info, 2> fields = {{{.name = "a"}, {.name = "b"}}};
 
   static constexpr std::array<constraints_t, 1> constraints = {{
       constraints_t{.min_properties = 1u},
@@ -126,11 +122,7 @@ struct with_extra_t {
   using additional_properties_type = integer;
   additional_properties_t<additional_properties_type> _additional_properties;
 
-  [[nodiscard]] static constexpr bool is_required(std::string_view) noexcept {
-    return false;
-  }
-
-  static constexpr std::array<std::string_view, 1> field_names = {"a"};
+  static constexpr std::array<field_info, 1> fields = {{{.name = "a"}}};
 };
 
 template <typename T>

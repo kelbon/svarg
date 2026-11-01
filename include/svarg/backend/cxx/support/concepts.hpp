@@ -59,13 +59,12 @@ enum struct parse_tag_e {
   not_a,        // одно спецполе
 
   // не комбинаторы
-  object,  // сначала требуемые поля, затем опциональные + is_required(string_view) +
+  object,  // сначала требуемые поля, затем опциональные + fields (описания полей) +
            // additional_properties_type / additional_properties
   enum_,
   string_enum,
 
-  body,       // string_view content_type + <special_field_name> единственное поле с данными +
-              // encoding_for(string_view)
+  body,       // string_view content_type + <special_field_name> единственное поле с данными
   operation,  // вообще парсится из запроса и сериализуется в запрос
   response,   // status/statusRange/нет статуса для дефолтного + хедера параметрами + боди
 };
@@ -206,23 +205,26 @@ concept an_operation = tagged_as<T>(parse_tag_e::operation);
 template <typename T>
 concept a_response = tagged_as<T>(parse_tag_e::response);
 
-// объекты и структуры параметров операций (path_t, query_t, headers_t, cookies_t)
-template <typename T>
-concept has_named_fields = requires(std::string_view name) {
-  T::field_names;
-  { T::is_required(name) } -> std::same_as<bool>;
+// описание поля объекта или структуры параметров операции (path_t, query_t, headers_t, cookies_t).
+// Описания лежат в `static constexpr std::array<field_info, N> fields` в порядке объявления полей
+struct field_info {
+  // имя из спецификации, C++ имя поля может отличаться
+  std::string_view name;
+  bool required = false;
+  // медиа тип значения: `content:` у параметра, encoding свойства form/multipart тела. Пусто - по умолчанию
+  std::string_view encoding = {};
 };
+
+template <typename T>
+concept has_named_fields = requires {
+  { T::fields[0] } -> std::convertible_to<const field_info&>;
+} || requires { requires T::fields.size() == 0; };
 
 template <a_body T>
 consteval std::string_view get_content_type() {
   static_assert(is_lowered(std::decay_t<T>::content_type));
   return std::decay_t<T>::content_type;
 }
-
-template <typename T>
-constexpr bool has_encodings = requires(std::string_view str) {
-  { T::encoding_for(str) };
-};
 
 template <an_operation O>
 constexpr bool has_path = requires {
@@ -315,11 +317,25 @@ constexpr bool has_additional_properties = [] {
 }();
 
 template <size_t I, typename T>
-[[nodiscard]] consteval std::string_view get_field_name() noexcept {
-  return std::decay_t<T>::field_names[I];
+[[nodiscard]] consteval const field_info& get_field_info() noexcept {
+  return std::decay_t<T>::fields[I];
 }
 
-// сгенерированные типы перечисляют поля сами (field_names, svarg_field<I>, единственное поле _implfield),
+template <size_t I, typename T>
+[[nodiscard]] consteval std::string_view get_field_name() noexcept {
+  return get_field_info<I, T>().name;
+}
+
+// медиа тип значения поля, пусто если не задан или поля не описаны
+template <size_t I, typename T>
+[[nodiscard]] consteval std::string_view get_field_encoding() noexcept {
+  if constexpr (has_named_fields<std::decay_t<T>>)
+    return get_field_info<I, T>().encoding;
+  else
+    return {};
+}
+
+// сгенерированные типы перечисляют поля сами (fields, svarg_field<I>, единственное поле _implfield),
 // boost::pfr - только для написанных вручную структур: он дорог для компиляции
 template <typename T>
 constexpr bool has_generated_fields = requires { requires T::has_svarg_field; };
@@ -331,8 +347,8 @@ template <typename T>
 consteval size_t fields_count() {
   static_assert(metel::is_decayed_v<T>);
   if constexpr (has_named_fields<T>) {
-    // field_names - только объявленные свойства, поле additional properties (последнее) в них не входит
-    return std::decay_t<T>::field_names.size();
+    // fields - только объявленные свойства, поле additional properties (последнее) в них не входит
+    return std::decay_t<T>::fields.size();
   } else if constexpr (has_single_value_field<T>) {
     return 1;
   } else if constexpr (std::is_aggregate_v<T>) {

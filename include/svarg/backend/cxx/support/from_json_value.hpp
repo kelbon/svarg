@@ -205,7 +205,7 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
       if (std::optional<size_t> i = cxx_support::get_field_index<A>(key)) {
         cxx_support::visit_field_index<fields_count<A>()>(
             [&]<size_t I>() {
-              if constexpr (A::is_required(cxx_support::get_field_name<I, A>()))
+              if constexpr (cxx_support::get_field_info<I, A>().required)
                 unparsed.set(I, false);
               ec = try_from_json(value, cxx_support::get_field<I>(v));
             },

@@ -79,7 +79,7 @@ consteval bool valid_generated_object() {
 // хранится как есть и присутствует всегда
 template <size_t I, typename T>
 [[nodiscard]] constexpr bool is_field_present(const T& t) noexcept {
-  if constexpr (T::is_required(get_field_name<I, T>())) {
+  if constexpr (get_field_info<I, T>().required) {
     return true;
   } else {
     const auto& f = get_field<I>(t);
@@ -101,7 +101,7 @@ consteval std::bitset<fields_count<O>()> get_required_bits_mask() {
   std::bitset<fields_count<O>()> mask;
 
   APPLY_INDEXES(fields_count<O>()) {
-    (mask.set(Is, O::is_required(cxx_support::get_field_name<Is, O>())), ...);
+    (mask.set(Is, cxx_support::get_field_info<Is, O>().required), ...);
   };
   return mask;
 }

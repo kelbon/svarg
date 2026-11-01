@@ -522,16 +522,6 @@ std::string renderer::render_part_headers(const string_map<std::set<ir::header>>
   return result;
 }
 
-static std::string render_encoding_for(const string_map<ir::content_type_t>& encodings) {
-  std::string encoding;
-  for (auto& [prop_name, content_type] : encodings)
-    encoding += std::format("if (str == {}) return {};\n", render_string(prop_name), render_string(content_type));
-  return std::format(
-      "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
-      "{{ {} return \"\";\n}}\n\n",
-      encoding);
-}
-
 void renderer::collect_body_encodings() {
   auto add = [&](const std::set<ir::body>& bodies) {
     for (const ir::body& b : bodies) {
@@ -585,7 +575,8 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
                                            std::string_view relspec, const json_pointer& relative,
                                            std::optional<ir::schema_ref> fields_owner,
                                            std::optional<ir::schema_ref> additional_properties,
-                                           const string_map<std::set<ir::header>>* part_headers) const {
+                                           const string_map<std::set<ir::header>>* part_headers,
+                                           const string_map<ir::content_type_t>* encodings) const {
   auto is_recursive = [&](const ir::schema_ref& r) {
     if (r.is_fundamental())
       return false;
@@ -624,27 +615,27 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
                           cxx_support::additional_properties_schema_alias_name,
                           cxx_support::additional_properties_field_name);
   }
-  result += "[[nodiscard]] static constexpr bool is_required(std::string_view str) noexcept {\n";
-  for (auto&& f : fields) {
-    if (f.required)  // оперирует именами из спецификации, а не из полей
-      result += std::format("if (str == {}) return true;\n", render_string(f.name));
-  }
-  result += "return false;\n";
-  result += "}\n\n";
-  // имена полей нельзя использовать, так как С++ имена могут не совпадать с указанными в спецификации
-  // порядок такой же как в декларациях - сначала требуемые, затем опциональные
-  result +=
-      std::format("static constexpr std::array<std::string_view, {}> field_names = {{\n", fields.size());
-  for (auto&& f : fields) {
+  // описания полей в порядке объявления (сначала требуемые, затем опциональные): имена из спецификации
+  // (C++ имена могут не совпадать), обязательность, медиа тип значения
+  auto field_info = [&](const ir::object_field_info& f) {
+    std::string r = std::format("{{.name = {}", render_string(f.name));
     if (f.required)
-      result += std::format("{},\n", render_string(f.name));
-  }
-  for (auto&& f : fields) {
+      r += ", .required = true";
+    if (encodings)
+      if (auto it = encodings->find(f.name); it != encodings->end())
+        r += std::format(", .encoding = {}", render_string(it->second));
+    return r + "},\n";
+  };
+  result += std::format("static constexpr std::array<::svarg::cxx_support::field_info, {}> fields = {{{{\n",
+                        fields.size());
+  for (auto&& f : fields)
+    if (f.required)
+      result += field_info(f);
+  for (auto&& f : fields)
     if (!f.required)
-      result += std::format("{},\n", render_string(f.name));
-  }
-  result += "};\n\n";
-  // доступ к полю по индексу (в порядке field_names) без boost::pfr, который дорог для компиляции
+      result += field_info(f);
+  result += "}};\n\n";
+  // доступ к полю по индексу (в порядке fields) без boost::pfr, который дорог для компиляции
   if (!fields.empty()) {
     result +=
         "static constexpr bool has_svarg_field = true;\n"
@@ -803,10 +794,10 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
             body && body->membersHeaders ? &*body->membersHeaders : nullptr;
         if (part_headers)
           result += render_part_headers(*part_headers, s.spec, s.jsonptr);
+        const string_map<ir::content_type_t>* encodings =
+            body && body->membersEncoding ? &*body->membersEncoding : nullptr;
         result += render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(),
-                                       a.additional_properties, part_headers);
-        if (body && body->membersEncoding && !body->membersEncoding->empty())
-          result += render_encoding_for(*body->membersEncoding);
+                                       a.additional_properties, part_headers, encodings);
         return result;
       },
   };
@@ -1022,24 +1013,13 @@ std::string render_parameters(const auto& params, std::string_view relspec, cons
                               const renderer& ren) {
   string s;
 
+  // параметры с `content:` кодируются своим медиа типом
+  string_map<ir::content_type_t> encodings;
+  for (const ir::operation_parameter& p : params)
+    if (p.encoding)
+      encodings.emplace(p.name, *p.encoding);
   s += ren.render_object_fields(as_object_fields(params), relspec, relative, /*fields_owner=*/std::nullopt,
-                                /*additional_properties=*/std::nullopt);
-
-  std::string encoding;
-  for (const ir::operation_parameter& p : params) {
-    if (p.encoding) {
-      // throw_if_unsupported_content_type(*p.encoding);
-      encoding += std::format("if (str == {}) return {};\n",
-                              render_string(p.name), render_string(*p.encoding));
-    }
-  }
-  if (!encoding.empty()) {
-    s += std::format(
-        "[[nodiscard]] static constexpr std::string_view encoding_for(std::string_view str) noexcept"
-        "{{ {} return \"\";\n}}\n\n",
-        encoding);
-  }
-
+                                /*additional_properties=*/std::nullopt, /*part_headers=*/nullptr, &encodings);
   return s;
 }
 

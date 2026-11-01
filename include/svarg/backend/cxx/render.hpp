@@ -56,7 +56,7 @@ struct renderer {
   // (spec, json pointer) всех схем: по ним определяется, какие сегменты неймспейса получают суффикс
   std::set<std::pair<std::string, std::string>> schema_locations;
   // (spec, json pointer) схемы тела form/multipart => тело с encoding её свойств. encoding рендерится в
-  // саму схему (encoding_for), чтобы кодировать её поля без знания о владельце тела
+  // описания полей самой схемы (fields[I].encoding), чтобы кодировать её поля без знания о владельце тела
   std::map<std::pair<std::string, std::string>, const ir::body*> body_encodings;
 
   void collect_body_encodings();
@@ -107,7 +107,8 @@ struct renderer {
   std::string render_object_fields(const arrayof<ir::object_field_info>& fields, std::string_view relspec,
                                    const json_pointer& relative, std::optional<ir::schema_ref> fields_owner,
                                    std::optional<ir::schema_ref> additional_properties,
-                                   const string_map<std::set<ir::header>>* part_headers = nullptr) const;
+                                   const string_map<std::set<ir::header>>* part_headers = nullptr,
+                                   const string_map<ir::content_type_t>* encodings = nullptr) const;
 
   std::string render_object_field(const ir::object_field_info&, std::string_view relspec,
                                   const json_pointer& relative, bool recursive_field) const;

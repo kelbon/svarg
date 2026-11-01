@@ -99,11 +99,8 @@ template <typename H>
 // медиа тип свойства I: encoding.contentType или по умолчанию
 template <an_object T, size_t I>
 consteval std::string_view part_media_type() {
-  if constexpr (has_encodings<T>) {
-    constexpr std::string_view enc = T::encoding_for(get_field_name<I, T>());
-    if constexpr (!enc.empty())
-      return enc;
-  }
+  if constexpr (constexpr std::string_view enc = get_field_encoding<I, T>(); !enc.empty())
+    return enc;
   using F = svarg::noexport::deoptional_type_t<decltype(get_field<I>(std::declval<T&>()))>;
   return default_media_type<typename part_value<F>::type>;
 }
@@ -287,7 +284,7 @@ template <an_object T>
                                type_name<T>());
         }
         if (filled.test(*index))
-          return parse_error("duplicate multipart part for property `{}`", T::field_names[*index]);
+          return parse_error("duplicate multipart part for property `{}`", T::fields[*index].name);
         filled.set(*index);
         return visit_field_index<fields_count<T>()>(
             [&]<size_t I>() { return noexport::parse_part<T, I>(headers, part, out); }, *index);
