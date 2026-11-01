@@ -843,8 +843,7 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
               std::string lname = lowered(name);
               if (lname == "content-type" || lname == "content-disposition")
                 continue;
-              headers.insert(
-                  header_lowering(name, hdr, file, jp / "encoding" / property / "headers" / name));
+              headers.insert(header_lowering(name, hdr, file, jp / "encoding" / property / "headers" / name));
             }
             if (!headers.empty()) {
               if (!result.membersHeaders)
@@ -865,35 +864,34 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
 
 ir::header lowering_context::header_lowering(std::string_view name, const reference_or<header_object>& hdr,
                                              fs::path file, json_pointer jp) {
-      ir::header result_hdr;
-      result_hdr.name = lowered(name);
-      auto [hdrobj, reffile, refjp] = resolve_ref_and_ret(hdr, file, jp, *this);
-      if (hdrobj.required)
-        result_hdr.required = *hdrobj.required;
-      if (hdrobj.schema && hdrobj.content)
-        throw validate_error("header object cannot have both `schema` and `content` set");
-      if (hdrobj.schema) {
-        resolved_schema rs = resolve_schema(*hdrobj.schema, reffile, refjp / "schema", *this);
-        result_hdr.schema = rs.ir_schema;
-        result_hdr.default_value = rs.front_schema.default_;
-      }
-      if (hdrobj.content) {
-        if (hdrobj.content->size() != 1)
-          throw validate_error("header object 'content' MUST contain one entry, but contains `{}`",
-                               hdrobj.content->size());
-        auto& [content_type, mtc] = *hdrobj.content->begin();
-        if (mtc.schema)
-          result_hdr.schema =
-              resolve_schema(*mtc.schema, reffile, refjp / "content" / content_type / "schema", *this)
-                  .ir_schema;
-        result_hdr.encoding = content_type;
-      }
-      if (result_hdr.required.value_or(false) && result_hdr.default_value) {
-        emit_warn(file, jp, "required header `{}` has default, default ignored", name);
-        result_hdr.default_value.reset();
-      }
-      result_hdr.validate();
-      return result_hdr;
+  ir::header result_hdr;
+  result_hdr.name = lowered(name);
+  auto [hdrobj, reffile, refjp] = resolve_ref_and_ret(hdr, file, jp, *this);
+  if (hdrobj.required)
+    result_hdr.required = *hdrobj.required;
+  if (hdrobj.schema && hdrobj.content)
+    throw validate_error("header object cannot have both `schema` and `content` set");
+  if (hdrobj.schema) {
+    resolved_schema rs = resolve_schema(*hdrobj.schema, reffile, refjp / "schema", *this);
+    result_hdr.schema = rs.ir_schema;
+    result_hdr.default_value = rs.front_schema.default_;
+  }
+  if (hdrobj.content) {
+    if (hdrobj.content->size() != 1)
+      throw validate_error("header object 'content' MUST contain one entry, but contains `{}`",
+                           hdrobj.content->size());
+    auto& [content_type, mtc] = *hdrobj.content->begin();
+    if (mtc.schema)
+      result_hdr.schema =
+          resolve_schema(*mtc.schema, reffile, refjp / "content" / content_type / "schema", *this).ir_schema;
+    result_hdr.encoding = content_type;
+  }
+  if (result_hdr.required.value_or(false) && result_hdr.default_value) {
+    emit_warn(file, jp, "required header `{}` has default, default ignored", name);
+    result_hdr.default_value.reset();
+  }
+  result_hdr.validate();
+  return result_hdr;
 }
 
 // statusstr пустой для дефолтного респонса
@@ -1239,7 +1237,13 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
           // нормально, так приоритет используется для выбора хендлера, а метод разделяет их
           // приоритет больше у тех, кто раньше в файле спецификации написан
           op.priority = item.insertion_index;
-          result.operations->insert(std::move(op));
+          // /a/{x} и /a/{y} с одним методом - одна операция (path-templating в OpenAPI), молча выкинуть
+          // вторую нельзя
+          // при неудаче узел не создаётся и `op` не перемещён
+          auto [it, inserted] = result.operations->insert(op);
+          if (!inserted)
+            throw validate_error("operation `{}` ({} {}) conflicts with `{}` ({} {}): same method and path",
+                                 op.id, op.method, op.path, it->id, it->method, it->path);
         }
       }
     }

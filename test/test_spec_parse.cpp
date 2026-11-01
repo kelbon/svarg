@@ -35,6 +35,60 @@ TEST("generate ir with allofs") {
   REQUIRE(!o.webhooks);
 }
 
+TEST("operations with the same method and path shape") {
+  // /a/{x} и /a/{y} - один путь (path-templating), вторая операция не должна молча пропасть
+  svarg::write_into("conflicting_paths.yaml", R"(
+openapi: 3.1.0
+info: {title: c, version: "1"}
+servers: [{url: /}]
+paths:
+  /a/{x}:
+    get:
+      operationId: one
+      parameters: [{name: x, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /a/{y}:
+    get:
+      operationId: two
+      parameters: [{name: y, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+)");
+  std::string error;
+  try {
+    (void)svarg::openapi2ir(std::filesystem::current_path(), {"./conflicting_paths.yaml"}, {});
+  } catch (std::exception& e) {
+    error = e.what();
+  }
+  REQUIRE(error.contains("conflicts with"));
+}
+
+TEST("callbacks with the same method") {
+  // у калбеков нет пути, они различаются по id
+  svarg::write_into("same_method_callbacks.yaml", R"(
+openapi: 3.1.0
+info: {title: cb, version: "1"}
+servers: [{url: /}]
+paths:
+  /sub:
+    post:
+      operationId: sub
+      responses: {"200": {description: ok}}
+      callbacks:
+        onA:
+          '{$request.body#/a}':
+            post:
+              operationId: cbA
+              responses: {"200": {description: ok}}
+        onB:
+          '{$request.body#/b}':
+            post:
+              responses: {"200": {description: ok}}
+)");
+  svarg::ir::ir_object o =
+      svarg::openapi2ir(std::filesystem::current_path(), {"./same_method_callbacks.yaml"}, {});
+  REQUIRE(o.webhooks && o.webhooks->size() == 2);
+}
+
 TEST("parse_spec") {
   svarg::openapi_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);

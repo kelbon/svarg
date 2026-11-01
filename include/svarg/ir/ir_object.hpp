@@ -757,7 +757,8 @@ struct operation {
   std::optional<std::set<server_object>> servers;
 
   // путь относительно url сервера. Должен начинаться с / (если не пустой)
-  // path + method + spec должны быть уникальны. Шаблонизированность не учитывается
+  // path + method + spec должны быть уникальны (у вебхуков path пуст - id + method + spec).
+  // Шаблонизированность не учитывается
   // если это callback/webhook, то путь пуст
   // TODO генерировать проверки на фронтенде и на бекенде надо делать парсеры путей
   // н-р если users/{id}, то обязательно должен быть параметр с in: path и именем id
@@ -813,7 +814,11 @@ struct operation {
     std::strong_ordering res = std::tie(spec, method) <=> std::tie(r.spec, r.method);
     if (res != std::strong_ordering::equal)
       return res;
-    return compare_paths_template_insensitve(path, r.path);
+    res = compare_paths_template_insensitve(path, r.path);
+    if (res != std::strong_ordering::equal || !path.empty())
+      return res;
+    // у вебхуков и калбеков пути нет, без id все с одним методом были бы одной операцией
+    return id <=> r.id;
   }
 };
 
