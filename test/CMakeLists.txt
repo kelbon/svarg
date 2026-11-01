@@ -65,3 +65,4 @@ target_sources(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}/api/server.hp
 target_include_directories(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}"
                                                   "${CMAKE_CURRENT_SOURCE_DIR}/generated_api")
 target_link_libraries(test_generated PRIVATE svarg_cxx_supportlib)
+target_link_libraries(test_router PRIVATE svarg_cxx_supportlib)
