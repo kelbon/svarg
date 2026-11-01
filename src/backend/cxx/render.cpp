@@ -644,6 +644,26 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
       result += std::format("{},\n", render_string(f.name));
   }
   result += "};\n\n";
+  // доступ к полю по индексу (в порядке field_names) без boost::pfr, который дорог для компиляции
+  if (!fields.empty()) {
+    result +=
+        "static constexpr bool has_svarg_field = true;\n"
+        "template <size_t I>\n"
+        "[[nodiscard]] constexpr decltype(auto) svarg_field(this auto&& self) noexcept {\n";
+    size_t i = 0;
+    auto add = [&](const ir::object_field_info& f) {
+      result += std::format("{}if constexpr (I == {}) return ::svarg::noadl::forwardLike<decltype(self)>(self.{});\n",
+                            i == 0 ? "" : "else ", i, make_cxx_ident(f.name, options));
+      ++i;
+    };
+    for (auto&& f : fields)
+      if (f.required)
+        add(f);
+    for (auto&& f : fields)
+      if (!f.required)
+        add(f);
+    result += "else static_assert(false);\n}\n\n";
+  }
   return result;
 }
 

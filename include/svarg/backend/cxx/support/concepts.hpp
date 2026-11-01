@@ -319,12 +319,22 @@ template <size_t I, typename T>
   return std::decay_t<T>::field_names[I];
 }
 
+// сгенерированные типы перечисляют поля сами (field_names, svarg_field<I>, единственное поле _implfield),
+// boost::pfr - только для написанных вручную структур: он дорог для компиляции
+template <typename T>
+constexpr bool has_generated_fields = requires { requires T::has_svarg_field; };
+
+template <typename T>
+constexpr bool has_single_value_field = requires(T& t) { t._implfield; };
+
 template <typename T>
 consteval size_t fields_count() {
   static_assert(metel::is_decayed_v<T>);
-  if constexpr (cxx_support::an_object<T>) {
+  if constexpr (has_named_fields<T>) {
     // field_names - только объявленные свойства, поле additional properties (последнее) в них не входит
     return std::decay_t<T>::field_names.size();
+  } else if constexpr (has_single_value_field<T>) {
+    return 1;
   } else if constexpr (std::is_aggregate_v<T>) {
     return boost::pfr::tuple_size_v<T>;
   } else {
@@ -334,7 +344,15 @@ consteval size_t fields_count() {
 
 template <size_t I, typename T>
 [[nodiscard]] constexpr decltype(auto) get_field(T&& t) noexcept {
-  return boost::pfr::get<I>(std::forward<T>(t));
+  using U = std::remove_cvref_t<T>;
+  if constexpr (has_generated_fields<U>) {
+    return std::forward<T>(t).template svarg_field<I>();
+  } else if constexpr (has_single_value_field<U> && !has_named_fields<U>) {
+    static_assert(I == 0);
+    return noadl::forwardLike<T>(t._implfield);
+  } else {
+    return boost::pfr::get<I>(std::forward<T>(t));
+  }
 }
 
 }  // namespace svarg::cxx_support
