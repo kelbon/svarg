@@ -411,29 +411,17 @@ class TestCleanupOnError:
 
 
 class TestHelpersInTemplates:
-    def test_cpp_id_filter(
+    def test_naming_filters(
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
         write_template(templates_dir, "operation", "op.j2", """\
-            {{ set_output_path("out.hpp") }}
-            void {{ operation.id | cpp_id }}();
+            {{ set_output_path("out.txt") }}
+            {{ operation.id | snake_case }} {{ operation.id | pascal_case }}
         """)
         ir = MockIr(operations=[MockOperation(id="getUserById")])
         generator.generate(ir)
 
-        assert "get_user_by_id" in (output_dir / "out.hpp").read_text()
-
-    def test_cpp_type_id_filter(
-        self, generator: Generator, templates_dir: Path, output_dir: Path
-    ) -> None:
-        write_template(templates_dir, "schema", "type.j2", """\
-            {{ set_output_path("out.hpp") }}
-            struct {{ schema.name | cpp_type_id }} {};
-        """)
-        ir = MockIr(schemas=[MockSchema(name="user_profile")])
-        generator.generate(ir)
-
-        assert "UserProfile" in (output_dir / "out.hpp").read_text()
+        assert "get_user_by_id GetUserById" in (output_dir / "out.txt").read_text()
 
     def test_extra_context_available(
         self, templates_dir: Path, output_dir: Path

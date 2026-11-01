@@ -4,9 +4,8 @@ Jinja-хелперы для кодогенерации.
 Регистрируются в Jinja Environment как фильтры и глобальные функции.
 Пользователь обращается к ним прямо из шаблона:
 
-    {{ operation.id | cpp_id }}
-    {{ schema.name | cpp_id }}
-    {{ "some string" | snake_case }}
+    {{ operation.id | snake_case }}
+    {{ schema.name | pascal_case }}
 """
 
 from __future__ import annotations
@@ -49,82 +48,13 @@ def _split_words(s: str) -> list[str]:
     return [w for w in words if w]
 
 
-# Зарезервированные ключевые слова C++17
-_CPP_KEYWORDS: frozenset[str] = frozenset(
-    {
-        "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor",
-        "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t",
-        "class", "compl", "concept", "const", "consteval", "constexpr", "constinit",
-        "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype",
-        "default", "delete", "do", "double", "dynamic_cast", "else", "enum",
-        "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
-        "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept",
-        "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected",
-        "public", "register", "reinterpret_cast", "requires", "return", "short",
-        "signed", "sizeof", "static", "static_assert", "static_cast", "struct",
-        "switch", "template", "this", "thread_local", "throw", "true", "try",
-        "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual",
-        "void", "volatile", "wchar_t", "while", "xor", "xor_eq",
-        # не ключевые, но зарезервированные в глобальном namespace
-        "NULL", "EOF",
-    }
-)
-
-
-def _sanitize_cpp_keyword(name: str) -> str:
-    """Если имя совпадает с C++ keyword, добавляет суффикс _."""
-    if name in _CPP_KEYWORDS:
-        return name + "_"
-    return name
-
-
 # ---------------------------------------------------------------------------
-# Публичные фильтры — идентификаторы
+# Публичные фильтры — имена в разных стилях (для любого целевого языка)
 # ---------------------------------------------------------------------------
-
-
-def cpp_id(s: str) -> str:
-    """
-    Превращает произвольную строку в валидный C++ идентификатор в snake_case.
-
-        "getUserById"   -> "get_user_by_id"
-        "Content-Type"  -> "content_type"
-        "404response"   -> "response_404"  (не может начинаться с цифры)
-        "class"         -> "class_"        (ключевое слово)
-        ""              -> "_"             (пустая строка)
-    """
-    s = _normalize_unicode(s)
-    words = _split_words(s)
-    if not words:
-        return "_"
-    result = "_".join(w.lower() for w in words)
-    # Идентификатор не может начинаться с цифры
-    if result[0].isdigit():
-        result = "_" + result
-    return _sanitize_cpp_keyword(result)
-
-
-def cpp_type_id(s: str) -> str:
-    """
-    Превращает произвольную строку в валидный C++ идентификатор в PascalCase —
-    удобно для имён типов/классов/структур.
-
-        "getUserById"  -> "GetUserById"
-        "user_profile" -> "UserProfile"
-        "HTTP_client"  -> "HttpClient"
-    """
-    s = _normalize_unicode(s)
-    words = _split_words(s)
-    if not words:
-        return "_"
-    result = "".join(w.capitalize() for w in words)
-    if result[0].isdigit():
-        result = "_" + result
-    return _sanitize_cpp_keyword(result)
 
 
 def snake_case(s: str) -> str:
-    """Конвертирует строку в snake_case (без C++-специфики)."""
+    """Конвертирует строку в snake_case."""
     s = _normalize_unicode(s)
     words = _split_words(s)
     if not words:
@@ -220,8 +150,6 @@ def _get_output_path() -> str:
 
 #: Фильтры, добавляемые в env.filters
 FILTERS: dict[str, object] = {
-    "cpp_id": cpp_id,
-    "cpp_type_id": cpp_type_id,
     "snake_case": snake_case,
     "camel_case": camel_case,
     "pascal_case": pascal_case,
@@ -234,8 +162,6 @@ GLOBALS: dict[str, object] = {
     # специальный фильтр который каждый шаблон должен использовать один раз
     # выставляет путь относительно output директории куда писать результат рендера
     "set_output_path": _set_output_path,
-    "cpp_id": cpp_id,
-    "cpp_type_id": cpp_type_id,
     "snake_case": snake_case,
     "camel_case": camel_case,
     "pascal_case": pascal_case,

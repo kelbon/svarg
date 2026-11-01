@@ -95,7 +95,7 @@ class _RenderResult:
 
 def _load_extensions(env: Environment, directory: Path) -> None:
     directory = Path(directory).resolve()
-    pkg_name = directory.name  # "cxx_gen"
+    pkg_name = directory.name  # например "my_templates"
 
     # Регистрируем папку как пакет, чтобы плагины могли делать from .filters import ...
     if pkg_name not in sys.modules:
@@ -104,7 +104,7 @@ def _load_extensions(env: Environment, directory: Path) -> None:
         sys.modules[pkg_name] = pkg
 
     def _load_module(path: Path):
-        mod_name = f"{pkg_name}.{path.stem}"  # "cxx_gen.globals"
+        mod_name = f"{pkg_name}.{path.stem}"  # "my_templates.filters"
         spec = importlib.util.spec_from_file_location(mod_name, path)
         module = importlib.util.module_from_spec(spec)
         sys.modules[mod_name] = module        # регистрируем ДО exec

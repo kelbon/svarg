@@ -140,6 +140,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Done: {len(results)} file(s) written to '{output_dir}'")
     return 0
 
-# запускать из корня jinja_backend: python -m src.cli --ir ./tests/example_ir.yaml --templates ./cxx_gen --output ./myout
+# запускать из корня jinja_backend: python -m src.cli --ir ./tests/example_ir.yaml --templates ./my_templates --output ./myout
 if __name__ == "__main__":
     sys.exit(main())

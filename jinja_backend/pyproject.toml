@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "codegen"
 version = "0.1.0"
-description = "svarg jinja2 backend"
+description = "svarg jinja2 backend creation helper - for any language"
 requires-python = ">=3.11"
 
 dependencies = [
