@@ -70,9 +70,10 @@ inline std::string make_file_path(const ir::schema_ref& ref, const render_option
   // папки operations/webhooks/директорию где это всё лежит. Все типы локализованы в schemas
   // при этом публичные в schemas/components/schemas
   std::string path = ref.spec + "/schemas";
+  // сегменты разэкранированы, как и в неймспейсах: /paths/~1login -> paths/_login
   for (std::string_view seg : ref.jsonptr->segments()) {
     path += '/';
-    path += make_cxx_ident(seg, options);
+    path += make_cxx_ident(jp_unescape_segment(seg), options);
   }
   path += ".hpp";
   return path;

@@ -2,7 +2,7 @@
 
 #include "common_types.hpp"
 
-#include "api/schemas/paths/_1ping/get/responses/_200/content/application_1json/schema.hpp"
+#include "api/schemas/paths/_ping/get/responses/_200/content/application_json/schema.hpp"
 
 namespace api {
 
