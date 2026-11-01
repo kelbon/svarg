@@ -88,7 +88,7 @@ function(svarg_generate_cxx)
         RESULT_VARIABLE rv OUTPUT_VARIABLE ov ERROR_VARIABLE ev)
     if(NOT rv EQUAL 0)
         message(FATAL_ERROR
-            ""${ARGS_SVARG_EXECUTABLE}" --dry-run ${svarg_args}' failed\n${ov}\n${ev}\n"
+            "'${ARGS_SVARG_EXECUTABLE} --dry-run ${svarg_args}' failed\n${ov}\n${ev}\n"
             "Make sure svarg is built and either on PATH or pointed to via SVARG_EXECUTABLE.")
     endif()
 
