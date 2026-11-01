@@ -79,6 +79,8 @@ class SchemaRef(Serializable):
 class EnumSchema(Serializable):
     values: list[Any]
     type: Optional["SchemaRef"] = None
+    # открытый enum: values - известные значения, но допустимо любое значение типа
+    open: Optional[bool] = None
 
 
 @kw_only_dataclass

@@ -292,7 +292,7 @@ TEST("generated server") {
   kv.body.n = 3;
   http_request kv_req = with_base_path(make_request(kv), "/v1");
   REQUIRE(kv_req.body.strview() == "a=hi;n=3");
-  std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
+  std::string_view item_json = R"({"name":"n","child":{"name":"c","color":"red"},"color":"purple"})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
   test_server server(hidi::server_ssl_context_ptr(nullptr));
@@ -370,6 +370,14 @@ TEST("generated server") {
   REQUIRE(echoed.body.name == "n" && echoed.body.count == 3);
   REQUIRE(echoed.body.kind.get() == api::components::schemas::Kind::b);
   REQUIRE(echoed.body.tags == std::vector<std::string>{"x"});
+  // открытый enum: любая строка, известные значения - константы (value совпало с членом - value_)
+  using api::components::schemas::Color;
+  REQUIRE(echoed.body.color && echoed.body.color->value == "purple" && !echoed.body.color->is_known());
+  REQUIRE(echoed.body.child->color == Color::red && echoed.body.child->color->is_known());
+  static_assert(Color::value_ == "value" && Color::values.size() == 3);
+  Color c = Color::green;
+  c = "any";
+  REQUIRE(c == "any");
   // инлайн-подсхема свойства: Item_::properties::mode
   REQUIRE(echoed.body.mode.get() == api::components::schemas::Item_::properties::mode::slow);
   // form-urlencoded запрос, text/plain ответ без JSON кавычек

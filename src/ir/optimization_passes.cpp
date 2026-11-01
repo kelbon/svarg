@@ -16,6 +16,8 @@ namespace svarg::ir {
 ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
   // применяется даже без оптимизаций вообще
   ir = pass_rm_trivial_schemas(std::move(ir), options).ir;
+  // меняет представление для пользователя, а не только упрощает
+  ir = pass_open_enums(std::move(ir), options).ir;
   if (!options.enable_optimizations)
     return ir;
   size_t count = 0;
@@ -315,6 +317,40 @@ pass_result pass_combinators_flatten(ir_object ir, const ir_options& options) {
   if (ir.schemas->empty())
     ir.schemas.reset();
   assert(validate_ir_object(ir));
+  return {std::move(ir), count};
+}
+
+pass_result pass_open_enums(ir_object ir, const ir_options&) {
+  if (!ir.schemas)
+    return {std::move(ir), 0};
+  access_schema get(*ir.schemas);
+  auto is_string = [](const schema_ref& r) { return r.is_fundamental(fundamental_e::string); };
+  // перечисление строк без требований: требования сузили бы "любую строку"
+  auto string_enum = [&](const schema_ref& r) -> const enum_schema* {
+    if (r.is_fundamental())
+      return nullptr;
+    const schema& s = get(r);
+    const enum_schema* e = s.type.if_enum();
+    if (!e || !is_string(e->type) || (e->open && *e->open) || s.has_requirements())
+      return nullptr;
+    return e;
+  };
+  size_t count = 0;
+  for (const schema& cs : *ir.schemas) {
+    const anyof_schema* any = cs.type.if_anyof();
+    if (!any || any->discriminator || any->schemas.size() != 2)
+      continue;
+    const schema_ref& a = any->schemas[0];
+    const schema_ref& b = any->schemas[1];
+    const enum_schema* e = is_string(a) ? string_enum(b) : is_string(b) ? string_enum(a) : nullptr;
+    if (!e)
+      continue;
+    enum_schema open = *e;
+    open.open = true;
+    // ключ множества (spec, jsonptr) не меняется
+    const_cast<schema&>(cs).type.data = std::move(open);
+    ++count;
+  }
   return {std::move(ir), count};
 }
 

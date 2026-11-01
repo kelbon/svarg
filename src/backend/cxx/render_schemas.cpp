@@ -538,6 +538,8 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         bool is_string_enum = e.type.is_fundamental(ir::fundamental_e::string);
         std::string type = render_schema_ref(e.type, s.spec, s.jsonptr).typeref;
         std::string result;
+        if (is_string_enum && e.open && *e.open)
+          return render_open_string_enum(e, s);
         if (is_string_enum) {
           result += render_parse_tag(cxx_support::parse_tag_e::string_enum);
           result += std::format("static constexpr inline std::array<std::string_view, {}> values = {{",
@@ -620,6 +622,43 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
       },
   };
   return std::visit(vtor, s.type.data) + render_requirements();
+}
+
+// открытый enum строк: строка `value` и известные значения константами (NFType::AMF). Константа, имя которой
+// совпало с членом структуры или другой константой, получает суффикс '_'
+std::string renderer::render_open_string_enum(const ir::enum_schema& e, const ir::schema& s) const {
+  std::string name = get_schema_name(s, options);
+  std::string result = render_parse_tag(cxx_support::parse_tag_e::open_string_enum);
+  result += "// известные значения, допустима любая строка\n";
+  std::set<std::string> used = {"value", "values", "is_known", "parse_tag", name};
+  std::vector<std::string> consts;
+  for (auto&& v : e.values) {
+    std::string text =
+        v.value.is_string() ? std::string(v.value.get_string()) : boost::json::serialize(v.value);
+    std::string ident = make_cxx_ident(text, options);
+    while (!used.insert(ident).second)
+      ident += '_';
+    result += std::format("static constexpr std::string_view {} = {};\n", ident, render_string(text));
+    consts.push_back(std::move(ident));
+  }
+  auto names = consts | std::views::join_with(std::string_view(", "));
+  result += std::format("static constexpr std::array<std::string_view, {}> values = {{{}}};\n\n",
+                        consts.size(), std::string(names.begin(), names.end()));
+  result += "std::string value;\n\n";
+  result += std::format(
+      "{0}() = default;\n"
+      "// неявный: p.field = {0}::X, p.field = \"any\"\n"
+      "template <typename S>\n"
+      "  requires std::constructible_from<std::string, S>\n"
+      "{0}(S&& s) : value(std::forward<S>(s)) {{\n}}\n\n"
+      "template <typename S>\n"
+      "  requires std::convertible_to<const S&, std::string_view>\n"
+      "bool operator==(const S& v) const noexcept {{\nreturn value == std::string_view(v);\n}}\n"
+      "bool operator==(const {0}&) const = default;\n\n"
+      "// одно из известных значений\n"
+      "bool is_known() const noexcept {{\nreturn std::ranges::contains(values, value);\n}}\n",
+      name);
+  return result;
 }
 
 render_result renderer::render_schema(const ir::schema& s) const {

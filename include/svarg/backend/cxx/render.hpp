@@ -191,6 +191,7 @@ struct renderer {
   // одно тело - статические члены владельца и поле body, несколько - обёртки и variant
   std::string render_bodies(const std::set<ir::body>&, std::string_view spec, const json_pointer& jp) const;
   // обёртка тела при нескольких телах: content_type и единственное поле
+  std::string render_open_string_enum(const ir::enum_schema&, const ir::schema&) const;
   // тип значения тела: схема, байты (std::string) для тела без схемы медиа типа без встроенного кодека
   std::string render_body_type(const ir::body& body, std::string_view spec, const json_pointer& jp) const;
   rendered_with_name render_body(const ir::body& body, std::string_view spec, const json_pointer& jp) const;

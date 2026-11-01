@@ -147,6 +147,9 @@ struct enum_schema {
 
   schema_ref type;
   arrayof<Any> values;
+  // открытый enum: `values` - известные значения, но допустимо любое значение типа `type`
+  // (anyOf: [enum строк, string] - см. pass_open_enums). По умолчанию false
+  std::optional<bool> open;
 };
 
 struct discriminator_desc {

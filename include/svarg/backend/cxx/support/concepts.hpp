@@ -63,6 +63,7 @@ enum struct parse_tag_e {
            // additional_properties_type / additional_properties
   enum_,
   string_enum,
+  open_string_enum,  // std::string value + известные значения values, допустима любая строка
 
   body,       // string_view content_type + <special_field_name> единственное поле с данными
   operation,  // вообще парсится из запроса и сериализуется в запрос
@@ -89,6 +90,8 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
       return "enum_";
     case parse_tag_e::string_enum:
       return "string_enum";
+    case parse_tag_e::open_string_enum:
+      return "open_string_enum";
     case parse_tag_e::body:
       return "body";
     case parse_tag_e::operation:
@@ -110,6 +113,7 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
                         .case_("object", parse_tag_e::object)
                         .case_("enum_", parse_tag_e::enum_)
                         .case_("string_enum", parse_tag_e::string_enum)
+                        .case_("open_string_enum", parse_tag_e::open_string_enum)
                         .case_("body", parse_tag_e::body)
                         .case_("operation", parse_tag_e::operation)
                         .case_("response", parse_tag_e::response)
@@ -195,6 +199,9 @@ concept an_enum = tagged_as<T>(parse_tag_e::enum_);
 
 template <typename T>
 concept a_string_enum = tagged_as<T>(parse_tag_e::string_enum);
+
+template <typename T>
+concept an_open_string_enum = tagged_as<T>(parse_tag_e::open_string_enum);
 
 template <typename T>
 concept a_body = tagged_as<T>(parse_tag_e::body);

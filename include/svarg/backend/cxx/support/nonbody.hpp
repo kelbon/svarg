@@ -84,6 +84,9 @@ template <typename T>
     // порядок значений енама совпадает с порядком в массиве
     get_special_field(out) = typename U::values_e(std::distance(U::values.begin(), it));
     return {};
+  } else if constexpr (an_open_string_enum<U>) {
+    out.value = str;
+    return {};
   } else if constexpr (an_enum<U>) {
     std::decay_t<decltype(get_special_field(out))> v;
     error_code ec = parse_nonbody_from(str, v);
@@ -126,6 +129,8 @@ template <typename T>
     return serialize_nonbody_into(*value);
   } else if constexpr (a_string_enum<T>) {
     return std::string(T::values[std::to_underlying(get_special_field(value))]);
+  } else if constexpr (an_open_string_enum<T>) {
+    return value.value;
   } else if constexpr (an_enum<T>) {
     return serialize_nonbody_into(get_special_field(value));
   } else if constexpr (an_fundamental<T>) {

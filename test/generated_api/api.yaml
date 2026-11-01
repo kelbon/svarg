@@ -417,6 +417,14 @@ components:
           default: [x]
         child:
           $ref: "#/components/schemas/Item"
+        color:
+          $ref: "#/components/schemas/Color"
+    # расширяемое перечисление: известные значения + любая строка (открытый enum)
+    Color:
+      anyOf:
+        - type: string
+          enum: [red, green, value]
+        - type: string
     Kind:
       type: string
       enum: [a, b]

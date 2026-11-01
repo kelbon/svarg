@@ -65,6 +65,16 @@ struct from_json_value<T> {
   }
 };
 
+template <cxx_support::an_open_string_enum T>
+struct from_json_value<T> {
+  static error_code operator()(const boost::json::value& j, T& v) {
+    if (!j.is_string())
+      return parse_error("expected string, got `{}`", e2str(j.kind()));
+    v.value = j.get_string();
+    return {};
+  }
+};
+
 template <cxx_support::an_enum T>
 struct from_json_value<T> {
   static error_code operator()(const boost::json::value& j, T& v) {

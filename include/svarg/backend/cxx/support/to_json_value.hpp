@@ -43,6 +43,13 @@ struct to_json_value<T> {
   }
 };
 
+template <cxx_support::an_open_string_enum T>
+struct to_json_value<T> {
+  static boost::json::value operator()(const T& v) {
+    return boost::json::string(v.value);
+  }
+};
+
 template <cxx_support::an_enum T>
 struct to_json_value<T> {
   static boost::json::value operator()(const T& v) {

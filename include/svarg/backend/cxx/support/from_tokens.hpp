@@ -121,6 +121,15 @@ struct from_tokens<T> {
   }
 };
 
+template <an_open_string_enum T>
+struct from_tokens<T> {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource) {
+    tok.expect(sax_token::string);
+    v.value = tok.get_str();
+    return {};
+  }
+};
+
 template <an_enum T>
 struct from_tokens<T> {
   static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource) {

@@ -31,6 +31,10 @@ struct pass_result {
 // неиспользуемымми)
 [[nodiscard]] pass_result pass_rm_useless_requirements(ir_object, const ir_options&);
 
+// anyOf: [enum строк, string] -> открытый enum строк (enum_schema::open): известные значения, но допустима
+// любая строка. Так в спеках описываются расширяемые перечисления (NFType в 3GPP)
+[[nodiscard]] pass_result pass_open_enums(ir_object, const ir_options&);
+
 // преобразует allOf из только фундаментальных типов в какой-то из них
 // allOf'ы с объектами объединяет в один объект, эмулируя "наследование"
 // также заодно убирает невозможные allof типа allof<int, string>
