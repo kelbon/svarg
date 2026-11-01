@@ -240,6 +240,11 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
   if (schema.additionalProperties) {
     ot.additional_properties =
         resolve_schema(*schema.additionalProperties, file, jp / "additionalProperties", *this).ir_schema;
+  } else if (!schema.properties) {
+    // схема не описывает свойства (только required, как в anyOf: [{required: [fqdn]}, ...] у NFProfile, или
+    // просто type: object) - ограничивает только их наличие, остальные свойства допустимы. Иначе требование
+    // отвергло бы любой объект с другими полями
+    ot.additional_properties = ir::make_fundamental_ref(ir::fundamental_e::any);
   } else {
     ot.additional_properties = opts.unsetted_additional_properties == false
                                    ? ir::make_fundamental_ref(ir::fundamental_e::never)

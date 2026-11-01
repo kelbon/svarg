@@ -19,7 +19,7 @@ TEST("generate ir from openapi") {
       {"./test_specs/TS29510_Nnrf_NFDiscovery.yaml", "./test_specs/TS29571_CommonData.yaml"},
       {.ir_opts = {.allow_rm_unused = svarg::ir::remove_category_e::noone}});
 
-  REQUIRE(o.schemas && o.schemas->size() == 2114);
+  REQUIRE(o.schemas && o.schemas->size() == 2124);
   REQUIRE(o.operations && o.operations->size() == 6);
   REQUIRE(o.webhooks && o.webhooks->size() == 1);
 }

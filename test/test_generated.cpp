@@ -296,7 +296,7 @@ TEST("generated server") {
   http_request kv_req = with_base_path(make_request(kv), "/v1");
   REQUIRE(kv_req.body.strview() == "a=hi;n=3");
   std::string_view item_json =
-      R"({"name":"n","child":{"name":"c","color":"red"},"color":"purple","filter":{"kind":"k"}})";
+      R"({"name":"n","child":{"name":"c","color":"red"},"color":"purple","filter":{"kind":"k","id":"1"}})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
   test_server server(hidi::server_ssl_context_ptr(nullptr));
@@ -379,7 +379,8 @@ TEST("generated server") {
   REQUIRE(echoed.body.color && echoed.body.color->value == "purple" && !echoed.body.color->is_known());
   REQUIRE(echoed.body.child->color == Color::red && echoed.body.child->color->is_known());
   static_assert(Color::value_ == "value" && Color::values.size() == 3);
-  REQUIRE(echoed.body.filter && echoed.body.filter->kind == "k");  // not: требование выполнено
+  // требования not и anyOf из схем только с required выполнены
+  REQUIRE(echoed.body.filter && echoed.body.filter->kind == "k" && echoed.body.filter->id == "1");
   Color c = Color::green;
   c = "any";
   REQUIRE(c == "any");
