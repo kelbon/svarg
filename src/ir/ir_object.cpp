@@ -8,7 +8,8 @@ void ir_object::validate() const {
     bool ok = true;
     auto foo = [&](const schema_ref& r) {
       if (!r.is_fundamental() && !schemas->contains(r))
-        throw validate_error("ir references to {}#{} not found in ir", r.spec, r.jsonptr->escaped());
+        throw validate_error("ir references to {}#{} not found in ir", r.spec,
+                             r.jsonptr ? r.jsonptr->escaped() : std::string_view{});
     };
     schema_ref_vtor checker(foo);
     checker.visit(*this);
