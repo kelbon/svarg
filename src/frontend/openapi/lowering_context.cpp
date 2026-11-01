@@ -852,6 +852,9 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
         emit_warn(file, jp, "media type `{}` does not support encodings, `encoding` ignored", content_type);
       }
     }
+  } else {
+    // без схемы содержимое любое (так в 3.1 описываются бинарные тела: application/octet-stream: {})
+    result.schema = ir::make_fundamental_ref(ir::fundamental_e::any);
   }
   return result;
 }

@@ -123,6 +123,21 @@ struct test_server : api::server {
     co_return make_response(api::addNote::response_204{});
   }
 
+  // бинарное тело ответа: байты как есть, в том числе '\0'
+  dd::task<hidi::http_response> do_getBlob(api::getBlob op, hidi::http_request,
+                                           hidi::request_context) override {
+    if (op.path.name == "missing")
+      co_return make_response(api::getBlob::response_404{.body = "no " + op.path.name});
+    co_return make_response(api::getBlob::response_200{.body = op.path.name + std::string("\0\xff", 2)});
+  }
+
+  dd::task<hidi::http_response> do_putBlob(api::putBlob op, hidi::http_request,
+                                           hidi::request_context) override {
+    api::putBlob::response_200 rsp;
+    rsp.body = op.body.size();
+    co_return make_response(rsp);
+  }
+
   dd::task<hidi::http_response> on_user_route(size_t id, hidi::http_request req,
                                               hidi::request_context) override {
     hidi::http_response rsp{.status = 200};
@@ -415,6 +430,8 @@ TEST("generated client") {
   std::optional<hidi::http_response> unexpected;
   api::login::result_t greeting;
   api::uploadFiles::result_t summary;
+  api::getBlob::result_t blob, no_blob;
+  api::putBlob::result_t put_blob;
 
   run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
     api::client cli{counting{any_client(client_ref(h2)), &count}};
@@ -447,6 +464,16 @@ TEST("generated client") {
     files.body.file = std::string("\r\n--\0", 5);
     summary = co_await cli.send_uploadFiles(files, hidi::deadline_t::never());
 
+    api::getBlob get_blob;
+    get_blob.path.name = "b";
+    blob = co_await cli.send_getBlob(get_blob, hidi::deadline_t::never());
+    get_blob.path.name = "missing";
+    no_blob = co_await cli.send_getBlob(get_blob, hidi::deadline_t::never());
+    api::putBlob put;
+    put.path.name = "b";
+    put.body = std::string("\0\x01\x02", 3);
+    put_blob = co_await cli.send_putBlob(put, hidi::deadline_t::never());
+
     // статус не из спецификации (404 на неверный base path): у getItem есть default ответ,
     // у upload нет - исключение
     api::client wrong_path{client_ref(h2), "/nope"};
@@ -459,7 +486,10 @@ TEST("generated client") {
     }
   });
 
-  REQUIRE(count == 5);
+  REQUIRE(count == 8);
+  REQUIRE(blob.get_if_200() && blob.get_if_200()->body == std::string("b\0\xff", 3));
+  REQUIRE(no_blob.get_if_404() && no_blob.get_if_404()->body == "no missing");
+  REQUIRE(put_blob.body == 3);
   REQUIRE(greeting.body == "u&=/true/-/x y");
   REQUIRE(summary.body == std::format("t \"q\"/-1/m/{}", std::string("\r\n--\0", 5)));
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});

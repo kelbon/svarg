@@ -345,6 +345,39 @@ paths:
             application/x-upper:
               schema:
                 type: string
+  /blobs/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getBlob
+      responses:
+        "200":
+          description: бинарное тело без схемы (3.1)
+          content:
+            application/octet-stream: {}
+        "404":
+          description: нет такого
+          content:
+            application/json:
+              schema:
+                type: string
+    put:
+      operationId: putBlob
+      requestBody:
+        required: true
+        content:
+          application/octet-stream: {}
+      responses:
+        "200":
+          description: размер полученного
+          content:
+            text/plain:
+              schema:
+                type: integer
 components:
   schemas:
     Item:

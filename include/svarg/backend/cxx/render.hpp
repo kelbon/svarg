@@ -188,6 +188,8 @@ struct renderer {
   // одно тело - статические члены владельца и поле body, несколько - обёртки и variant
   std::string render_bodies(const std::set<ir::body>&, std::string_view spec, const json_pointer& jp) const;
   // обёртка тела при нескольких телах: content_type и единственное поле
+  // тип значения тела: схема, байты (std::string) для тела без схемы медиа типа без встроенного кодека
+  std::string render_body_type(const ir::body& body, std::string_view spec, const json_pointer& jp) const;
   rendered_with_name render_body(const ir::body& body, std::string_view spec, const json_pointer& jp) const;
   // struct ответа: статус, хедеры, тела
   rendered_with_name render_response(const ir::response_desc&, std::string_view spec,

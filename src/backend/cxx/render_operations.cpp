@@ -4,6 +4,15 @@
 
 namespace svarg::cxx {
 
+std::string renderer::render_body_type(const ir::body& body, std::string_view spec,
+                                       const json_pointer& jp) const {
+  // без схемы (@any@) и без встроенного кодека (octet-stream, image/png...) - байты как есть
+  if (body.schema.is_fundamental(ir::fundamental_e::any) &&
+      body_format_of(body.contentType.str()) == body_format_e::raw)
+    return "std::string";
+  return render_schema_ref(body.schema, spec, jp).typeref;
+}
+
 rendered_with_name renderer::render_body(const ir::body& body, std::string_view spec,
                                          const json_pointer& jp) const {
   // throw_if_unsupported_content_type(body.contentType);
@@ -15,7 +24,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   assert(is_lowered(body.contentType.str()));
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
                         render_string(body.contentType));
-  result += render_special_field(render_schema_ref(body.schema, spec, jp).typeref);
+  result += render_special_field(render_body_type(body, spec, jp));
 
   result += "};\n";
 
@@ -54,7 +63,7 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     result += std::format("static constexpr std::string_view body_content_type = {};\n",
                           render_string(body.contentType));
     result += std::format("static constexpr bool body_is_required = {};\n", body.required);
-    std::string type = render_schema_ref(body.schema, spec, jp).typeref;
+    std::string type = render_body_type(body, spec, jp);
     if (body.required)
       result += std::format("\n{} body;\n", type);
     else
