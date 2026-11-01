@@ -430,7 +430,7 @@
           "jsonptr": "/components/parameters/LimitParam/schema"
         "default_value": 20
       - "location": "header"
-        "name": "X-Api-Key"
+        "name": "x-api-key"
         "schema":
           "spec": "@string@"
         "required": true
@@ -464,7 +464,7 @@
           "jsonptr": "/paths/~1orders~1{orderId}/get/parameters/0/schema"
         "required": true
       - "location": "header"
-        "name": "X-Api-Key"
+        "name": "x-api-key"
         "schema":
           "spec": "@string@"
         "required": true

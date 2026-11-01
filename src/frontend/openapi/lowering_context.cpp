@@ -923,7 +923,8 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
                                                              json_pointer jp, std::string_view path) {
   ir::operation_parameter result;
   result.location = param.in;
-  result.name = param.name;
+  // имена хедеров не зависят от регистра, а HTTP/2 требует нижний (как у хедеров ответов)
+  result.name = param.in == parameter_location::header ? lowered(param.name) : param.name;
   if (param.schema) {
     resolved_schema rs = resolve_schema(*param.schema, file, jp / "schema", *this);
     result.schema = rs.ir_schema;
@@ -984,7 +985,8 @@ std::set<ir::body> lowering_context::request_body_lowering(request_body_object o
 static std::optional<ir::operation_parameter> auth_parameter(const security_scheme_object& sec) {
   auto make_string_param = [](std::string_view name, parameter_location in = parameter_location::header) {
     ir::operation_parameter param;
-    param.name = name;
+    // хедер - в нижнем регистре, как и остальные хедеры
+    param.name = in == parameter_location::header ? lowered(name) : std::string(name);
     param.location = in;
     param.required = true;  // позже станет optional если есть другие параметры
     param.schema = ir::make_fundamental_ref(ir::fundamental_e::string);

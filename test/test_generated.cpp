@@ -12,9 +12,12 @@ struct test_server : api::server {
   using api::server::server;
 
   std::string uploaded;
+  std::string request_id;
   std::vector<std::string> notes;
 
   dd::task<hidi::http_response> handle(api::getItem op, hidi::http_request, hidi::request_context) override {
+    if (op.headers.x_request_id)
+      request_id = *op.headers.x_request_id;
     api::getItem::response_200 rsp;
     // limit и tag со значениями по умолчанию
     rsp.body = std::format("item{}/{}/{}", op.path.id.get(), op.query.limit.get(), op.query.tag);
@@ -456,6 +459,7 @@ TEST("generated client") {
 
     api::getItem get;
     get.path.id.get() = 7;
+    get.headers.x_request_id = "r1";
     item = co_await cli.send(get, hidi::deadline_t::never());
 
     api::upload up;
@@ -555,6 +559,7 @@ TEST("generated client") {
   REQUIRE(server.notes == std::vector<std::string>{"text", "42"});
   REQUIRE(item.get_if_200() && item.get_if_200()->body == "item7/10/all");
   REQUIRE(server.uploaded == "file");
+  REQUIRE(server.request_id == "r1");  // X-Request-Id из спеки: поле и хедер в нижнем регистре
   REQUIRE(not_found.get_if_default() && not_found.get_if_default()->status == 404);
   REQUIRE(unexpected && unexpected->status == 404);
 }

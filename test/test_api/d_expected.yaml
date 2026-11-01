@@ -13,7 +13,7 @@
         "required": true
         "auth_related": true
       - "location": "header"
-        "name": "Authorization"
+        "name": "authorization"
         "schema":
           "spec": "@string@"
         "required": true
@@ -35,7 +35,7 @@
         "required": false
         "auth_related": true
       - "location": "header"
-        "name": "Authorization"
+        "name": "authorization"
         "schema":
           "spec": "@string@"
         "required": false

@@ -27,6 +27,11 @@ paths:
           schema:
             type: string
             default: all
+        # имя хедера в любом регистре - поле и хедер в нижнем
+        - name: X-Request-Id
+          in: header
+          schema:
+            type: string
         - name: x-trace
           in: header
           content:
