@@ -213,6 +213,27 @@ paths:
                     Content-Id:
                       schema:
                         type: string
+  /files/{name}.{ext}:
+    get:
+      operationId: getFile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: ext
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: name and extension
+          content:
+            text/plain:
+              schema:
+                type: string
 components:
   schemas:
     Item:

@@ -32,20 +32,17 @@ struct serialize_path_visitor {
   void substr(std::string_view s) {
     result += s;
   }
+  // значения кодируются (percent_encode_path_value), литералы шаблона уже валидны
   template <size_t I>
   void param(std::index_sequence<I> field_index) {
     static_assert(has_path_params<Op>);
-    result += serialize_nonbody_field(p.path, field_index);
+    percent_encode_path_value(serialize_nonbody_field(p.path, field_index), "", std::back_inserter(result));
   }
   template <size_t I>
   void param(std::index_sequence<I> field_index, std::string_view separator) {
     static_assert(has_path_params<Op>);
-    auto part = serialize_nonbody_field(p.path, field_index);
-    // separator внутри самой части пути приведёт к неправильному парсу пути на другой стороне
-    // например /v1/{a}-{b}. Если {a} содержит '-', то /v1/part-a-cd распарсится не как a=part-a, b=cd,
-    // а как a=part, b=a-cd
-    assert(!part.contains(separator));
-    result += std::move(part);
+    percent_encode_path_value(serialize_nonbody_field(p.path, field_index), separator,
+                              std::back_inserter(result));
     substr(separator);
   }
 };
@@ -70,6 +67,12 @@ struct parse_path_visitor {
   Op& op;
   std::string_view path;
   error_code ec;
+  std::string decode_buf;
+
+  template <size_t I>
+  void parse_param(std::index_sequence<I>, std::string_view raw) {
+    ec = parse_nonbody_field<I>(percent_decode_path_value(raw, decode_buf), op.path);
+  }
 
   // visit_path не проверяет is_done, поэтому после ошибки все вызовы пропускаются
   void substr(std::string_view s) {
@@ -86,7 +89,7 @@ struct parse_path_visitor {
     static_assert(has_path_params<Op>);
     if (ec)
       return;
-    ec = parse_nonbody_field<I>(path, op.path);
+    parse_param(field_index, path);
     path = {};
   }
   template <size_t I>
@@ -101,7 +104,7 @@ struct parse_path_visitor {
     }
     std::string_view arg = path.substr(0, pos);
     path.remove_prefix(pos + separator.size());
-    ec = parse_nonbody_field<I>(arg, op.path);
+    parse_param(field_index, arg);
   }
 
   bool is_done() const {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 
@@ -305,7 +306,8 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
 }
 
 // TODO совместить с парсингом path параметров?
-// игнорирует возможный % енкодинг путей
+// `path` не декодируется: разделители из шаблона внутри значений закодированы (percent_encode_path_value).
+// Значение может содержать '/' (GitHub `{ref}` = feature/x): последний параметр забирает остаток пути
 constexpr bool match_path_pattern(std::string_view path_pattern, std::string_view path) {
   struct vtor_t {
     std::string_view p;
@@ -346,7 +348,6 @@ constexpr bool match_path_pattern(std::string_view path_pattern, std::string_vie
   return vtor.matches;
 }
 
-// игнорирует возможный % енкодинг путей
 template <constexpr_string PathPattern>
 constexpr bool match_path_pattern(std::string_view path) {
   if constexpr (!is_template_path(PathPattern.str()))
@@ -436,6 +437,63 @@ O query_decode(std::string_view s, O out) {
     }
   }
   return out;
+}
+
+// символ, допустимый в сегменте пути как есть (pchar из RFC 3986 без pct-encoded)
+[[nodiscard]] constexpr bool is_path_segment_char(char c) noexcept {
+  switch (c) {
+    case 'A' ... 'Z':
+    case 'a' ... 'z':
+    case '0' ... '9':
+    case '-':
+    case '.':
+    case '_':
+    case '~':
+    // sub-delims
+    case '!':
+    case '$':
+    case '&':
+    case '\'':
+    case '(':
+    case ')':
+    case '*':
+    case '+':
+    case ',':
+    case ';':
+    case '=':
+    case ':':
+    case '@':
+      return true;
+    default:
+      return false;
+  }
+}
+
+// значение параметра пути. Кодируются только символы, недопустимые в сегменте пути ('/', '?', '%',
+// пробел, не-ASCII...), и символы `extra` - разделитель из шаблона (/v1/{a}-{b}: '-' в значении `a`
+// иначе спутался бы с разделителем). Обычно кодировать нечего (id, uuid, числа) - значение копируется
+template <typename O>
+O percent_encode_path_value(std::string_view value, std::string_view extra, O out) {
+  auto needs_encoding = [&](char c) { return !is_path_segment_char(c) || extra.contains(c); };
+  if (std::ranges::none_of(value, needs_encoding))
+    return std::ranges::copy(value, out).out;
+  for (char c : value) {
+    if (needs_encoding(c))
+      out = std::format_to(out, "%{:02X}", (unsigned)(unsigned char)c);
+    else
+      *out++ = c;
+  }
+  return out;
+}
+
+// декодирует значение параметра пути ('+' в пути - это '+', а не пробел). Без '%' возвращает `value` без
+// копирования, иначе результат в `buf`
+[[nodiscard]] inline std::string_view percent_decode_path_value(std::string_view value, std::string& buf) {
+  if (!value.contains('%'))
+    return value;
+  buf.clear();
+  query_decode</*WwwUrlencoded=*/false>(value, std::back_inserter(buf));
+  return buf;
 }
 
 // делит путь на сам путь и query (в которой возможно будет фрагмент)

@@ -61,6 +61,13 @@ struct test_server : api::server {
     co_return make_response(rsp);
   }
 
+  dd::task<hidi::http_response> do_getFile(api::getFile op, hidi::http_request,
+                                           hidi::request_context) override {
+    api::getFile::response_200 rsp;
+    rsp.body = std::format("{}|{}", op.path.name, op.path.ext);
+    co_return make_response(rsp);
+  }
+
   dd::task<hidi::http_response> do_putItem(api::putItem op, hidi::http_request,
                                            hidi::request_context) override {
     api::putItem::response_200 rsp;
@@ -177,6 +184,19 @@ TEST("generated server") {
   http_request related_bad = related;
   std::string_view bad_body = "--b 1\r\nContent-Type: text/html\r\n\r\nx\r\n--b 1--"sv;
   related_bad.body.data.assign(bad_body.begin(), bad_body.end());
+  // значения пути закодированы: '/' и разделитель '.' внутри значения
+  api::getFile file;
+  file.path.name = "a/b.c d%+";
+  file.path.ext = "tar.gz";
+  http_request file_req = make_request(file);
+  REQUIRE(file_req.path == "/files/a%2Fb%2Ec%20d%25+.tar.gz");
+  file.path.name = "id-1@x";  // кодировать нечего
+  REQUIRE(make_request(file).path == "/files/id-1@x.tar.gz");
+  http_request file_raw;
+  file_raw.method = hidi::http_method_e::GET;
+  file_raw.path = "/v1/files/x/y.txt";  // '/' как есть тоже принимается (как {ref} у GitHub)
+  http_request file_ok = file_raw;
+  file_ok.path = "/v1/files/x%2fy.txt";
   std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
@@ -195,8 +215,11 @@ TEST("generated server") {
                                           form_bad,
                                           related,
                                           related_bad,
+                                          with_base_path(file_req, "/v1"),
+                                          file_raw,
+                                          file_ok,
                                       });
-  REQUIRE(rsps.size() == 13);
+  REQUIRE(rsps.size() == 16);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
@@ -249,6 +272,13 @@ TEST("generated server") {
   REQUIRE(echo.body.binaryN2 && echo.body.binaryN2->headers.content_id == "n2" &&
           echo.body.binaryN2->value == "N2\0\x01"sv);
   REQUIRE(rsps[12].status == 400);  // часть не подходит ни к одному свойству
+
+  REQUIRE(rsps[13].status == 200);
+  REQUIRE(rsps[13].body_strview() == "a/b.c d%+|tar.gz");
+  REQUIRE(rsps[14].status == 200);
+  REQUIRE(rsps[14].body_strview() == "x/y|txt");
+  REQUIRE(rsps[15].status == 200);
+  REQUIRE(rsps[15].body_strview() == "x/y|txt");
 
   // поле типа самого объекта
   REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);
