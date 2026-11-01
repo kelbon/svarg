@@ -14,21 +14,19 @@ struct test_server : api::server {
   std::string uploaded;
   std::vector<std::string> notes;
 
-  dd::task<hidi::http_response> do_getItem(api::getItem op, hidi::http_request,
-                                           hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::getItem op, hidi::http_request, hidi::request_context) override {
     api::getItem::response_200 rsp;
     // limit и tag со значениями по умолчанию
     rsp.body = std::format("item{}/{}/{}", op.path.id.get(), op.query.limit.get(), op.query.tag);
     co_return make_response(rsp);
   }
 
-  dd::task<hidi::http_response> do_upload(api::upload op, hidi::http_request,
-                                          hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::upload op, hidi::http_request, hidi::request_context) override {
     uploaded = op.body.get();
     co_return make_response(api::upload::response_204{});
   }
 
-  dd::task<hidi::http_response> do_login(api::login op, hidi::http_request, hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::login op, hidi::http_request, hidi::request_context) override {
     api::login::response_200 rsp;
     rsp.body = std::format("{}/{}/{}/{}", op.body.user, op.body.remember,
                            op.body.attempts ? std::to_string(*op.body.attempts) : "-",
@@ -36,8 +34,8 @@ struct test_server : api::server {
     co_return make_response(rsp);
   }
 
-  dd::task<hidi::http_response> do_uploadFiles(api::uploadFiles op, hidi::http_request,
-                                               hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::uploadFiles op, hidi::http_request,
+                                       hidi::request_context) override {
     api::uploadFiles::response_200 rsp;
     rsp.body = std::format("{}/{}/{}/{}", op.body.title, op.body.size.value_or(-1),
                            op.body.meta ? op.body.meta->name : "-", op.body.file.value_or("-"));
@@ -47,8 +45,7 @@ struct test_server : api::server {
   std::string n1;
 
   // эхо: JSON часть и N2 часть с тем же Content-Id
-  dd::task<hidi::http_response> do_transfer(api::transfer op, hidi::http_request,
-                                            hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::transfer op, hidi::http_request, hidi::request_context) override {
     if (op.body.binaryN1)
       n1 = std::format("{}={}", op.body.binaryN1->headers.content_id.value_or("-"), op.body.binaryN1->value);
     api::transfer::response_200 rsp;
@@ -61,8 +58,7 @@ struct test_server : api::server {
     co_return make_response(rsp);
   }
 
-  dd::task<hidi::http_response> do_getFile(api::getFile op, hidi::http_request,
-                                           hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::getFile op, hidi::http_request, hidi::request_context) override {
     api::getFile::response_200 rsp;
     rsp.body = std::format("{}|{}", op.path.name, op.path.ext);
     co_return make_response(rsp);
@@ -80,8 +76,7 @@ struct test_server : api::server {
     return r;
   }
 
-  dd::task<hidi::http_response> do_search(api::search op, hidi::http_request,
-                                          hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::search op, hidi::http_request, hidi::request_context) override {
     auto& q = op.query;
     api::search::response_200 rsp;
     rsp.body = std::format("ids={} tags={} filter={}/{} point={}/{} list={} prefs={}", join(q.ids),
@@ -93,29 +88,25 @@ struct test_server : api::server {
     co_return make_response(rsp);
   }
 
-  dd::task<hidi::http_response> do_getCell(api::getCell op, hidi::http_request,
-                                           hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::getCell op, hidi::http_request, hidi::request_context) override {
     api::getCell::response_200 rsp;
     rsp.body = std::format("{}:{} {}", op.path.cell.row, op.path.cell.col, join(op.path.tags.get()));
     co_return make_response(rsp);
   }
 
-  dd::task<hidi::http_response> do_postKv(api::postKv op, hidi::http_request,
-                                          hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::postKv op, hidi::http_request, hidi::request_context) override {
     api::postKv::response_200 rsp;
     rsp.body = std::format("{}-{}", op.body.a, op.body.n.value_or(0));
     co_return make_response(rsp);
   }
 
-  dd::task<hidi::http_response> do_putItem(api::putItem op, hidi::http_request,
-                                           hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::putItem op, hidi::http_request, hidi::request_context) override {
     api::putItem::response_200 rsp;
     rsp.body = op.body;  // эхо, поля по умолчанию уже заполнены
     co_return make_response(rsp);
   }
 
-  dd::task<hidi::http_response> do_addNote(api::addNote op, hidi::http_request,
-                                           hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::addNote op, hidi::http_request, hidi::request_context) override {
     if (auto* text = std::get_if<api::addNote::application_json_body>(&op.body))
       notes.push_back(text->get());
     else if (auto* n = std::get_if<api::addNote::application_vnd_note_json_body>(&op.body))
@@ -124,15 +115,13 @@ struct test_server : api::server {
   }
 
   // бинарное тело ответа: байты как есть, в том числе '\0'
-  dd::task<hidi::http_response> do_getBlob(api::getBlob op, hidi::http_request,
-                                           hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::getBlob op, hidi::http_request, hidi::request_context) override {
     if (op.path.name == "missing")
       co_return make_response(api::getBlob::response_404{.body = "no " + op.path.name});
     co_return make_response(api::getBlob::response_200{.body = op.path.name + std::string("\0\xff", 2)});
   }
 
-  dd::task<hidi::http_response> do_putBlob(api::putBlob op, hidi::http_request,
-                                           hidi::request_context) override {
+  dd::task<hidi::http_response> handle(api::putBlob op, hidi::http_request, hidi::request_context) override {
     api::putBlob::response_200 rsp;
     rsp.body = op.body.size();
     co_return make_response(rsp);

@@ -7,12 +7,13 @@
 #include "api/operations/ping.hpp"
 namespace api {
 
-// операции спеки - виртуальные do_X. Маршрут каждой операции в routes() с id < user_route_begin, свои
-// маршруты можно добавить туда же с id от user_route_begin, их обрабатывает on_user_route
+// операции спеки - перегрузки виртуального handle по типу операции. Маршрут каждой операции в routes()
+// с id < user_route_begin, свои маршруты можно добавить туда же с id от user_route_begin, их
+// обрабатывает on_user_route
 struct server : hidi::h2server {
   using hidi::h2server::h2server;
 
-  virtual dd::task<hidi::http_response> do_ping(ping, hidi::http_request, hidi::request_context) = 0;
+  virtual dd::task<hidi::http_response> handle(ping, hidi::http_request, hidi::request_context) = 0;
 
   // путь и метод не подошли ни к одной операции
   virtual dd::task<hidi::http_response> on_unknown_operation(hidi::http_request, hidi::request_context) {

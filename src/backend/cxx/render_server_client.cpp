@@ -148,23 +148,22 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
 
   // TODO x-name для сервера поддержать ?
   result +=
-      "// операции спеки - виртуальные do_X. Маршрут каждой операции в routes() с id < user_route_begin, "
-      "свои\n"
-      "// маршруты можно добавить туда же с id от user_route_begin, их обрабатывает on_user_route\n"
+      "// операции спеки - перегрузки виртуального handle по типу операции. Маршрут каждой операции в "
+      "routes()\n"
+      "// с id < user_route_begin, свои маршруты можно добавить туда же с id от user_route_begin, их\n"
+      "// обрабатывает on_user_route\n"
       "struct server : hidi::h2server {\nusing hidi::h2server::h2server;\n\n";
-
-  auto make_handler_method_name = [&](const ir::operation& op) {
-    return std::format("do_{}", make_cxx_ident(op.id, options));
-  };
 
   for (auto* op : operations) {
     assert(op);
     // возвращает http_response чтобы пользователь мог гибче назначить всякие параметры content type
     // или сделать что-то неподдерживаемое библиотекой
+    // перегрузка в наследнике скрывает остальные при вызове через наследника (нужен using server::handle),
+    // сам сервер вызывает их через базу
     result += std::format(
-        "virtual dd::task<hidi::http_response> {}({}, hidi::http_request, hidi::request_context) = "
+        "virtual dd::task<hidi::http_response> handle({}, hidi::http_request, hidi::request_context) = "
         "0;\n\n",
-        make_handler_method_name(*op), make_cxx_ident(op->id, options));
+        make_cxx_ident(op->id, options));
   }
 
   result += std::format(
@@ -216,9 +215,9 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
         "{} op;\n"
         "svarg::error_code ec = svarg::cxx_support::from_request(req, op, {});\n"
         "if (ec) return on_bad_request(std::move(req), std::move(ec), std::move(ctx));\n"
-        "return {}(std::move(op), std::move(req), std::move(ctx));\n"
+        "return handle(std::move(op), std::move(req), std::move(ctx));\n"
         "}}\n",
-        i, make_cxx_ident(r.op->id, options), render_string(r.base_path), make_handler_method_name(*r.op));
+        i, make_cxx_ident(r.op->id, options), render_string(r.base_path));
   }
   impl += "default: break;\n}\n";  // end switch
   impl += "return on_user_route(*id, std::move(req), std::move(ctx));\n";

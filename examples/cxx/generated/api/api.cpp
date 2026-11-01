@@ -19,7 +19,7 @@ dd::task<hidi::http_response> server::handle_request(hidi::http_request req, hid
       svarg::error_code ec = svarg::cxx_support::from_request(req, op, "");
       if (ec)
         return on_bad_request(std::move(req), std::move(ec), std::move(ctx));
-      return do_ping(std::move(op), std::move(req), std::move(ctx));
+      return handle(std::move(op), std::move(req), std::move(ctx));
     }
     default:
       break;

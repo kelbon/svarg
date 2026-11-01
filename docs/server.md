@@ -3,14 +3,14 @@
 ## Сервер спеки
 
 На каждую спеку генерируется `struct server` (файл `<spec>/server.hpp`). Это `hidi::h2server`, у которого на
-каждую операцию есть виртуальный обработчик:
+каждую операцию есть виртуальный обработчик — перегрузка `handle` по типу операции:
 
 ```cpp
 struct my_server : api::server {
   using api::server::server;  // конструкторы - как у hidi::h2server
 
-  dd::task<hidi::http_response> do_getItem(api::getItem op, hidi::http_request req,
-                                           hidi::request_context ctx) override {
+  dd::task<hidi::http_response> handle(api::getItem op, hidi::http_request req,
+                                       hidi::request_context ctx) override {
     // op уже разобран и проверен: параметры, тело
     api::getItem::response_200 rsp;
     rsp.body = ...;
@@ -18,6 +18,9 @@ struct my_server : api::server {
   }
 };
 ```
+
+Переопределённая перегрузка скрывает остальные, если вызывать `handle` через наследника — тогда нужен
+`using api::server::handle;`.
 
 Обработчик возвращает сырой `http_response`: обычно его строит `make_response` из описанного в спеке
 ответа, но можно вернуть что угодно.
