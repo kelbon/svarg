@@ -497,7 +497,7 @@ template <an_operation Op>
 [[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
                                                           deadline_t deadline) {
   static_assert(metel::is_decayed_v<Op>);
-  http_response rsp = co_await client.send_request(std::move(req), deadline);
+  http_response rsp = co_await send_buffered(client, std::move(req), deadline);
   // TODO sax parsing
   co_return Op::visit_response_status(rsp.status, [&]<typename T>() -> operation_result<Op> {
     if constexpr (std::is_void_v<T>) {

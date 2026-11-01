@@ -405,9 +405,10 @@ struct counting {
   any_client next;
   int* count;
 
-  dd::task<http_response> send_request(http_request req, hidi::deadline_t d) {
+  dd::task<int> send_request(hidi::on_header_fn_ptr h, hidi::on_data_part_fn_ptr d, http_request req,
+                             hidi::deadline_t dl) {
     ++*count;
-    return next.send_request(std::move(req), d);
+    return next.send_request(h, d, std::move(req), dl);
   }
 };
 
@@ -428,48 +429,48 @@ TEST("generated client") {
 
     api::getItem get;
     get.path.id.get() = 7;
-    item = co_await cli.send_getItem(get, hidi::deadline_t::never());
+    item = co_await cli.send(get, hidi::deadline_t::never());
 
     api::upload up;
     up.body.get() = "file";
-    uploaded = co_await upload_cli.send_upload(up, hidi::deadline_t::never());
+    uploaded = co_await upload_cli.send(up, hidi::deadline_t::never());
 
     // несколько тел: выбирается по content type
     api::addNote note;
     note.body.emplace<api::addNote::application_json_body>().get() = "text";
-    (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
+    (void)co_await cli.send(note, hidi::deadline_t::never());
     note.body.emplace<api::addNote::application_vnd_note_json_body>().get() = 42;
-    (void)co_await cli.send_addNote(note, hidi::deadline_t::never());
+    (void)co_await cli.send(note, hidi::deadline_t::never());
 
     api::login login;
     login.body.user = "u&=";
     login.body.remember = true;
     login.body.meta = "x y";
-    greeting = co_await cli.send_login(login, hidi::deadline_t::never());
+    greeting = co_await cli.send(login, hidi::deadline_t::never());
 
     api::uploadFiles files;
     files.body.title = "t \"q\"";
     files.body.meta.emplace().name = "m";
     files.body.file = std::string("\r\n--\0", 5);
-    summary = co_await cli.send_uploadFiles(files, hidi::deadline_t::never());
+    summary = co_await cli.send(files, hidi::deadline_t::never());
 
     api::getBlob get_blob;
     get_blob.path.name = "b";
-    blob = co_await cli.send_getBlob(get_blob, hidi::deadline_t::never());
+    blob = co_await cli.send(get_blob, hidi::deadline_t::never());
     get_blob.path.name = "missing";
-    no_blob = co_await cli.send_getBlob(get_blob, hidi::deadline_t::never());
+    no_blob = co_await cli.send(get_blob, hidi::deadline_t::never());
     api::putBlob put;
     put.path.name = "b";
     put.body = std::string("\0\x01\x02", 3);
-    put_blob = co_await cli.send_putBlob(put, hidi::deadline_t::never());
+    put_blob = co_await cli.send(put, hidi::deadline_t::never());
 
     // статус не из спецификации (404 на неверный base path): у getItem есть default ответ,
     // у upload нет - исключение
     api::client wrong_path{client_ref(h2), "/nope"};
-    not_found = co_await wrong_path.send_getItem(get, hidi::deadline_t::never());
+    not_found = co_await wrong_path.send(get, hidi::deadline_t::never());
     api::client_upload_example_com_v2 wrong_upload{client_ref(h2), "/nope"};
     try {
-      (void)co_await wrong_upload.send_upload(up, hidi::deadline_t::never());
+      (void)co_await wrong_upload.send(up, hidi::deadline_t::never());
     } catch (unexpected_response& e) {
       unexpected = std::move(e.response);
     }

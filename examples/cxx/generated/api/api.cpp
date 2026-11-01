@@ -31,8 +31,8 @@ dd::task<hidi::http_response> server::handle_request(hidi::http_request req, hid
 
 namespace api {
 
-dd::task<ping::result_t> client::send_ping(const ping& op, hidi::deadline_t deadline,
-                                           const svarg::content_type_params& ctp) {
+dd::task<ping::result_t> client::send(const ping& op, hidi::deadline_t deadline,
+                                      const svarg::content_type_params& ctp) {
   return svarg::cxx_support::send_request<ping>(
       transport, svarg::cxx_support::make_request(op, ctp, base_path), deadline);
 }

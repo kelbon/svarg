@@ -25,7 +25,7 @@ int main() {
 
   bool done = false;
   auto ping = [&]() -> dd::task<void> {
-    api::ping::result_t rsp = co_await cli.send_ping(api::ping{}, hidi::deadline_t::never());
+    api::ping::result_t rsp = co_await cli.send(api::ping{}, hidi::deadline_t::never());
     std::cout << "ping: " << rsp.body.status << std::endl;
     done = true;
   };

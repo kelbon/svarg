@@ -265,13 +265,14 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
 
     for (auto* op : ops) {
       auto opname = make_cxx_ident(op->id, options);
+      // перегрузки send по типу операции
       res += std::format(
-          "dd::task<{0}::result_t> send_{0}(const {0}& op, hidi::deadline_t deadline, "
+          "dd::task<{0}::result_t> send(const {0}& op, hidi::deadline_t deadline, "
           "const svarg::content_type_params& ctp = {{}});\n",
           opname);
       // определение в .cpp спеки
       source += std::format(
-          "dd::task<{0}::result_t> {1}::send_{0}(const {0}& op, hidi::deadline_t deadline, "
+          "dd::task<{0}::result_t> {1}::send(const {0}& op, hidi::deadline_t deadline, "
           "const svarg::content_type_params& ctp) {{\n"
           "return svarg::cxx_support::send_request<{0}>(transport, "
           "svarg::cxx_support::make_request(op, ctp, base_path), deadline);\n"

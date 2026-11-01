@@ -1,7 +1,8 @@
 
 
 add_library(svarg_cxx_supportlib STATIC ${CMAKE_CURRENT_SOURCE_DIR}/stream_parsing.cpp
-                                         ${CMAKE_CURRENT_SOURCE_DIR}/router.cpp)
+                                         ${CMAKE_CURRENT_SOURCE_DIR}/router.cpp
+                                         ${CMAKE_CURRENT_SOURCE_DIR}/any_client.cpp)
 
 target_link_libraries(svarg_cxx_supportlib PUBLIC svarglib)
 target_include_directories(svarg_cxx_supportlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
