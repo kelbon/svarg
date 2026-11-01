@@ -608,10 +608,6 @@ struct body {
   // мапа имя property => хедеры её части (encoding.headers), только для multipart. Например Content-Id,
   // по которому на бинарную часть ссылается JSON часть (3GPP)
   std::optional<string_map<std::set<header>>> membersHeaders;
-  // означает, что schema применяется не ко всему телу, а к единице стрима
-  // (например openapi 3.2 itemsSchema)
-  // по умолчанию false
-  std::optional<bool> streaming;
   // имеет смысл только для отправки. При получении определяется по хедеру content-type или по дефолту т.к.
   // одно body
   bool required = false;

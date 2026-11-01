@@ -11,8 +11,6 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   std::string result;
   result += std::format("struct {} {{\n", name);
   result += std::format("static constexpr bool is_required = {};\n", body.required);
-  if (body.streaming && *body.streaming)
-    result += "using is_streaming = int;\n";
   result += render_parse_tag(cxx_support::parse_tag_e::body);
   assert(is_lowered(body.contentType.str()));
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
@@ -56,8 +54,6 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     result += std::format("static constexpr std::string_view body_content_type = {};\n",
                           render_string(body.contentType));
     result += std::format("static constexpr bool body_is_required = {};\n", body.required);
-    if (body.streaming && *body.streaming)
-      result += "static constexpr bool body_is_streaming = true;\n";
     std::string type = render_schema_ref(body.schema, spec, jp).typeref;
     if (body.required)
       result += std::format("\n{} body;\n", type);

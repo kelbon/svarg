@@ -814,16 +814,11 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
   // возможно media type range
   result.contentType = content_type;
   result.required = is_required_body;
-  if (obj.itemSchema) {
-    auto [ref, rschema] = resolve_schema(*obj.schema, file, jp / "itemSchema", *this);
-    result.schema = ref;
-    result.streaming = true;
-    if (obj.schema)
-      emit_warn(file, jp, "'schema' setted but ignored, because itemSchema present");
-    if (obj.encoding)
-      emit_warn(file, jp, "'encoding' setted but ignored, because itemSchema present");
-  }  // игнорируем schema/encoding если была itemSchema
-  else if (obj.schema) {
+  // поток элементов (OpenAPI 3.2) не поддерживается: бинарные тела и так передаются потоком, а схема
+  // элемента для генерации не нужна
+  if (obj.itemSchema)
+    emit_warn(file, jp, "'itemSchema' is not supported and ignored");
+  if (obj.schema) {
     auto [ref, rschema] = resolve_schema(*obj.schema, file, jp / "schema", *this);
     result.schema = ref;
     if (obj.encoding) {
@@ -858,7 +853,6 @@ ir::body lowering_context::media_type_object_lowering(const media_type_object& o
       }
     }
   }
-  // result.streaming пока игнорируется
   return result;
 }
 

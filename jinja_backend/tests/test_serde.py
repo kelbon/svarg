@@ -165,10 +165,9 @@ class TestOmitsNoneOptionalFields:
         d = Header(name="X-Trace-Id").to_dict()
         assert d == {"name": "X-Trace-Id"}
 
-    def test_body_without_members_encoding_or_streaming(self):
+    def test_body_without_members_encoding(self):
         d = Body(content_type="application/json", schema=SchemaRef(spec="@string@")).to_dict()
         assert "membersEncoding" not in d
-        assert "streaming" not in d
 
     def test_operation_parameter_without_required(self):
         d = OperationParameter(name="filter", schema=SchemaRef(spec="@string@")).to_dict()
@@ -194,14 +193,6 @@ class TestOmitsNoneOptionalFields:
 
 
 class TestKeepsFalsyExplicitValues:
-    def test_body_streaming_false_is_serialized(self):
-        d = Body(
-            content_type="application/json",
-            schema=SchemaRef(spec="@string@"),
-            streaming=False,
-        ).to_dict()
-        assert d["streaming"] is False
-
     def test_operation_parameter_required_false_is_serialized(self):
         d = OperationParameter(
             name="filter", schema=SchemaRef(spec="@string@"), required=False
