@@ -320,11 +320,15 @@ constexpr bool match_path_pattern(std::string_view path_pattern, std::string_vie
       }
       p.remove_prefix(str.size());
     }
-    constexpr void pattern_end() const {
+    // путь длиннее шаблона ("/a/{x}/b" и "/a/1/b/c") - не подходит
+    constexpr void pattern_end() {
+      matches = p.empty();
     }
+    // последний параметр - остаток пути
     constexpr void param(std::string_view name) {
       assert(matches);
       assert(!name.empty());
+      p = {};
     }
     constexpr void param(std::string_view name, std::string_view sep) {
       auto pos = p.find(sep);

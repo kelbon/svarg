@@ -77,5 +77,18 @@ TEST("compare_paths_specialized") {
   TEST_PATH_SPECIALIZED("/v1/orders/{id}", "/v1/{version}/{id}", greater);
 }
 
+TEST("match_path_pattern") {
+  REQUIRE(svarg::match_path_pattern("/a/{x}/b", "/a/1/b"));
+  REQUIRE(!svarg::match_path_pattern("/a/{x}/b", "/a/1/b/c"));  // лишний хвост
+  REQUIRE(!svarg::match_path_pattern("/a/{x}/b", "/a/1/bc"));
+  REQUIRE(svarg::match_path_pattern("/files/{name}.{ext}", "/files/dir/a.txt"));  // '/' в значении принимается
+  REQUIRE(!svarg::match_path_pattern("/a", "/ab"));
+  REQUIRE(svarg::match_path_pattern("/files/{name}.{ext}", "/files/a.tar.gz"));
+  REQUIRE(!svarg::match_path_pattern("/files/{name}.{ext}", "/files/a"));
+  // последний параметр забирает остаток пути вместе с '/'
+  REQUIRE(svarg::match_path_pattern("/repos/{owner}/contents/{path}", "/repos/me/contents/a/b/c"));
+  REQUIRE(!svarg::match_path_pattern("/repos/{owner}/contents/{path}", "/repos/me/other/a"));
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;
