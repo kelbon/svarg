@@ -2,6 +2,8 @@
 
 #include "render_common.hpp"
 
+#include "svarg/backend/cxx/support/route_trie.hpp"
+
 namespace svarg::cxx {
 
 // путь из url сервера без завершающего '/', переменные заменяются значениями по умолчанию
@@ -46,12 +48,9 @@ struct route {
 
 }  // namespace
 
-// TODO теоретически пути делятся на "точное соответствие" - хеш мапа и для динамических и для статических,
-// без аргументов пути и может префиксное дерево для остального. Но существуют неоднозначности
-
-// возвращает сортированных набор маршрутов такой, что по нему можно идти сверху вниз при матче path
-// и первый сматченный будет наиболее специализированным
-// возвращает мапу метод -> маршруты (сначала не шаблонные пути, затем шаблонные сортированные по приоритету)
+// возвращает мапу метод -> маршруты (сначала не шаблонные пути, затем шаблонные сортированные по
+// специализации и приоритету). Для роутера важен только порядок шаблонов со смешанными сегментами: они
+// проверяются линейно и выигрывает первый подошедший
 static string_map<std::vector<route>> order_routes_for_path_matching(std::vector<route> routes) {
   auto is_not_templated = [](const route& r) { return !is_template_path(r.path); };
   // TODO такую неоднозначность (см. ниже) можно решать по правилу точное совпадение выигрывает. В данном
@@ -90,23 +89,73 @@ static string_map<std::vector<route>> order_routes_for_path_matching(std::vector
   return ordered;
 }
 
+// сегмент шаблона не литерал и не параметр целиком ("{name}.{ext}", "v{version}"): такой маршрут не идёт в
+// trie роутера, а проверяется линейно (router::add_before)
+static bool has_mixed_segment(std::string_view path) {
+  bool mixed = false;
+  visit_path_segments(path, [&](std::string_view seg) {
+    if (!cxx_support::is_param_segment(seg) && (seg.contains('{') || seg.contains('}')))
+      mixed = true;
+  });
+  return mixed;
+}
+
+// форма шаблона для поиска конфликтов: /a/{x}/b и /a/{y}/b - одна форма
+static std::string path_shape(std::string_view path) {
+  std::string shape;
+  bool in_param = false;
+  for (char c : path) {
+    if (c == '{')
+      in_param = true, shape += "{}";
+    else if (c == '}')
+      in_param = false;
+    else if (!in_param)
+      shape += c;
+  }
+  return shape;
+}
+
 std::string renderer::render_server(const std::vector<const ir::operation*>& operations,
                                     std::string_view spec, std::string& source) const {
   assert(!operations.empty());
 
+  // маршрут на каждый (операция, base path сервера). Индекс маршрута - его id в роутере
+  std::vector<route> routes;
+  for (auto* op : operations) {
+    std::set<std::string> base_paths;
+    for (auto& srv : *op->servers)
+      base_paths.insert(server_base_path(srv));
+    for (auto& bp : base_paths)
+      routes.push_back(route{.op = op, .base_path = bp, .path = bp + deescape_path(op->path)});
+  }
+  std::vector<std::pair<std::string, route>> ordered;  // (метод, маршрут)
+  for (auto& [method, rs] : order_routes_for_path_matching(std::move(routes)))
+    for (auto& r : rs)
+      ordered.emplace_back(method, std::move(r));
+  // одна форма пути с одним методом: роутер отверг бы такой маршрут при создании сервера
+  std::set<std::pair<std::string, std::string>> shapes;
+  for (auto& [method, r] : ordered) {
+    if (!shapes.emplace(method, path_shape(r.path)).second)
+      throw render_error("operation `{}`: {} `{}` conflicts with another operation of the same path shape",
+                         r.op->id, method, r.path);
+  }
+
   std::string result = render_file_begin();
+  result += "#include \"svarg/backend/cxx/support/router.hpp\"\n\n";
   for (auto* op : operations)
     result += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
   result += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
 
   // TODO x-name для сервера поддержать ?
-  result += "struct server : hidi::h2server {\nusing hidi::h2server::h2server;\n\n";
+  result +=
+      "// операции спеки - виртуальные do_X. Маршрут каждой операции в routes() с id < user_route_begin, "
+      "свои\n"
+      "// маршруты можно добавить туда же с id от user_route_begin, их обрабатывает on_user_route\n"
+      "struct server : hidi::h2server {\nusing hidi::h2server::h2server;\n\n";
 
   auto make_handler_method_name = [&](const ir::operation& op) {
     return std::format("do_{}", make_cxx_ident(op.id, options));
   };
-
-  // виртуальные функции операций
 
   for (auto* op : operations) {
     assert(op);
@@ -118,58 +167,61 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
         make_handler_method_name(*op), make_cxx_ident(op->id, options));
   }
 
-  result +=
+  result += std::format(
       "// путь и метод не подошли ни к одной операции\n"
       "virtual dd::task<hidi::http_response> on_unknown_operation(hidi::http_request, "
-      "hidi::request_context) {\n"
-      "co_return hidi::http_response{.status = 404};\n}\n\n"
+      "hidi::request_context) {{\n"
+      "co_return hidi::http_response{{.status = 404}};\n}}\n\n"
       "// операция найдена, но запрос не соответствует ей (параметры, тело...)\n"
       "virtual dd::task<hidi::http_response> on_bad_request(hidi::http_request, svarg::error_code, "
-      "hidi::request_context) {\n"
-      "co_return hidi::http_response{.status = 400};\n}\n\n";
-
-  // определение в .cpp спеки, чтобы разбор всех операций не инстанцировался у пользователя
-  result +=
+      "hidi::request_context) {{\n"
+      "co_return hidi::http_response{{.status = 400}};\n}}\n\n"
+      "// маршрут пользователя: id >= user_route_begin\n"
+      "virtual dd::task<hidi::http_response> on_user_route(size_t, hidi::http_request req, "
+      "hidi::request_context ctx) {{\n"
+      "return on_unknown_operation(std::move(req), std::move(ctx));\n}}\n\n"
+      "// определение в .cpp спеки, чтобы разбор всех операций не инстанцировался у пользователя\n"
       "dd::task<hidi::http_response> handle_request(hidi::http_request req, hidi::request_context ctx) "
-      "override;\n";
+      "override;\n\n"
+      "static constexpr size_t user_route_begin = {};\n\n"
+      "::svarg::cxx_support::router& routes() noexcept {{\nreturn routes_;\n}}\n\n"
+      "private:\n"
+      "static ::svarg::cxx_support::router make_routes();\n\n"
+      "::svarg::cxx_support::router routes_ = make_routes();\n",
+      ordered.size());
   result += "};\n\n}\n";  // end struct, namespace
 
   std::string& impl = source;
   impl += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
+  impl += "::svarg::cxx_support::router server::make_routes() {\n::svarg::cxx_support::router r;\n";
+  for (size_t i = 0; i < ordered.size(); ++i) {
+    auto& [method, r] = ordered[i];
+    impl +=
+        std::format("r.{}(hidi::http_method_e::{}, {}, {});\n",
+                    has_mixed_segment(r.path) ? "add_before" : "add_route", method, render_string(r.path), i);
+  }
+  impl += "return r;\n}\n\n";
+
+  // значения параметров пути роутер не возвращает: from_request разбирает путь по шаблону операции
   impl +=
       "dd::task<hidi::http_response> server::handle_request(hidi::http_request req, hidi::request_context "
-      "ctx) "
-      "{\n"
-      "std::string_view path = svarg::path_and_query(req.path).first;\n";
-
-  // операция доступна по base path каждого своего сервера
-  std::vector<route> routes;
-  for (auto* op : operations) {
-    std::set<std::string> base_paths;
-    for (auto& srv : *op->servers)
-      base_paths.insert(server_base_path(srv));
-    for (auto& bp : base_paths)
-      routes.push_back(route{.op = op, .base_path = bp, .path = bp + deescape_path(op->path)});
-  }
-
-  impl += "switch(req.method) {\n";
-  for (auto& [method, rs] : order_routes_for_path_matching(std::move(routes))) {
-    impl += std::format("case hidi::http_method_e::{}:\n", method);
-    for (auto& r : rs) {
-      impl += std::format(
-          "if (svarg::match_path_pattern<{}>(path)) {{\n"
-          "{} op;\n"
-          "svarg::error_code ec = svarg::cxx_support::from_request(req, op, {});\n"
-          "if (ec) return on_bad_request(std::move(req), std::move(ec), std::move(ctx));\n"
-          "return {}(std::move(op), std::move(req), std::move(ctx));\n"
-          "}}\n",
-          render_string(r.path), make_cxx_ident(r.op->id, options), render_string(r.base_path),
-          make_handler_method_name(*r.op));
-    }
-    impl += "break;\n";
+      "ctx) {\n"
+      "std::optional id = routes_.find(req.method, svarg::path_and_query(req.path).first);\n"
+      "if (!id) return on_unknown_operation(std::move(req), std::move(ctx));\n"
+      "switch (*id) {\n";
+  for (size_t i = 0; i < ordered.size(); ++i) {
+    auto& [method, r] = ordered[i];
+    impl += std::format(
+        "case {}: {{\n"
+        "{} op;\n"
+        "svarg::error_code ec = svarg::cxx_support::from_request(req, op, {});\n"
+        "if (ec) return on_bad_request(std::move(req), std::move(ec), std::move(ctx));\n"
+        "return {}(std::move(op), std::move(req), std::move(ctx));\n"
+        "}}\n",
+        i, make_cxx_ident(r.op->id, options), render_string(r.base_path), make_handler_method_name(*r.op));
   }
   impl += "default: break;\n}\n";  // end switch
-  impl += "return on_unknown_operation(std::move(req), std::move(ctx));\n";
+  impl += "return on_user_route(*id, std::move(req), std::move(ctx));\n";
   impl += "}\n\n}\n";  // end fn, namespace
   return result;
 }

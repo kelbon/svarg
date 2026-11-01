@@ -3,22 +3,28 @@
 
 namespace api {
 
+::svarg::cxx_support::router server::make_routes() {
+  ::svarg::cxx_support::router r;
+  r.add_route(hidi::http_method_e::GET, "/ping", 0);
+  return r;
+}
+
 dd::task<hidi::http_response> server::handle_request(hidi::http_request req, hidi::request_context ctx) {
-  std::string_view path = svarg::path_and_query(req.path).first;
-  switch (req.method) {
-    case hidi::http_method_e::GET:
-      if (svarg::match_path_pattern<"/ping">(path)) {
-        ping op;
-        svarg::error_code ec = svarg::cxx_support::from_request(req, op, "");
-        if (ec)
-          return on_bad_request(std::move(req), std::move(ec), std::move(ctx));
-        return do_ping(std::move(op), std::move(req), std::move(ctx));
-      }
-      break;
+  std::optional id = routes_.find(req.method, svarg::path_and_query(req.path).first);
+  if (!id)
+    return on_unknown_operation(std::move(req), std::move(ctx));
+  switch (*id) {
+    case 0: {
+      ping op;
+      svarg::error_code ec = svarg::cxx_support::from_request(req, op, "");
+      if (ec)
+        return on_bad_request(std::move(req), std::move(ec), std::move(ctx));
+      return do_ping(std::move(op), std::move(req), std::move(ctx));
+    }
     default:
       break;
   }
-  return on_unknown_operation(std::move(req), std::move(ctx));
+  return on_user_route(*id, std::move(req), std::move(ctx));
 }
 
 }  // namespace api

@@ -122,6 +122,14 @@ struct test_server : api::server {
       notes.push_back(std::to_string(n->get()));
     co_return make_response(api::addNote::response_204{});
   }
+
+  dd::task<hidi::http_response> on_user_route(size_t id, hidi::http_request req,
+                                              hidi::request_context) override {
+    hidi::http_response rsp{.status = 200};
+    std::string body = std::format("user{} {}", id - user_route_begin, req.path);
+    rsp.body.assign(body.begin(), body.end());
+    co_return rsp;
+  }
 };
 
 // поднимает сервер на loopback и выполняет `fn(h2client&)` до завершения
@@ -268,6 +276,14 @@ TEST("generated server") {
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
   test_server server(hidi::server_ssl_context_ptr(nullptr));
+  // свои маршруты рядом с операциями спеки: литерал и "ДО" выигрывают у шаблона /v1/items/{id}
+  server.routes().add_route(hidi::http_method_e::GET, "/v1/items/custom", test_server::user_route_begin);
+  server.routes().add_before(hidi::http_method_e::GET, "/v1/items/{id}.json",
+                             test_server::user_route_begin + 1);
+  http_request custom_lit = with_base_path(make_request(get), "/v1");
+  custom_lit.path = "/v1/items/custom";
+  http_request custom_before = custom_lit;
+  custom_before.path = "/v1/items/5.json";
   std::vector rsps = exchange(server, {
                                           with_base_path(make_request(get), "/v1"),
                                           make_request(get),  // без base path
@@ -290,8 +306,10 @@ TEST("generated server") {
                                           cell_bad,
                                           search_raw,
                                           kv_req,
+                                          custom_lit,
+                                          custom_before,
                                       });
-  REQUIRE(rsps.size() == 21);
+  REQUIRE(rsps.size() == 23);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
@@ -365,6 +383,9 @@ TEST("generated server") {
   api::postKv::response_200 kv_rsp;
   REQUIRE(!from_response(rsps[20], kv_rsp).failed());
   REQUIRE(kv_rsp.body == "hi-3");
+
+  REQUIRE(rsps[21].status == 200 && rsps[21].body_strview() == "user0 /v1/items/custom");
+  REQUIRE(rsps[22].status == 200 && rsps[22].body_strview() == "user1 /v1/items/5.json");
 
   // поле типа самого объекта
   REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);
