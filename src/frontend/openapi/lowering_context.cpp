@@ -953,6 +953,18 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
   }
   if (param.required)
     result.required = param.required;
+  // style/explode - как есть в meta, что из этого поддерживать, решает бэкенд
+  if (param.style || param.explode) {
+    if (result.encoding) {
+      emit_warn(file, jp, "parameter `{}` with `content` ignores style/explode", param.name);
+    } else {
+      result.meta.emplace();
+      if (param.style)
+        (*result.meta)[std::string(x_param_style)] = Any{boost::json::value(std::string_view(*param.style))};
+      if (param.explode)
+        (*result.meta)[std::string(x_param_explode)] = Any{boost::json::value(bool(*param.explode))};
+    }
+  }
   if (result.required.value_or(false) && result.default_value) {
     // default имеет смысл только для необязательного параметра
     emit_warn(file, jp, "required parameter `{}` has default, default ignored", param.name);

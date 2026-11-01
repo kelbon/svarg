@@ -549,6 +549,23 @@ template <bool WwwUrlEncoded>
   return {};
 }
 
+// как visit_query, но имя и значение передаются как есть, без декодирования: разделители элементов
+// (style параметров) отличаются от закодированных символов значения
+[[nodiscard]] error_code visit_query_raw(std::string_view query, auto&& vtor) {
+  while (!query.empty()) {
+    auto amp = query.find('&');
+    std::string_view pair = query.substr(0, amp);
+    query = (amp == std::string_view::npos) ? std::string_view{} : query.substr(amp + 1);
+    if (pair.empty())
+      continue;
+    auto eq = pair.find('=');
+    std::string_view raw_value = (eq == std::string_view::npos) ? std::string_view{} : pair.substr(eq + 1);
+    if (error_code ec = vtor(pair.substr(0, eq), raw_value))
+      return ec;
+  }
+  return {};
+}
+
 // TODO test
 
 // cookie-string = cookie-pair *( ";" SP cookie-pair )

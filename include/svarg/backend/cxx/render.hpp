@@ -19,6 +19,12 @@ struct render_options {
   std::string inline_scope_suffix = "_";
 };
 
+// то, что попадает в field_info поля помимо имени и обязательности
+struct field_render_info {
+  std::optional<std::string> encoding;  // медиа тип значения
+  std::optional<bool> explode;          // массивы/объекты в параметрах, если указано явно
+};
+
 struct schema_ref_result {
   std::string typeref;
   bool is_alias = false;
@@ -108,7 +114,7 @@ struct renderer {
                                    const json_pointer& relative, std::optional<ir::schema_ref> fields_owner,
                                    std::optional<ir::schema_ref> additional_properties,
                                    const string_map<std::set<ir::header>>* part_headers = nullptr,
-                                   const string_map<ir::content_type_t>* encodings = nullptr) const;
+                                   const string_map<field_render_info>* extra = nullptr) const;
 
   std::string render_object_field(const ir::object_field_info&, std::string_view relspec,
                                   const json_pointer& relative, bool recursive_field) const;

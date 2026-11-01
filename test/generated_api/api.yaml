@@ -234,6 +234,95 @@ paths:
             text/plain:
               schema:
                 type: string
+  /search:
+    get:
+      operationId: search
+      parameters:
+        - name: ids
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+        - name: tags
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: filter
+          in: query
+          explode: false
+          schema:
+            type: object
+            properties:
+              color:
+                type: string
+              min:
+                type: integer
+        - name: point
+          in: query
+          schema:
+            type: object
+            required: [x]
+            properties:
+              x:
+                type: integer
+              y:
+                type: integer
+        - name: x-list
+          in: header
+          schema:
+            type: array
+            items:
+              type: string
+        - name: prefs
+          in: cookie
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        "200":
+          description: parsed parameters
+          content:
+            text/plain:
+              schema:
+                type: string
+  /cells/{cell}/{tags}:
+    get:
+      operationId: getCell
+      parameters:
+        - name: cell
+          in: path
+          required: true
+          explode: true
+          schema:
+            type: object
+            required: [row, col]
+            properties:
+              row:
+                type: integer
+              col:
+                type: integer
+        - name: tags
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: array
+            items:
+              type: string
+            minItems: 1
+      responses:
+        "200":
+          description: parsed parameters
+          content:
+            text/plain:
+              schema:
+                type: string
 components:
   schemas:
     Item:

@@ -26,4 +26,9 @@ constexpr inline std::string_view x_name_hint = "x-name-hint";
 // передаётся из поля format схемы в meta IR схемы. Значение строка
 constexpr inline std::string_view x_format_hint = "x-format-hint";
 
+// meta параметра операции, только если указаны явно: как массив/объект записывается в строку (OpenAPI
+// style и explode). Значения строка и bool
+constexpr inline std::string_view x_param_style = "x-style";
+constexpr inline std::string_view x_param_explode = "x-explode";
+
 }  // namespace svarg

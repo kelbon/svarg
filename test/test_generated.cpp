@@ -68,6 +68,38 @@ struct test_server : api::server {
     co_return make_response(rsp);
   }
 
+  static std::string join(const auto& items) {
+    std::string r;
+    if constexpr (requires { items.has_value(); }) {
+      if (items)
+        return join(*items);
+    } else {
+      for (auto& x : items)
+        r += std::format("{}{}", r.empty() ? "" : " ", x);
+    }
+    return r;
+  }
+
+  dd::task<hidi::http_response> do_search(api::search op, hidi::http_request,
+                                          hidi::request_context) override {
+    auto& q = op.query;
+    api::search::response_200 rsp;
+    rsp.body = std::format("ids={} tags={} filter={}/{} point={}/{} list={} prefs={}", join(q.ids),
+                           join(q.tags),
+                           q.filter && q.filter->color ? *q.filter->color : "-",
+                           q.filter && q.filter->min ? *q.filter->min : -1, q.point ? q.point->x : -1,
+                           q.point && q.point->y ? *q.point->y : -1, join(op.headers.x_list),
+                           join(op.cookies.prefs));
+    co_return make_response(rsp);
+  }
+
+  dd::task<hidi::http_response> do_getCell(api::getCell op, hidi::http_request,
+                                           hidi::request_context) override {
+    api::getCell::response_200 rsp;
+    rsp.body = std::format("{}:{} {}", op.path.cell.row, op.path.cell.col, join(op.path.tags.get()));
+    co_return make_response(rsp);
+  }
+
   dd::task<hidi::http_response> do_putItem(api::putItem op, hidi::http_request,
                                            hidi::request_context) override {
     api::putItem::response_200 rsp;
@@ -197,6 +229,28 @@ TEST("generated server") {
   file_raw.path = "/v1/files/x/y.txt";  // '/' как есть тоже принимается (как {ref} у GitHub)
   http_request file_ok = file_raw;
   file_ok.path = "/v1/files/x%2fy.txt";
+  // style/explode
+  api::search search;
+  search.query.ids = {1, 2};
+  search.query.tags = {"a", "b,c"};
+  search.query.filter.emplace().color = "red";
+  search.query.point.emplace().x = 5;
+  search.headers.x_list = {"h1", "h2"};
+  search.cookies.prefs = {"p1", "p2"};
+  http_request search_req = make_request(search);
+  REQUIRE(search_req.path ==
+          "/search?filter=color,red&ids=1&ids=2&x=5&tags=a,b%2Cc");
+  api::getCell cell;
+  cell.path.cell.row = 1;
+  cell.path.cell.col = 2;
+  cell.path.tags.get() = {"x.y", "z,w"};
+  http_request cell_req = make_request(cell);
+  REQUIRE(cell_req.path == "/cells/col=2,row=1/x.y,z%2Cw");
+  http_request cell_bad = with_base_path(cell_req, "/v1");
+  cell_bad.path = "/v1/cells/row=1,col=2/";  // minItems (порядок свойств при разборе не важен)
+  http_request search_raw;
+  search_raw.method = hidi::http_method_e::GET;
+  search_raw.path = "/v1/search?ids=7&y=3";  // у point обязателен x
   std::string_view item_json = R"({"name":"n","child":{"name":"c"}})";
   put_raw.body.data.assign(item_json.begin(), item_json.end());
 
@@ -218,8 +272,12 @@ TEST("generated server") {
                                           with_base_path(file_req, "/v1"),
                                           file_raw,
                                           file_ok,
+                                          with_base_path(search_req, "/v1"),
+                                          with_base_path(cell_req, "/v1"),
+                                          cell_bad,
+                                          search_raw,
                                       });
-  REQUIRE(rsps.size() == 16);
+  REQUIRE(rsps.size() == 20);
 
   api::getItem::response_200 item;
   REQUIRE(rsps[0].status == 200);
@@ -279,6 +337,14 @@ TEST("generated server") {
   REQUIRE(rsps[14].body_strview() == "x/y|txt");
   REQUIRE(rsps[15].status == 200);
   REQUIRE(rsps[15].body_strview() == "x/y|txt");
+
+  REQUIRE(rsps[16].status == 200);
+  REQUIRE(rsps[16].body_strview() ==
+          "ids=1 2 tags=a b,c filter=red/-1 point=5/-1 list=h1 h2 prefs=p1 p2");
+  REQUIRE(rsps[17].status == 200);
+  REQUIRE(rsps[17].body_strview() == "1:2 x.y z,w");
+  REQUIRE(rsps[18].status == 400);
+  REQUIRE(rsps[19].status == 400);
 
   // поле типа самого объекта
   REQUIRE(echoed.body.child && echoed.body.child->name == "c" && !echoed.body.child->child);

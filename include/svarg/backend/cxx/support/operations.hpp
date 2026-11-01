@@ -3,6 +3,7 @@
 #include "svarg/backend/cxx/support/concepts.hpp"
 #include "svarg/backend/cxx/support/nonbody.hpp"
 #include "svarg/backend/cxx/support/body.hpp"
+#include "svarg/backend/cxx/support/param_style.hpp"
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
 #include "svarg/backend/cxx/support/x_www_form_urlencoded.hpp"
 #include "svarg/backend/cxx/support/names.hpp"
@@ -34,15 +35,14 @@ struct serialize_path_visitor {
   }
   // значения кодируются (percent_encode_path_value), литералы шаблона уже валидны
   template <size_t I>
-  void param(std::index_sequence<I> field_index) {
+  void param(std::index_sequence<I>) {
     static_assert(has_path_params<Op>);
-    percent_encode_path_value(serialize_nonbody_field(p.path, field_index), "", std::back_inserter(result));
+    result += serialize_param_field<param_location_e::path, I>(p.path);
   }
   template <size_t I>
-  void param(std::index_sequence<I> field_index, std::string_view separator) {
+  void param(std::index_sequence<I>, std::string_view separator) {
     static_assert(has_path_params<Op>);
-    percent_encode_path_value(serialize_nonbody_field(p.path, field_index), separator,
-                              std::back_inserter(result));
+    result += serialize_param_field<param_location_e::path, I>(p.path, separator);
     substr(separator);
   }
 };
@@ -67,11 +67,10 @@ struct parse_path_visitor {
   Op& op;
   std::string_view path;
   error_code ec;
-  std::string decode_buf;
 
   template <size_t I>
   void parse_param(std::index_sequence<I>, std::string_view raw) {
-    ec = parse_nonbody_field<I>(percent_decode_path_value(raw, decode_buf), op.path);
+    ec = parse_param_field<param_location_e::path, I>(raw, op.path);
   }
 
   // visit_path не проверяет is_done, поэтому после ошибки все вызовы пропускаются
@@ -140,7 +139,7 @@ void serialize_headers_of(T&& v, http_headers_t& out) {
     FOR_EACH_FIELD_INDEX_OF(headers_t<T>) {
       if (is_field_present<I>(v.headers))
         out.emplace_back(std::string(get_field_name<I, headers_t<T>>()),
-                         serialize_nonbody_field<I>(v.headers));
+                         serialize_param_field<param_location_e::header, I>(v.headers));
     };
   }
 }
@@ -237,8 +236,10 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
   if constexpr (has_query_params<Op>) {
     application_x_www_form_urlencoded query;
     FOR_EACH_FIELD_INDEX_OF(query_t<Op>) {
-      if (is_field_present<I>(op.query))
-        query.nonbody_arg(get_field_name<I, query_t<Op>>(), serialize_nonbody_field<I>(op.query));
+      if (is_field_present<I>(op.query)) {
+        serialize_param_pairs<param_location_e::query, I>(
+            op.query, [&](std::string_view k, std::string_view v) { query.encoded_arg(k, v); });
+      }
     };
     // TODO вынести в отдельную функцию по работе с квери
     std::string q = query.take();
@@ -258,14 +259,17 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
     std::string cookie_header;
     FOR_EACH_FIELD_INDEX_OF(cookies_t<Op>) {
       if (is_field_present<I>(op.cookies)) {
-        if (!cookie_header.empty()) {
-          // https://datatracker.ietf.org/doc/html/rfc6265.html#section-4.2.1
-          // формально по грамматике пробел действительно обязателен
-          cookie_header += "; ";
-        }
-        cookie_header += get_field_name<I, cookies_t<Op>>();
-        cookie_header += '=';
-        cookie_header += serialize_nonbody_field<I>(op.cookies);
+        serialize_param_pairs<param_location_e::cookie, I>(
+            op.cookies, [&](std::string_view k, std::string_view v) {
+              if (!cookie_header.empty()) {
+                // https://datatracker.ietf.org/doc/html/rfc6265.html#section-4.2.1
+                // формально по грамматике пробел действительно обязателен
+                cookie_header += "; ";
+              }
+              cookie_header += k;
+              cookie_header += '=';
+              cookie_header += v;
+            });
       }
     };
     if (!cookie_header.empty())
@@ -311,25 +315,19 @@ template <an_operation Op>
   }
 
   if constexpr (has_query_params<Op>) {
-    std::bitset unparsed = cxx_support::get_required_bits_mask<query_t<Op>>();
-    auto on_query_arg = [&](std::string_view name, std::string_view value) -> error_code {
-      std::optional index = get_field_index<query_t<Op>>(name);
-      if (!index)
-        return {};  // игнорируем дополнительные аргументы
-      unparsed.set(*index, false);
-      return visit_field_index<fields_count<query_t<Op>>()>(
-          [&]<size_t I>() { return parse_nonbody_field<I>(value, op.query); }, *index);
-    };
-    ec = visit_query</*WwwUrlEncoded=*/false>(get_query(req.path), on_query_arg);
+    // дополнительные аргументы игнорируются
+    param_pairs_parser<param_location_e::query, query_t<Op>> query{.out = op.query};
+    ec = visit_query_raw(get_query(req.path),
+                         [&](std::string_view k, std::string_view v) { return query.on_pair(k, v); });
+    if (!ec)
+      ec = query.finish();
     if (ec)
       return ec;
-    if (unparsed.any())
-      return noexport::unparsed_error(unparsed, "query");
   }
 
-  auto unparsed_cookies = [] {
+  auto cookies = [&] {
     if constexpr (has_cookie_params<Op>) {
-      return get_required_bits_mask<cookies_t<Op>>();
+      return param_pairs_parser<param_location_e::cookie, cookies_t<Op>>{.out = op.cookies};
     } else {
       return std::monostate{};
     }
@@ -350,15 +348,7 @@ template <an_operation Op>
     }
     if constexpr (has_cookie_params<Op>) {
       if (name == cookie_hdr) {
-        auto on_cookie_arg = [&](std::string_view name, std::string_view value) {
-          std::optional index = get_field_index<cookies_t<Op>>(name);
-          if (!index)
-            return error_code{};  // игнорируем дополнительные аргументы
-          unparsed_cookies.set(*index, false);
-          return visit_field_index<fields_count<cookies_t<Op>>()>(
-              [&]<size_t I>() { return parse_nonbody_field<I>(value, op.cookies); }, *index);
-        };
-        ec = visit_cookies(value, on_cookie_arg);
+        ec = visit_cookies(value, [&](std::string_view k, std::string_view v) { return cookies.on_pair(k, v); });
         if (ec)
           return ec;
         continue;
@@ -369,7 +359,8 @@ template <an_operation Op>
       if (index) {
         unparsed_headers.set(*index, false);
         ec = visit_field_index<fields_count<headers_t<Op>>()>(
-            [&]<size_t I>() { return parse_nonbody_field<I>(value, op.headers); }, *index);
+            [&]<size_t I>() { return parse_param_field<param_location_e::header, I>(value, op.headers); },
+            *index);
         if (ec)
           return ec;
       }
@@ -377,8 +368,9 @@ template <an_operation Op>
     }
   }
   if constexpr (has_cookie_params<Op>) {
-    if (unparsed_cookies.any())
-      return noexport::unparsed_error(unparsed_cookies, "cookies");
+    ec = cookies.finish();
+    if (ec)
+      return ec;
   }
   if constexpr (has_header_params<Op>) {
     if (unparsed_headers.any())
@@ -451,7 +443,8 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
       if (index) {
         unparsed.set(*index, false);
         ec = visit_field_index<fields_count<headers_t<R>>()>(
-            [&]<size_t I>() { return parse_nonbody_field<I>(value, rsp.headers); }, *index);
+            [&]<size_t I>() { return parse_param_field<param_location_e::header, I>(value, rsp.headers); },
+            *index);
         if (ec)
           return ec;
       }

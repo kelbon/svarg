@@ -1,6 +1,7 @@
 #include "svarg/backend/cxx/cxx_ident.hpp"
 #include "svarg/backend/cxx/namespace_strings.hpp"
 #include "svarg/backend/cxx/render.hpp"
+#include "svarg/x_meta_keys.hpp"
 #include "svarg/errors.hpp"
 #include "svarg/ir/ir_visitor.hpp"
 
@@ -576,7 +577,7 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
                                            std::optional<ir::schema_ref> fields_owner,
                                            std::optional<ir::schema_ref> additional_properties,
                                            const string_map<std::set<ir::header>>* part_headers,
-                                           const string_map<ir::content_type_t>* encodings) const {
+                                           const string_map<field_render_info>* extra) const {
   auto is_recursive = [&](const ir::schema_ref& r) {
     if (r.is_fundamental())
       return false;
@@ -621,9 +622,14 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
     std::string r = std::format("{{.name = {}", render_string(f.name));
     if (f.required)
       r += ", .required = true";
-    if (encodings)
-      if (auto it = encodings->find(f.name); it != encodings->end())
-        r += std::format(", .encoding = {}", render_string(it->second));
+    const field_render_info* info = nullptr;
+    if (extra)
+      if (auto it = extra->find(f.name); it != extra->end())
+        info = &it->second;
+    if (info && info->encoding)
+      r += std::format(", .encoding = {}", render_string(*info->encoding));
+    if (info && info->explode)
+      r += std::format(", .explode = {}", *info->explode);
     return r + "},\n";
   };
   result += std::format("static constexpr std::array<::svarg::cxx_support::field_info, {}> fields = {{{{\n",
@@ -794,10 +800,12 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
             body && body->membersHeaders ? &*body->membersHeaders : nullptr;
         if (part_headers)
           result += render_part_headers(*part_headers, s.spec, s.jsonptr);
-        const string_map<ir::content_type_t>* encodings =
-            body && body->membersEncoding ? &*body->membersEncoding : nullptr;
+        string_map<field_render_info> extra;
+        if (body && body->membersEncoding)
+          for (auto& [prop, ct] : *body->membersEncoding)
+            extra[prop].encoding = ct.str();
         result += render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(),
-                                       a.additional_properties, part_headers, encodings);
+                                       a.additional_properties, part_headers, &extra);
         return result;
       },
   };
@@ -1013,13 +1021,28 @@ std::string render_parameters(const auto& params, std::string_view relspec, cons
                               const renderer& ren) {
   string s;
 
-  // параметры с `content:` кодируются своим медиа типом
-  string_map<ir::content_type_t> encodings;
-  for (const ir::operation_parameter& p : params)
+  string_map<field_render_info> extra;
+  for (const ir::operation_parameter& p : params) {
+    // параметры с `content:` кодируются своим медиа типом
     if (p.encoding)
-      encodings.emplace(p.name, *p.encoding);
+      extra[p.name].encoding = p.encoding->str();
+    if (!p.meta)
+      continue;
+    // explode из meta (OpenAPI), только явно указанный. Поддержаны style по умолчанию (simple в path и
+    // header, form в query и cookie), для остальных - предупреждение и умолчание
+    if (auto it = p.meta->find(x_param_style); it != p.meta->end()) {
+      std::string_view st = it->second.value.is_string() ? std::string_view(it->second.value.as_string()) : "";
+      bool form_location = p.location == parameter_location::query || p.location == parameter_location::cookie;
+      if (st != (form_location ? "form" : "simple")) {
+        std::println("warning: parameter `{}`: style `{}` is not supported, default style is used", p.name, st);
+        continue;
+      }
+    }
+    if (auto it = p.meta->find(x_param_explode); it != p.meta->end() && it->second.value.is_bool())
+      extra[p.name].explode = it->second.value.as_bool();
+  }
   s += ren.render_object_fields(as_object_fields(params), relspec, relative, /*fields_owner=*/std::nullopt,
-                                /*additional_properties=*/std::nullopt, /*part_headers=*/nullptr, &encodings);
+                                /*additional_properties=*/std::nullopt, /*part_headers=*/nullptr, &extra);
   return s;
 }
 

@@ -30,6 +30,14 @@ struct application_x_www_form_urlencoded {
     nonbody_arg(k, serialize_value<F>(value));
   }
 
+  // ключ и значение уже закодированы (параметры query со style)
+  void encoded_arg(std::string_view k, std::string_view v) {
+    body += k;
+    body.push_back('=');
+    body += v;
+    body.push_back('&');
+  }
+
   // значение уже сериализовано (параметры query), только percent-encoding
   void nonbody_arg(std::string_view k, std::string_view value) {
     svarg::query_encode(k, std::back_inserter(body));

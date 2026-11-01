@@ -213,6 +213,9 @@ struct field_info {
   bool required = false;
   // медиа тип значения: `content:` у параметра, encoding свойства form/multipart тела. Пусто - по умолчанию
   std::string_view encoding = {};
+  // параметр-массив/объект: каждый элемент отдельно (ids=1&ids=2). nullopt - по умолчанию для места
+  // параметра (см. param_style.hpp)
+  std::optional<bool> explode = std::nullopt;
 };
 
 template <typename T>

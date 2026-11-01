@@ -525,6 +525,8 @@ struct operation_parameter {
   optional<bool> auth_related;
   // `default` схемы параметра, отсутствующий параметр получает это значение
   std::optional<Any> default_value;
+  // специфичное для формата (см. x_meta_keys.hpp), например OpenAPI style/explode
+  std::optional<meta_t> meta;
 
   [[nodiscard]] bool is_auth_related() const noexcept {
     return auth_related ? *auth_related : false;
