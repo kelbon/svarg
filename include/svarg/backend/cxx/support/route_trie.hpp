@@ -7,6 +7,8 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "svarg/utils/strcmp.hpp"
+
 // trie шаблонов пути: "/items/{id}/data" -> id маршрута
 //
 // Сегмент шаблона (между '/') - литерал или параметр целиком ("{id}"). Смешанные сегменты ("{name}.{ext}")
@@ -36,14 +38,8 @@ struct route_trie {
   }
 
  private:
-  struct sv_hash {
-    using is_transparent = void;
-    size_t operator()(std::string_view s) const noexcept {
-      return std::hash<std::string_view>{}(s);
-    }
-  };
   struct node {
-    std::unordered_map<std::string, std::unique_ptr<node>, sv_hash, std::equal_to<>> literals;
+    std::unordered_map<std::string, std::unique_ptr<node>, str_hash, str_equal_to> literals;
     std::unique_ptr<node> param;
     std::optional<id_t> id;
 

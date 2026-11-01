@@ -55,18 +55,12 @@ struct router {
  private:
   static constexpr size_t methods_count = size_t(hidi::http_method_e::UNKNOWN) + 1;
 
-  struct sv_hash {
-    using is_transparent = void;
-    size_t operator()(std::string_view s) const noexcept {
-      return std::hash<std::string_view>{}(s);
-    }
-  };
   struct before_entry {
     std::string pattern;
     id_t id;
   };
 
-  std::array<std::unordered_map<std::string, id_t, sv_hash, std::equal_to<>>, methods_count> literal_paths;
+  std::array<std::unordered_map<std::string, id_t, str_hash, str_equal_to>, methods_count> literal_paths;
   std::array<std::vector<before_entry>, methods_count> before;
   std::array<route_trie, methods_count> templates;
 };
