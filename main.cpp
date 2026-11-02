@@ -136,6 +136,11 @@ int main(int argc, char* argv[]) try {
   renoptions.simple_cxx_identifiers = cliopts.simple_identifiers;
   renoptions.file_prefix = cliopts.file_prefix;
   renoptions.unsetted_additional_properties = cliopts.unsetted_additional_properties;
+  if (cliopts.sources_per_spec < 1) {
+    std::println("--sources-per-spec must be at least 1");
+    return -1;
+  }
+  renoptions.sources_per_spec = cliopts.sources_per_spec;
   for (const std::string& ct : cliopts.stream_content_types.args) {
     std::string mt(without_media_type_parameters(monomorph_media_type(ct)));
     if (!std::ranges::contains(renoptions.stream_content_types, mt))

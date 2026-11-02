@@ -142,7 +142,7 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
     write_file(output_dir / spec / "all_webhooks.hpp", all.all_webhooks);
   }
 
-  string_map<std::string> spec_sources, spec_instantiations;
+  string_map<std::string> spec_sources;
   // server.hpp и client.hpp только если есть операции
   // один сервер на спеку (адрес сервера определяется listen), клиент на каждый набор серверов
   if (ir.operations) {
@@ -161,20 +161,47 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
                       server_source, client_source);
     }
   }
-  // один .cpp на спеку: определения сервера и клиента, явные инстанциации (де)сериализации операций
+  // <spec>.cpp - определения сервера и клиента. Явные инстанциации (де)сериализации операций - в нём же, если
+  // часть одна, иначе поровну, подряд, в остальные options.sources_per_spec - 1 частей (см. render_options)
+  if (options.sources_per_spec == 0)
+    throw render_error("sources per spec must be at least 1");
+  struct spec_operations {
+    std::vector<std::string> includes, instantiations;
+  };
+  string_map<spec_operations> spec2ops;
   for (auto* ops : {&ir.operations, &ir.webhooks}) {
     if (!*ops)
       continue;
     for (auto& op : **ops) {
-      std::string& src = spec_sources[op.spec];
-      src +=
-          std::format("#include \"{}\"\n", make_file_path(op, options, /*is_webhook=*/ops == &ir.webhooks));
-      spec_instantiations[op.spec] += render_instantiations(op, /*is_extern=*/false);
+      spec_operations& so = spec2ops[op.spec];
+      so.includes.push_back(
+          std::format("#include \"{}\"\n", make_file_path(op, options, /*is_webhook=*/ops == &ir.webhooks)));
+      so.instantiations.push_back(render_instantiations(op, /*is_extern=*/false));
     }
   }
+  for (auto& [spec, so] : spec2ops) {
+    std::string ident = make_cxx_ident(spec, options);
+    // операции [begin, end) в одну часть
+    auto part = [&](size_t begin, size_t end) {
+      std::string includes, instantiations;
+      for (size_t i = begin; i < end; ++i) {
+        includes += so.includes[i];
+        instantiations += so.instantiations[i];
+      }
+      return std::format("{}\n{}", includes, instantiations);
+    };
+    std::string& main_source = spec_sources[spec];
+    if (options.sources_per_spec == 1) {
+      main_source += part(0, so.includes.size());
+      continue;
+    }
+    // все части пишутся, даже пустые: набор файлов зависит только от опции
+    size_t n = options.sources_per_spec - 1, count = so.includes.size();
+    for (size_t i = 0; i < n; ++i)
+      write_file(output_dir / spec / std::format("{}_{}.cpp", ident, i + 1), part(i * count / n, (i + 1) * count / n));
+  }
   for (auto& [spec, src] : spec_sources)
-    write_file(output_dir / spec / std::format("{}.cpp", make_cxx_ident(spec, options)),
-               std::format("{}\n{}", src, spec_instantiations[spec]));
+    write_file(output_dir / spec / std::format("{}.cpp", make_cxx_ident(spec, options)), src);
   remove_duplicates(generated);
   std::stable_sort(generated.begin(), generated.end(),
                    [](const fs::path& a, const fs::path& b) { return a.extension() < b.extension(); });

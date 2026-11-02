@@ -31,6 +31,9 @@ INTEGER(references_max_recursion_depth, "max recursion depth for $ref's", defaul
 BOOLEAN(unsetted_additional_properties, "if additional properties in object is not set, this means = true or fales? 'false' ignored for objects without properties", default_value(true))
 RENAME(unsetted_additional_properties, "unsetted-additional-properties")
 
+INTEGER(sources_per_spec, "into how many .cpp files the code of each spec is split (at least 1): <spec>.cpp with server and client and <spec>_1.cpp... with operations", default_value(1))
+RENAME(sources_per_spec, "sources-per-spec")
+
 BOOLEAN(simple_identifiers, "if false, C++ identifiers guaranteed to be unique and type names are fully qualified, but can be ugly", default_value(true))
 RENAME(simple_identifiers, "simple-identifiers")
 

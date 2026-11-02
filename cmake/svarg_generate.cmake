@@ -12,6 +12,8 @@
 #       INCLUDE_DIRS     ${CMAKE_SOURCE_DIR}/openapi/common     # optional, each becomes "-I <dir>"
 #       STREAM_CONTENT_TYPES text/event-stream                   # optional, response media types streamed
 #                                                               # besides application/octet-stream
+#       SOURCES_PER_SPEC 8                                      # optional, default 1: into how many .cpp
+#                                                               # the code of each spec is split
 #       SVARG_EXECUTABLE ${CMAKE_SOURCE_DIR}/tools/bin/svarg    # optional, defaults to "svarg" (PATH)
 #   )
 #
@@ -21,7 +23,7 @@ cmake_minimum_required(VERSION 3.14)
 include_guard(GLOBAL)
 
 function(svarg_generate_cxx)
-    set(oneValueArgs TARGET SPECS_DIR OUT_DIR SVARG_EXECUTABLE)
+    set(oneValueArgs TARGET SPECS_DIR OUT_DIR SVARG_EXECUTABLE SOURCES_PER_SPEC)
     set(multiValueArgs SPECS INCLUDE_DIRS STREAM_CONTENT_TYPES)
     cmake_parse_arguments(ARGS "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -68,8 +70,14 @@ function(svarg_generate_cxx)
         list(APPEND stream_args --stream-content-type "${ct}")
     endforeach()
 
+    set(sources_args "")
+    if(DEFINED ARGS_SOURCES_PER_SPEC)
+        list(APPEND sources_args --sources-per-spec "${ARGS_SOURCES_PER_SPEC}")
+    endif()
+
     # Arguments shared between the discovery (--dry-run) and the real run.
-    set(svarg_args "--out" "${out_dir}" "--specs-dir" "${specs_dir}" ${include_args} ${stream_args} ${ARGS_SPECS})
+    set(svarg_args "--out" "${out_dir}" "--specs-dir" "${specs_dir}" ${include_args} ${stream_args} ${sources_args}
+        ${ARGS_SPECS})
 
     # --- 1. Auto re-run configure when a spec changes ---------------------
     # Expand "dir/*" masks too, so files matched only through a mask are tracked.

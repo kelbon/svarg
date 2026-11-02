@@ -38,6 +38,11 @@ int main(int argc, char* argv[]) try {
   cxx::render_options options;
   options.simple_cxx_identifiers = cliopts.simple_identifiers;
   options.unsetted_additional_properties = cliopts.unsetted_additional_properties;
+  if (cliopts.sources_per_spec < 1) {
+    std::println("--sources-per-spec must be at least 1");
+    return -1;
+  }
+  options.sources_per_spec = cliopts.sources_per_spec;
   cxx::renderer r(ir, options);
   r.render2cxx(cliopts.out);
   auto onfile = [](const fs::path& p, bool success) {
