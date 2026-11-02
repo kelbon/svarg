@@ -127,65 +127,50 @@ struct from_json_value<T> {
   }
 };
 
-template <cxx_support::an_anyof T>
-struct from_json_value<T> {
-  static error_code operator()(const boost::json::value& j, T& v) {
-    if constexpr (cxx_support::has_discriminator<T>) {
-      if (!j.is_object()) {
-        // игнорируем дискриминатор на случай если фундаментальный тип
-        // TODO пытаться парсить только фундаментальные типы из anyOf
-        error_code ec = try_from_json(j, get_special_field(v));
-        if (ec)
-          return ec;
-        return cxx_support::validate_required_schemas(j, v);
-      }
-      auto& obj = j.as_object();
-      auto* discriminator = obj.if_contains(T::discriminator_value);
-      return T::discriminate(std::string_view(*discriminator), [&]<typename X>() {
-        if constexpr (std::is_void_v<X>) {
-          return parse_error("invalid discriminator value `{}` for anyOf `{}`",
-                             std::string_view(*discriminator), type_name<X>());
-        } else {
-          return try_from_json(j, v);
-        }
-      });
-    } else {
-      error_code ec = try_from_json(j, get_special_field(v));
-      if (ec)
-        return ec;
-      return cxx_support::validate_required_schemas(j, v);
-    }
-  }
-};
+namespace noexport {
 
-template <cxx_support::a_oneof T>
+// anyOf/oneOf с дискриминатором: вариант выбирается по значению свойства-дискриминатора и разбирается только
+// он, остальные не пробуются (для oneOf не проверяется, что подходит ровно один). pre: j.is_object()
+template <typename T>
+[[nodiscard]] error_code parse_discriminated(const boost::json::value& j, T& v) {
+  const boost::json::value* d = j.get_object().if_contains(T::discriminator_field);
+  if (!d || !d->is_string()) {
+    return parse_error("discriminator property `{}` of `{}` is missing or is not a string",
+                       std::string_view(T::discriminator_field), type_name<T>());
+  }
+  std::string_view value = d->get_string();
+  return T::discriminate(value, [&]<typename X>() -> error_code {
+    if constexpr (std::is_void_v<X>) {
+      return parse_error("unknown discriminator value `{}` of `{}`", value, type_name<T>());
+    } else {
+      auto& field = get_special_field(v);
+      if constexpr (cxx_support::tagged_as<T>(cxx_support::parse_tag_e::anyof))
+        return try_from_json(j, field.template get<X>().emplace());
+      else
+        return try_from_json(j, field.template emplace<X>());
+    }
+  });
+}
+
+}  // namespace noexport
+
+template <typename T>
+  requires(cxx_support::an_anyof<T> || cxx_support::a_oneof<T>)
 struct from_json_value<T> {
   static error_code operator()(const boost::json::value& j, T& v) {
+    error_code ec;
+    // дискриминатор - свойство объекта, остальные значения разбираются как без него
     if constexpr (cxx_support::has_discriminator<T>) {
-      if (!j.is_object()) {
-        // игнорируем дискриминатор на случай если фундаментальный тип
-        // TODO пытаться парсить только фундаментальные типы из oneOf
-        error_code ec = try_from_json(j, get_special_field(v));
-        if (ec)
-          return ec;
-        return cxx_support::validate_required_schemas(j, v);
-      }
-      auto& obj = j.as_object();
-      auto* discriminator = obj.if_contains(T::discriminator_value);
-      return T::discriminate(std::string_view(*discriminator), [&]<typename X>() {
-        if constexpr (std::is_void_v<X>) {
-          return parse_error("invalid discriminator value `{}` for oneOf `{}`",
-                             std::string_view(*discriminator), type_name<X>());
-        } else {
-          return try_from_json(j, v);
-        }
-      });
+      if (j.is_object())
+        ec = noexport::parse_discriminated(j, v);
+      else
+        ec = try_from_json(j, get_special_field(v));
     } else {
-      error_code ec = try_from_json(j, get_special_field(v));
-      if (ec)
-        return ec;
-      return cxx_support::validate_required_schemas(j, v);
+      ec = try_from_json(j, get_special_field(v));
     }
+    if (ec)
+      return ec;
+    return cxx_support::validate_required_schemas(j, v);
   }
 };
 

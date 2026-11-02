@@ -260,17 +260,37 @@ std::optional<ir::discriminator_desc> lowering_context::discriminator_lowering(
   // а для фундаментальных типов определять содержимое без помощи дискриминатора
   ir::discriminator_desc ird;
   ird.propertyName = d.propertyName;
-  auto from_mapping_or_just_name = [&](std::string_view name) -> std::string_view {
-    if (!d.mapping)
-      return name;
-    auto it = (*d.mapping).find(name);
-    if (it == d.mapping->end())
-      return name;
-    return std::string_view(it->second);
+  // значение в mapping - $ref на схему или её имя
+  auto find_schema = [&](std::string_view target) -> std::optional<size_t> {
+    if (!target.contains('#')) {
+      for (size_t i = 0; i < schemas.size(); ++i)
+        if (schemas[i].name == target)
+          return i;
+      return std::nullopt;
+    }
+    parsed_ref r = parse_ref(target);
+    std::string spec = fs::path(r.file).filename().replace_extension().generic_string();
+    for (size_t i = 0; i < schemas.size(); ++i)
+      if (schemas[i].jsonptr == r.json_ptr && (r.file.empty() || schemas[i].spec == spec))
+        return i;
+    return std::nullopt;
   };
-  for (auto& s : schemas) {
-    ird.mapping[std::string(from_mapping_or_just_name(*s.name))] = s;
+  std::vector<bool> mapped(schemas.size());
+  if (d.mapping) {
+    for (auto& [value, target] : *d.mapping) {
+      if (std::optional i = find_schema(target)) {
+        ird.mapping[value] = schemas[*i];
+        mapped[*i] = true;
+      } else {
+        emit_warn(file, jp, "discriminator mapping `{}: {}` does not refer to anyOf/oneOf schema, ignored", value,
+                  target);
+      }
+    }
   }
+  // остальные варианты - по имени схемы (неявный mapping)
+  for (size_t i = 0; i < schemas.size(); ++i)
+    if (!mapped[i])
+      ird.mapping.try_emplace(*schemas[i].name, schemas[i]);
   return ird;
 }
 

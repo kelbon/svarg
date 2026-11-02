@@ -193,7 +193,12 @@ static bool inline_into(T& to, access_schema get, schema* add_requirements) {
     const schema& t = get(s);
     if (!add_requirements && t.has_requirements())
       return false;
-    return std::holds_alternative<T>(t.type.data);
+    if (!std::holds_alternative<T>(t.type.data))
+      return false;
+    // вложенный anyOf/oneOf с дискриминатором не вливается: дискриминатор относится к нему
+    if constexpr (requires(const T& x) { x.discriminator; })
+      return !std::get<T>(t.type.data).discriminator;
+    return true;
   };
 
   // достаём все T из to.schemas
@@ -241,7 +246,8 @@ static maybe_replace flatten_allof(schema& this_schema, allof_schema& allof, acc
 
 static maybe_replace flatten_anyof(schema& this_schema, anyof_schema& anyof, access_schema get,
                                    size_t& changes, const ir_options& options) {
-  if (inline_into(anyof, get, /*add_requirements=*/nullptr))
+  // в anyOf/oneOf с дискриминатором варианты не вливаются: mapping ссылается на них
+  if (!anyof.discriminator && inline_into(anyof, get, /*add_requirements=*/nullptr))
     ++changes;
   if (anyof.schemas.empty()) {
     // anyof<> -> never (также как (A || ...) == false если A пусто)
@@ -256,7 +262,7 @@ static maybe_replace flatten_anyof(schema& this_schema, anyof_schema& anyof, acc
 
 static maybe_replace flatten_oneof(schema& this_schema, oneof_schema& oneof, access_schema get,
                                    size_t& changes, const ir_options& options) {
-  if (inline_into(oneof, get, /*add_requirements=*/nullptr))
+  if (!oneof.discriminator && inline_into(oneof, get, /*add_requirements=*/nullptr))
     ++changes;
   if (oneof.schemas.empty()) {
     // oneof<> -> never (также как (A || ...) == false если A пусто)

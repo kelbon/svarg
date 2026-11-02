@@ -79,9 +79,12 @@ struct to_json_value<T> {
             metel::matcher{[](metel::nothing_t) -> std::string_view {
                              throw serialize_error("cannot serialize empty oneOf");
                            },
-                           [](auto&& var) -> std::string_view { return T::discriminator_for(var); }});
+                           [](auto&& var) -> std::string_view {
+                             return T::template discriminator_for<std::remove_cvref_t<decltype(var)>>();
+                           }});
         // на случай если пользователь не заполнил или заполнил неверно
-        j[T::discriminator_field] = boost::json::string(discriminator);
+        if (!discriminator.empty())
+          j.get_object()[T::discriminator_field] = boost::json::string(discriminator);
       }
     }
     cxx_support::validate_required_schemas(j, v).rethrow_if_failed();

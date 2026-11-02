@@ -191,6 +191,34 @@ static http_request with_base_path(http_request req, std::string_view base_path)
   return req;
 }
 
+TEST("discriminator") {
+  using api::components::schemas::AnyPet;
+  using api::components::schemas::Cat;
+  using api::components::schemas::Dog;
+  using api::components::schemas::Pet;
+  auto parse = [](auto& v, std::string_view json) {
+    return !svarg::try_from_json(boost::json::parse(json), v).failed();
+  };
+  Pet p;
+  REQUIRE(parse(p, R"({"petType": "kitty", "lives": 9})"));
+  REQUIRE(get_special_field(p).get_if<Cat>() && get_special_field(p).get_if<Cat>()->lives == 9);
+  REQUIRE(parse(p, R"({"petType": "Dog"})"));
+  REQUIRE(get_special_field(p).get_if<Dog>());
+  REQUIRE(!parse(p, R"({"petType": "Cat"})"));  // есть в mapping под другим значением
+  REQUIRE(!parse(p, R"({"lives": 9})"));        // нет дискриминатора
+  // при сериализации значение дискриминатора выставляется по типу
+  Cat cat;
+  cat.petType = "x";
+  p = Pet{};
+  get_special_field(p).emplace<Cat>(cat);
+  REQUIRE(svarg::to_json(p).as_object().at("petType") == "kitty");
+
+  AnyPet a;
+  REQUIRE(parse(a, R"({"petType": "Cat", "bark": true})"));
+  REQUIRE(get_special_field(a).get<Cat>() && !get_special_field(a).get<Dog>());
+  REQUIRE(!parse(a, R"({"petType": "kitty"})"));
+}
+
 TEST("generated server") {
   api::getItem get;
   get.path.id.get() = 5;

@@ -426,6 +426,10 @@ components:
           $ref: "#/components/schemas/Color"
         filter:
           $ref: "#/components/schemas/Filter"
+        pet:
+          $ref: "#/components/schemas/Pet"
+        anyPet:
+          $ref: "#/components/schemas/AnyPet"
     # not как требование (как NfTypeCond в 3GPP TS 29.510): поля other быть не должно
     # и требование из схем, где есть только required (как anyOf у NFProfile): остальные поля допустимы
     Filter:
@@ -451,3 +455,36 @@ components:
       type: string
       enum: [a, b]
       default: b
+    # oneOf с дискриминатором: значение из mapping (kitty) и неявное (имя схемы Dog). Без дискриминатора
+    # {petType: ...} подходил бы под оба варианта
+    Pet:
+      oneOf:
+        - $ref: "#/components/schemas/Cat"
+        - $ref: "#/components/schemas/Dog"
+      discriminator:
+        propertyName: petType
+        mapping:
+          kitty: "#/components/schemas/Cat"
+    # anyOf с дискриминатором, только неявные значения
+    AnyPet:
+      anyOf:
+        - $ref: "#/components/schemas/Cat"
+        - $ref: "#/components/schemas/Dog"
+      discriminator:
+        propertyName: petType
+    Cat:
+      type: object
+      required: [petType]
+      properties:
+        petType:
+          type: string
+        lives:
+          type: integer
+    Dog:
+      type: object
+      required: [petType]
+      properties:
+        petType:
+          type: string
+        bark:
+          type: boolean

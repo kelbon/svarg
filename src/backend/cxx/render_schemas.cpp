@@ -163,12 +163,22 @@ schema_ref_result renderer::render_fundamental_type(const ir::fundamental_e f) c
   return {.typeref = std::format("::svarg::cxx_support::{}", e2str(f)), .is_alias = true};
 }
 
+// дискриминатор anyOf/oneOf, nullptr если его нет
+static const ir::discriminator_desc* discriminator_of(const ir::schema_type& t) {
+  if (const ir::anyof_schema* a = t.if_anyof(); a && a->discriminator)
+    return &*a->discriminator;
+  if (const ir::oneof_schema* o = t.if_oneof(); o && o->discriminator)
+    return &*o->discriminator;
+  return nullptr;
+}
+
 std::string renderer::render_discriminator(const ir::discriminator_desc& d, std::string_view relspec,
                                            const json_pointer& relative) const {
   // discriminator_field
   std::string result = std::format("\nstatic constexpr inline std::string_view discriminator_field = {};\n\n",
                                    render_string(d.propertyName));
-  result += "// `vtor` must accept type, e.g. []<typename X>() { ... }";
+  // vtor вызывается с типом варианта, void - значение не найдено: vtor.template operator()<X>()
+  result += "// `vtor` must accept type, e.g. []<typename X>() { ... }, X = void if value is unknown\n";
   // discriminate
   result += "static decltype(auto) discriminate(std::string_view str, auto&& vtor) {\n";
   for (auto&& [str, type] : d.mapping) {
@@ -201,13 +211,9 @@ std::string renderer::render_special_field_type(const ir::schema_type& type, std
         return std::format("{}<{}>", allof_str, render_schemas_array(a.schemas, relspec, relative));
       },
       [&](const ir::anyof_schema& a) {
-        if (a.discriminator)
-          return std::string{};  // нетривиальный
         return std::format("{}<{}>", anyof_str, render_schemas_array(a.schemas, relspec, relative));
       },
       [&](const ir::oneof_schema& a) {
-        if (a.discriminator)
-          return std::string{};  // нетривиальный
         return std::format("{}<{}>", oneof_str, render_schemas_array(a.schemas, relspec, relative));
       },
       [&](const ir::not_schema& a) {
@@ -237,7 +243,8 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   // если простой - пытаемся сгенерировать алиас
   // именованные даже простые алиасы оставляем, например чтобы oneof<A, B, C,...> не дублировать во многих
   // местах. Если пользователь в спеке дал ему имя - значит так и хотел
-  if (!t.name && !t.has_requirements()) {
+  // anyOf/oneOf с дискриминатором - всегда структура: дискриминатор рендерится в неё (render_discriminator)
+  if (!t.name && !t.has_requirements() && !discriminator_of(t.type)) {
     std::string res = render_special_field_type(t.type, relspec, relative);
     if (!res.empty())
       return {.typeref = std::move(res), .is_alias = true};
@@ -527,7 +534,10 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
             [](const ir::not_schema&) { return not_a; },
             [](const auto&) -> cxx_support::parse_tag_e { metel::unreachable(); }),
         s.type.data);
-    return render_parse_tag(tag) + render_special_field(r) + render_requirements();
+    std::string result = render_parse_tag(tag) + render_special_field(r) + render_requirements();
+    if (const ir::discriminator_desc* d = discriminator_of(s.type))
+      result += render_discriminator(*d, s.spec, s.jsonptr);
+    return result;
   }
   matcher vtor{
       [&](const ir::fundamental_e& f) -> std::string { metel::unreachable(); },
