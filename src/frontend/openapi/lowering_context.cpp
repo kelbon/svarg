@@ -1,3 +1,4 @@
+#include "svarg/utils/svarg_assert.hpp"
 #include "svarg/frontend/openapi/lowering_context.hpp"
 #include "svarg/ir/ir_object.hpp"
 #include "svarg/ir/ir_visitor.hpp"
@@ -140,7 +141,7 @@ template <typename T>
 object_and_path<T> resolve_ref_to(reference_object ref, fs::path file, json_pointer jp,
                                   lowering_context& ctx) {
   // если обращение к nullptr - всё равно это ассёрт
-  assert(from_json<reference_object>(*jp.access(ctx.load_as_json(file))) == ref);
+  SVARG_ASSERT(from_json<reference_object>(*jp.access(ctx.load_as_json(file))) == ref);
 
   references_chain chain(std::move(file), std::move(jp), ctx);
 
@@ -324,7 +325,7 @@ static ir::fundamental_e detect_enum_type(const arrayof<Any>& values) noexcept {
 }
 
 [[nodiscard]] static std::optional<ir::schema_ref> try_simple(const schema_object& schema) {
-  assert(!schema.allow_always() && !schema.allow_never());
+  SVARG_ASSERT(!schema.allow_always() && !schema.allow_never());
   if (schema.enum_ || schema.const_ || schema.oneOf || schema.anyOf || schema.allOf || schema.not_)
     return std::nullopt;
   if (has_constraints(schema))
@@ -373,7 +374,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   res.spec = file.filename().replace_extension().generic_string();
   res.jsonptr = jp;
   auto ret_schema = [&] {
-    assert(parsable_as<schema_object>(jp.access(load_as_json(file))) && "invalidly generated scheme");
+    SVARG_ASSERT(parsable_as<schema_object>(jp.access(load_as_json(file))) && "invalidly generated scheme");
     result_ir.schemas->insert(res);
     return schema_or_ref(std::move(res));
   };
@@ -426,9 +427,9 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
   bool as_requirements = schema.enum_ || schema.type;
 
   // ── enum_ / const ─────────────────────────────────────────────────────────
-  assert(!schema.const_);                        // postparse должен был удалить
-  assert(!(!schema.type && schema.properties));  // postparse должен был обработать
-  assert(!(!schema.type && schema.required));
+  SVARG_ASSERT(!schema.const_);                        // postparse должен был удалить
+  SVARG_ASSERT(!(!schema.type && schema.properties));  // postparse должен был обработать
+  SVARG_ASSERT(!(!schema.type && schema.required));
 
   if (schema.enum_) {
     if (schema.enum_->empty()) {
@@ -690,7 +691,7 @@ struct schemas_collector {
   // обработано специально, так как ключ _responses отсутствует в оригинальном json
   void operator()(std::string_view name, const responses_object& rsps) {
     dbgprint(name);
-    assert(!is_keyfield(name));
+    SVARG_ASSERT(!is_keyfield(name));
     currentjp.add_key(name);
     on_scope_exit {
       currentjp.rm_last_segment();
@@ -700,7 +701,7 @@ struct schemas_collector {
       recursion(std::string_view(key), v);
   }
   void operator()(std::string_view name, const frontend_type auto& x) try {
-    assert(!is_keyfield(name));  // должен был обработать специально
+    SVARG_ASSERT(!is_keyfield(name));  // должен был обработать специально
     name = unescape_field_name(name);
     currentjp.add_key(name);
     dbgprint(name);
@@ -934,7 +935,7 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
     result.default_value = rs.front_schema.default_;
   } else {
     // валидация была
-    assert(param.content && param.content->size() == 1);
+    SVARG_ASSERT(param.content && param.content->size() == 1);
     // content type
     auto& [content_type_, mediaobj] = *param.content->begin();
     result.encoding = content_type_;
@@ -945,7 +946,7 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
   }
   if (param.in == parameter_location::path) {
     // валидация уже была
-    assert(!(param.required && !*param.required));
+    SVARG_ASSERT(!(param.required && !*param.required));
     if (!path.contains(std::string("{") + param.name + std::string("}")))
       throw validate_error("path `{}` does not contain path parameter with name", path, param.name);
     result.required = true;
@@ -998,7 +999,7 @@ static std::optional<ir::operation_parameter> auth_parameter(const security_sche
   };
   constexpr std::string_view authhdr = "Authorization";
   if (sec.type == "apiKey") {
-    assert(sec.in && sec.name);  // validate должен был проверить
+    SVARG_ASSERT(sec.in && sec.name);  // validate должен был проверить
     parameter_location in;
     if (!efromstr(*sec.in, in))
       throw validate_error("cannot parse parameter location from `{}`", *sec.in);
@@ -1008,10 +1009,10 @@ static std::optional<ir::operation_parameter> auth_parameter(const security_sche
   } else if (sec.type == "http") {
     return make_string_param(authhdr);
   } else if (sec.type == "oauth2") {
-    assert(sec.flows);
+    SVARG_ASSERT(sec.flows);
     return make_string_param(authhdr);
   } else if (sec.type == "openIdConnect") {
-    assert(sec.openIdConnectUrl);
+    SVARG_ASSERT(sec.openIdConnectUrl);
     return make_string_param(authhdr);
   } else {
     throw validate_error("unknown auth type `{}`", sec.type);
@@ -1065,11 +1066,11 @@ std::vector<std::vector<security_scheme_object>> lowering_context::resolve_secur
         if (obj.bearerFormat)
           operation_meta[std::string(x_bearer_format)] = Any(boost::json::value(*obj.bearerFormat));
       } else if (obj.type == "oauth2") {
-        assert(obj.flows);
+        SVARG_ASSERT(obj.flows);
         operation_meta[std::string(x_auth_flows)] = Any(to_json(*obj.flows));
         operation_meta[std::string(x_auth_scopes_oauth2)] = Any(to_json(scopes));
       } else if (obj.type == "openIdConnect") {
-        assert(obj.openIdConnectUrl);  // должно быть проверено в validate
+        SVARG_ASSERT(obj.openIdConnectUrl);  // должно быть проверено в validate
         operation_meta[std::string(x_openid_connect_url)] = Any(boost::json::value(*obj.openIdConnectUrl));
         operation_meta[std::string(x_auth_scopes_openIdConnect)] = Any(to_json(scopes));
       }
@@ -1085,7 +1086,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
                                                                       fs::path resolve_ref_file,
                                                                       json_pointer jp, std::string_view name,
                                                                       const path_item_object& item) {
-  assert(parsable_as<path_item_object>(jp.access(load_as_json(spec))) && "no such path item");
+  SVARG_ASSERT(parsable_as<path_item_object>(jp.access(load_as_json(spec))) && "no such path item");
   string_map<ir::operation> result;
   std::vector<ir::operation_parameter> common_params;
   if (item.parameters) {
@@ -1110,7 +1111,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
           return *o.servers;
         if (item.servers && !item.servers->empty())
           return *item.servers;
-        assert(api.servers && !api.servers->empty());  // должен быть хотя бы один дефолтный '/'
+        SVARG_ASSERT(api.servers && !api.servers->empty());  // должен быть хотя бы один дефолтный '/'
         return *api.servers;
       }();
       op.servers = std::set(srvs.begin(), srvs.end());
@@ -1168,7 +1169,7 @@ string_map<ir::operation> lowering_context::path_item_object_lowering(const open
       auto _ = guard_array(op.meta);
       std::vector op_sec = resolve_security(path, api, o, *op.meta);
       for (auto& ap : make_auth_parameters(op_sec)) {
-        assert(ap.is_auth_related());
+        SVARG_ASSERT(ap.is_auth_related());
         if (auto* pp = op.find_parameter(ap.name, ap.location)) {
           if (!pp->is_auth_related()) {
             throw validate_error(
@@ -1201,7 +1202,7 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
     visit_all_callbacks(api, obj_file, *this,
                         [&](std::string_view name, const reference_or<callback_object>& cb, fs::path cbpath_,
                             json_pointer jp) {
-                          assert(parsable_as<callback_object>(jp.access(load_as_json(cbpath_))));
+                          SVARG_ASSERT(parsable_as<callback_object>(jp.access(load_as_json(cbpath_))));
                           auto [rcb, cbpath, cbjp] = resolve_ref_and_ret(cb, cbpath_, jp, *this);
                           // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
                           for (auto&& [expr, pathItem] : rcb) {

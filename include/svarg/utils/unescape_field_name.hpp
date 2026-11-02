@@ -1,5 +1,7 @@
 #pragma once
 
+#include "svarg/utils/svarg_assert.hpp"
+
 #include <string_view>
 #include <strswitch/strswitch.hpp>
 
@@ -24,8 +26,8 @@ constexpr std::string_view unescape_field_name(std::string_view name) {
              .or_default(name);
   // чтобы не забыть _responses в responses_object и подобные вещи.
   // По сути ключевые слова которые нужно специальным образом обработать
-  assert(!(name.starts_with('_') && !is_keyfield(name) && "special field not handled correctly"));
-  assert(!name.ends_with('_') && "may be i forget some field");
+  SVARG_ASSERT(!(name.starts_with('_') && !is_keyfield(name) && "special field not handled correctly"));
+  SVARG_ASSERT(!name.ends_with('_') && "may be i forget some field");
   return name;
 }
 

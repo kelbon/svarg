@@ -1,5 +1,6 @@
 // СХЕМЫ: файл схемы, типы полей, зависимости, значения по умолчанию
 
+#include "svarg/utils/svarg_assert.hpp"
 #include "render_common.hpp"
 
 namespace svarg::cxx {
@@ -148,7 +149,7 @@ std::vector<std::string> renderer::collect_mentioned_first_layer_specs(const ir:
 
   std::vector<std::string> specs;
   for (auto& r : out) {
-    assert(!r.is_fundamental());
+    SVARG_ASSERT(!r.is_fundamental());
     if (!std::ranges::contains(specs, r.spec))
       specs.push_back(r.spec);
   }

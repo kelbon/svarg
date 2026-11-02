@@ -7,6 +7,7 @@
 
 #include "svarg/utils/forward_like.hpp"
 #include "svarg/utils/type_name.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -109,7 +110,7 @@ struct METEL_TRIVIAL_ABI error_code {
   // pre: failed() == true
   template <typename... Args>
   void reformat(std::format_string<noexport::strview_if_old_msg<Args>...> fmt, Args&&... args) {
-    assert(failed());
+    SVARG_ASSERT(failed());
     metel::matcher m{
         [](metel::nothing_t) {},
         [&](auto& x) { x.message = std::format(fmt, insert_old_message(std::forward<Args>(args))...); }};

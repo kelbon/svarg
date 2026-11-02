@@ -1,5 +1,6 @@
 // ВХОД БЭКЕНДА: render2cxx обходит IR и пишет файлы схем, операций, сервера и клиента и .cpp спеки
 
+#include "svarg/utils/svarg_assert.hpp"
 #include "render_common.hpp"
 
 namespace svarg::cxx {
@@ -143,7 +144,7 @@ std::vector<fs::path> renderer::render2cxx(fs::path output_dir) const {
   if (ir.operations) {
     string_map<std::vector<const ir::operation*>> spec2ops;
     for (auto& op : *ir.operations) {
-      assert(op.has_path() || !op.servers);  // у вебхуков не должно быть серверов
+      SVARG_ASSERT(op.has_path() || !op.servers);  // у вебхуков не должно быть серверов
       if (op.servers)
         spec2ops[op.spec].push_back(&op);
     }

@@ -9,6 +9,7 @@
 #include "svarg/ir/optimization_passes.hpp"
 #include "svarg/utils/media_types.hpp"
 #include "svarg/utils/clang_format_dir.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 #include <svarg/ir/ir_object.hpp>
 #include <svarg/backend/cxx/render.hpp>
@@ -37,7 +38,7 @@ using namespace svarg;
 }
 
 [[nodiscard]] static bool match_mask(const std::filesystem::path& p, std::string_view mask) {
-  assert(is_mask(mask));
+  SVARG_ASSERT(is_mask(mask));
   std::string m = monomorph_mask(mask);
   // убираем /*
   m.pop_back();

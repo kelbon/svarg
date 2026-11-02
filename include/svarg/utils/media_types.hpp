@@ -7,6 +7,7 @@
 #include "svarg/common_types.hpp"
 #include "svarg/errors.hpp"
 #include "svarg/utils/constexpr_string.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -175,7 +176,7 @@ constexpr bool match_content_type(std::string_view candidate) {
   static_assert(!media_type_has_parameters(ContentType.str()));
   static_assert(is_lowered(ContentType.str()));
 
-  assert(!is_wildcard_content_type(candidate));
+  SVARG_ASSERT(!is_wildcard_content_type(candidate));
 
   constexpr size_t starcount = noexport::count_star_segments(ContentType.str());
   if constexpr (starcount == 2) {

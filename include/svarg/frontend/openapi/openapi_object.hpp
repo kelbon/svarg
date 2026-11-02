@@ -1,5 +1,6 @@
 #pragma once
 
+#include "svarg/utils/svarg_assert.hpp"
 #include "svarg/frontend/parameter_location.hpp"
 #include "svarg/utils/all.hpp"
 #include "svarg/frontend/openapi/reference.hpp"
@@ -118,7 +119,7 @@ struct schema_object {
   SVARG_FRONTEND_TYPE;
 
   static error_code parse_if_not_object(const boost::json::value& j, schema_object& out) {
-    assert(!j.is_object());
+    SVARG_ASSERT(!j.is_object());
     auto* b = j.if_bool();
     if (!b)
       return parse_error("`{}` is not a valid schema object, not even boolean...", boost::json::serialize(j));

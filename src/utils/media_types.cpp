@@ -1,3 +1,4 @@
+#include "svarg/utils/svarg_assert.hpp"
 #include "svarg/utils/media_types.hpp"
 
 namespace svarg::noexport {
@@ -17,7 +18,7 @@ static std::pair<std::string_view, std::string_view> parse_parameter(std::string
 }
 
 static bool has_case_insensitive_value(std::string_view s) noexcept {
-  assert(is_lowered(s));
+  SVARG_ASSERT(is_lowered(s));
   // теоретически это зависит от параметра и его семантикИ, но нигде нет списка ни параметров ни их семантики,
   // поэтому эта еботека сводится к обрабатыванию только charset
   return s == "charset";
@@ -63,7 +64,7 @@ static void quoted_into(std::string_view value, std::string& out) {
 // quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE
 // Возвращает участок вместе с кавычками, сдвигая `in` за его пределы.
 static std::string_view eat_quoted_string(std::string_view& in) {
-  assert(in.starts_with('"'));
+  SVARG_ASSERT(in.starts_with('"'));
   size_t pos = 1;
   for (; pos < in.size(); ++pos) {
     if (in[pos] == '\\') {
@@ -97,7 +98,7 @@ static std::string unquote_value(std::string_view quoted) {
 namespace svarg {
 
 std::strong_ordering compare_media_types(std::string_view a, std::string_view b) {
-  assert(a == monomorph_media_type(a) && b == monomorph_media_type(b));
+  SVARG_ASSERT(a == monomorph_media_type(a) && b == monomorph_media_type(b));
 
   // игнорируем параметры
   std::string_view name_value_a = a.substr(0, a.find(';'));
@@ -173,9 +174,9 @@ std::string monomorph_media_type(std::string_view input) {
 }
 
 bool match_content_type(std::string_view content_type, std::string_view candidate) {
-  assert(monomorph_media_type(content_type) == content_type);
-  assert(without_media_type_parameters(content_type) == content_type);
-  assert(!is_wildcard_content_type(candidate));
+  SVARG_ASSERT(monomorph_media_type(content_type) == content_type);
+  SVARG_ASSERT(without_media_type_parameters(content_type) == content_type);
+  SVARG_ASSERT(!is_wildcard_content_type(candidate));
   auto ends_or_params = [&c = candidate, &t = content_type] {
     // проверка, что кандидат оканчивается сразу после content_type (либо идут параметры)
     // лямбдой отложено после && чтобы не всегда проверять
@@ -187,7 +188,7 @@ bool match_content_type(std::string_view content_type, std::string_view candidat
       // */*
       return true;
     case 1:
-      assert(content_type.ends_with("/*"));  // ренжи всегда заканчиваются только так
+      SVARG_ASSERT(content_type.ends_with("/*"));  // ренжи всегда заканчиваются только так
       content_type.remove_suffix(2);
       return starts_with_ci_prefix_lowered(candidate, content_type);
     case 0:

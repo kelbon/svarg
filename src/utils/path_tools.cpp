@@ -1,3 +1,4 @@
+#include "svarg/utils/svarg_assert.hpp"
 #include "svarg/utils/path_tools.hpp"
 
 #include <regex>
@@ -115,7 +116,7 @@ static std::string make_regex_from_template_path(std::string_view pattern) {
 // сводит задачу к более специализированному регексу, где каждый {param} это *
 static std::strong_ordering compare_template_pathes_by_specialization(std::string_view a,
                                                                       std::string_view b) {
-  assert(is_template_path(a) && is_template_path(b));
+  SVARG_ASSERT(is_template_path(a) && is_template_path(b));
   const std::regex ra(make_regex_from_template_path(a));
   const std::regex rb(make_regex_from_template_path(b));
   // подставляем первый во второй
@@ -136,7 +137,7 @@ std::strong_ordering compare_paths_specialized(std::string_view l, std::string_v
     return noexport::compare_template_pathes_by_specialization(l, r);
   if (tl)
     return std::strong_ordering::less;
-  assert(tr);
+  SVARG_ASSERT(tr);
   return std::strong_ordering::greater;
 }
 

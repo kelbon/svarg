@@ -4,6 +4,7 @@
 
 #include "svarg/frontend/openapi/openapi.hpp"
 #include "svarg/utils/parse_url.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 #include <hidi/h2client.hpp>
 #include <hidi/asio/io_impl.hpp>
@@ -68,7 +69,7 @@ std::string do_get_request_to(std::string_view url) {
     client->ioctx().poll();
   if (err)
     throw parse_error("cannot load url(`{}`), err: {}", url, *err);
-  assert(body);
+  SVARG_ASSERT(body);
   return std::move(*body);
 }
 
@@ -97,7 +98,7 @@ static load_raw_ref_return load_raw_refered_object(std::string_view url, fs::pat
   curfile = fixup_path(std::move(curfile));
   // вроде если не обрабатывать путь может получится слишком длинным и в итоге
   // сломается всё. А если обрабатывать - https:// -> https:/ может выйти боком
-  assert(!url.contains('#'));
+  SVARG_ASSERT(!url.contains('#'));
   // TODO здесь путь обрабывается и https:// может превратиться в https:/
 
   // абсолютные ссылки в сеть
@@ -191,7 +192,7 @@ static void include_raw_references(boost::json::value& v, fs::path curfile, size
   for (auto& [ref, parent, value] : refs) {
     auto [replace, replace_path] = load_raw_refered_object(value, curfile, options, cache);
     include_raw_references(replace, replace_path, depth - 1, options, cache);
-    assert(ref && parent);
+    SVARG_ASSERT(ref && parent);
     if (!replace.is_object())
       *ref = std::move(replace);
     else {

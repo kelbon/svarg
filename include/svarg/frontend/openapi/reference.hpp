@@ -6,6 +6,7 @@
 #include "svarg/common_types.hpp"
 #include "svarg/to_json_value.hpp"
 #include "svarg/utils/parse_ref.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 #include "svarg/utils/parse_frontend_or_ir_type.hpp"
 
@@ -136,9 +137,9 @@ struct to_json_value<reference_object> {
     if (r.summary)
       obj["summary"] = *r.summary;
     for (auto& [key, value] : r._keyfield_override_fields) {
-      assert(key != "$ref");
-      assert(key != "description");
-      assert(key != "summary");
+      SVARG_ASSERT(key != "$ref");
+      SVARG_ASSERT(key != "description");
+      SVARG_ASSERT(key != "summary");
       obj[key] = value.value;
     }
     return obj;

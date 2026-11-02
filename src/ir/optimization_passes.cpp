@@ -1,3 +1,4 @@
+#include "svarg/utils/svarg_assert.hpp"
 #include "svarg/ir/optimization_passes.hpp"
 #include "svarg/ir/ir_visitor.hpp"
 #include "svarg/utils/algo.hpp"
@@ -50,7 +51,7 @@ ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
     if (!count)
       break;
   }
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return ir;
 }
 
@@ -80,7 +81,7 @@ pass_result pass_rm_trivial_schemas(ir_object ir, const ir_options& options) {
   }
   if (ir.schemas->empty())
     ir.schemas.reset();
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return {std::move(ir), count};
 }
 
@@ -127,7 +128,7 @@ size_t do_pass_rm_unused_schemas(ir_object& ir, const ir_options& options) {
   }
   if (ir.schemas->empty())
     ir.schemas.reset();
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return count;
 }
 
@@ -149,7 +150,7 @@ struct access_schema {
   const schemas_t& schemas;
 
   const schema& operator()(const schema_ref& r) {
-    assert(!r.is_fundamental());
+    SVARG_ASSERT(!r.is_fundamental());
     return *schemas.find(r);
   }
 };
@@ -211,7 +212,7 @@ static bool inline_into(T& to, access_schema get, schema* add_requirements) {
       if (t.required)
         add_requirements->add_requirements(*t.required);
     } else
-      assert(!t.has_requirements());
+      SVARG_ASSERT(!t.has_requirements());
     append_range(inlined_schemas, std::get<T>(t.type.data).schemas);
   }
   std::erase_if(to.schemas, condition);
@@ -305,7 +306,7 @@ pass_result pass_combinators_flatten(ir_object ir, const ir_options& options) {
       std::optional replace = flatten_combinator(*it, *ir.schemas, changes, options);
       if (replace) {
         ++changes;
-        assert(!replace->refers_to(*it));
+        SVARG_ASSERT(!replace->refers_to(*it));
         auto vtor = [&](schema_ref& r) {
           if (r.refers_to(*it))
             r = *replace;
@@ -323,7 +324,7 @@ pass_result pass_combinators_flatten(ir_object ir, const ir_options& options) {
   }
   if (ir.schemas->empty())
     ir.schemas.reset();
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return {std::move(ir), count};
 }
 
@@ -509,7 +510,7 @@ pass_result pass_rm_useless_requirements(ir_object ir, const ir_options& options
     }
     count += inline_single_requirement(s, get);
   }
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return {std::move(ir), count};
 }
 
@@ -557,7 +558,7 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
     }
     ++count;
   }
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return {std::move(ir), count};
 }
 
@@ -572,7 +573,7 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
     return r.is_fundamental() || get(r).type.is_fundamental();
   };
   auto get_fundamental = [&](const schema_ref& r) -> fundamental_e {
-    assert(is_fundamental_schema(r));
+    SVARG_ASSERT(is_fundamental_schema(r));
     if (r.is_fundamental())
       return *r.if_fundamental();
     return *get(r).type.if_fundamental();
@@ -584,7 +585,7 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
     return !r.is_fundamental() && get(r).type.is_object();  //
   };
   auto get_object = [&](const schema_ref& r) -> const object_schema& {
-    assert(is_object_schema(r));
+    SVARG_ASSERT(is_object_schema(r));
     return *get(r).type.if_object();
   };
   auto replace_with_never = [&](schema& s, std::string_view err) {
@@ -652,7 +653,7 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
       s.type.data = std::move(obj);
     }
   }
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return {std::move(ir), count};
 }
 
@@ -722,7 +723,7 @@ pass_result pass_merge_equal_schemas(ir_object ir, const ir_options& options) {
       reqs = std::move(unique);
     }
   }
-  assert(validate_ir_object(ir));
+  SVARG_ASSERT(validate_ir_object(ir));
   return {std::move(ir), count};
 }
 

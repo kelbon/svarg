@@ -12,6 +12,7 @@
 #include "svarg/utils/json_pretty.hpp"
 #include "svarg/utils/yamljson.hpp"
 #include "svarg/utils/indexes.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -236,7 +237,7 @@ struct to_json_value<T> {
     };
     if constexpr (allows_meta_fields<std::decay_t<T>>) {
       for (auto& [key, value] : in.SVARG_META_KEYFIELD) {
-        assert(is_meta_key(std::string_view(key)));
+        SVARG_ASSERT(is_meta_key(std::string_view(key)));
         out[key] = value.value;
       }
     }

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include "svarg/utils/combined_hash.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -70,7 +71,7 @@ constexpr bool starts_with_ci_prefix_lowered(std::string_view str, std::string_v
   for (size_t i = 0; i < prefix.size(); ++i) {
     char a = str[i];
     char b = prefix[i];
-    assert(b == to_lower_ascii(b));
+    SVARG_ASSERT(b == to_lower_ascii(b));
     if (b != to_lower_ascii(a))
       return false;
   }

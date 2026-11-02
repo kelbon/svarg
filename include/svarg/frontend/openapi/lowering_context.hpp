@@ -10,6 +10,7 @@
 #include "svarg/utils/json_pointer.hpp"
 #include "svarg/utils/strpair.hpp"
 #include "svarg/utils/forward_like.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -69,7 +70,7 @@ struct lowering_context {
     {
       if (reffile.is_absolute())
         return fs::relative(reffile, specs_dir);
-      assert(fs::exists(specs_dir / reffile));
+      SVARG_ASSERT(fs::exists(specs_dir / reffile));
       return reffile;
     }
     if (filefromref.is_absolute())
@@ -159,7 +160,7 @@ struct lowering_context {
   const boost::json::value& load_as_json(const fs::path& p) {
     // spec_dir != cwd
     // не включен ассёрт, так как файловую систему могут поменять
-    // assert(fs::is_directory(specs_dir));
+    // SVARG_ASSERT(fs::is_directory(specs_dir));
     return jcache.load(specs_dir / p);
   }
 

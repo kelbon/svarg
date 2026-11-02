@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <string>
-#include <cassert>
 #include <vector>
 #include <span>
 
@@ -11,6 +10,7 @@
 #include "svarg/utils/path_tools.hpp"
 #include "svarg/to_json_value.hpp"
 #include "svarg/from_json_value.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -63,7 +63,7 @@ struct json_pointer {
   }
 
   void rm_last_segment() {
-    assert(!prevszs.empty());
+    SVARG_ASSERT(!prevszs.empty());
     data.resize(prevszs.back());
     prevszs.pop_back();
   }
@@ -106,10 +106,10 @@ struct json_pointer {
     }
 
     reference operator*() const noexcept {
-      assert(!prevszs_.empty() && "end iterator dereference");
+      SVARG_ASSERT(!prevszs_.empty() && "end iterator dereference");
       if (prevszs_.size() == 1)
         return str.substr(prevszs_[0] + 1 /*skip `/` */);
-      assert(prevszs_[1] > prevszs_[0]);
+      SVARG_ASSERT(prevszs_[1] > prevszs_[0]);
       size_t seglen = prevszs_[1] - prevszs_[0];
       return str.substr(prevszs_[0] + 1 /*skip `/` */, seglen - 1);
     }
@@ -242,7 +242,7 @@ struct json_pointer {
  private:
   // precondition: str это только один сегмент (например "id", а не "id/name")
   void add_one_scope(std::string_view str) {
-    assert(!str.empty());
+    SVARG_ASSERT(!str.empty());
     prevszs.push_back(data.size());
     data.push_back('/');
     // TODO лучше с экранированным ренжом, а не созданием строки
@@ -252,7 +252,7 @@ struct json_pointer {
       data += jp_escape_segment(str);
   }
   void add_one_scope(std::string_view str, escaped_t) {
-    assert(!str.empty());
+    SVARG_ASSERT(!str.empty());
     prevszs.push_back(data.size());
     data.push_back('/');
     data += str;

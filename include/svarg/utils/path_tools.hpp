@@ -8,6 +8,7 @@
 
 #include "svarg/common_types.hpp"
 #include "svarg/utils/media_types.hpp"
+#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -31,7 +32,7 @@ inline constexpr bool is_cookie_octet(char c) noexcept {
 constexpr std::string_view cut_path_segment(std::string_view& path) noexcept {
   if (path.empty()) [[unlikely]]
     return path;
-  assert(path.starts_with('/'));
+  SVARG_ASSERT(path.starts_with('/'));
   std::string_view segment;
   // находим два '/' и отдаём то что оказалось между ними
   auto pos = path.find('/', 1);
@@ -62,7 +63,7 @@ template <typename F>
 void visit_path_segments(std::string_view path, F&& callback) {
   if (path.empty())
     return;
-  assert(path.starts_with('/'));
+  SVARG_ASSERT(path.starts_with('/'));
   while (!path.empty())
     callback(cut_path_segment(path));
 }
@@ -260,7 +261,7 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
 
 // TODO test
 [[nodiscard]] constexpr size_t count_in_str(std::string_view str, std::string_view needle) {
-  assert(!needle.empty());
+  SVARG_ASSERT(!needle.empty());
   size_t count = 0;
   do {
     auto pos = str.find(needle);
@@ -284,8 +285,8 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
     constexpr void pattern_end() const {
     }
     constexpr void param(std::string_view name) {
-      assert(!failed);
-      assert(!name.empty());
+      SVARG_ASSERT(!failed);
+      SVARG_ASSERT(!name.empty());
       failed = count_in_str(p, '{' + std::string(name) + '}') != 1;
     }
     constexpr void param(std::string_view name, std::string_view sep) {
@@ -326,8 +327,8 @@ constexpr bool match_path_pattern(std::string_view path_pattern, std::string_vie
     }
     // последний параметр - остаток пути
     constexpr void param(std::string_view name) {
-      assert(matches);
-      assert(!name.empty());
+      SVARG_ASSERT(matches);
+      SVARG_ASSERT(!name.empty());
       p = {};
     }
     constexpr void param(std::string_view name, std::string_view sep) {
