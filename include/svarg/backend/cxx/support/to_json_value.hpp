@@ -111,6 +111,8 @@ boost::json::value aggregate_to_json(const A& v) {
     constexpr std::string_view field_name = cxx_support::get_field_name<I, A>();
     if (cxx_support::is_field_present<I>(v))
       obj[field_name] = to_json(field);
+    else if constexpr (cxx_support::get_field_info<I, A>().null_when_absent)
+      obj[field_name] = nullptr;
   };
   APPLY_INDEXES(fields_count<A>()) {
     (serialize_one(std::index_sequence<Is>{}), ...);

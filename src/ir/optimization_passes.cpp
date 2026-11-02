@@ -663,11 +663,23 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
       ++count;
     } else if (std::ranges::all_of(allof->schemas, is_object_schema)) {
       object_schema obj;
+      boost::json::array null_when_absent;
       for (auto& var : allof->schemas) {
         obj.combine(get_object(var));
         // требования складываются
         if (get(var).has_requirements())
           s.add_requirements(*get(var).required);
+        // как и поля
+        if (const auto& meta = get(var).meta)
+          if (auto it = meta->find(x_null_when_absent); it != meta->end())
+            for (const boost::json::value& name : it->second.value.as_array())
+              if (!std::ranges::contains(null_when_absent, name))
+                null_when_absent.push_back(name);
+      }
+      if (!null_when_absent.empty()) {
+        if (!s.meta)
+          s.meta.emplace();
+        (*s.meta)[std::string(x_null_when_absent)] = Any(boost::json::value(std::move(null_when_absent)));
       }
       ++count;
       // заменяем allof на один объект
@@ -695,7 +707,8 @@ struct encoded_bodies_collector : ir_visitor_base {
   using ir_visitor_base::operator();
 
   void operator()(const body& b) {
-    if ((b.membersEncoding && !b.membersEncoding->empty()) || (b.membersHeaders && !b.membersHeaders->empty()))
+    if ((b.membersEncoding && !b.membersEncoding->empty()) ||
+        (b.membersHeaders && !b.membersHeaders->empty()))
       schemas.insert(b.schema);
   }
 };

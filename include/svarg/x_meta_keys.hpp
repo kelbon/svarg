@@ -26,6 +26,11 @@ constexpr inline std::string_view x_name_hint = "x-name-hint";
 // передаётся из поля format схемы в meta IR схемы. Значение строка
 constexpr inline std::string_view x_format_hint = "x-format-hint";
 
+// meta объекта: имена свойств, которые в спеке required, но nullable. svarg считает null отсутствием поля,
+// поэтому такое поле необязательное, но отсутствующее сериализуется как null - так этого требует спека.
+// Значение массив строк
+constexpr inline std::string_view x_null_when_absent = "x-null-when-absent";
+
 // meta параметра операции, только если указаны явно: как массив/объект записывается в строку (OpenAPI
 // style и explode). Значения строка и bool
 constexpr inline std::string_view x_param_style = "x-style";

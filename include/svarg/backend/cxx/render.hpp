@@ -39,6 +39,7 @@ struct render_options {
 struct field_render_info {
   std::optional<std::string> encoding;  // медиа тип значения
   std::optional<bool> explode;          // массивы/объекты в параметрах, если указано явно
+  bool null_when_absent = false;        // x-null-when-absent объекта
 };
 
 struct schema_ref_result {

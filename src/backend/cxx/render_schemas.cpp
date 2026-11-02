@@ -461,6 +461,8 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
       r += std::format(", .encoding = {}", render_string(*info->encoding));
     if (info && info->explode)
       r += std::format(", .explode = {}", *info->explode);
+    if (info && info->null_when_absent)
+      r += ", .null_when_absent = true";
     return r + "},\n";
   };
   result += std::format("static constexpr std::array<::svarg::cxx_support::field_info, {}> svarg_fields = {{{{\n",
@@ -638,6 +640,10 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         if (body && body->membersEncoding)
           for (auto& [prop, ct] : *body->membersEncoding)
             extra[prop].encoding = ct.str();
+        if (s.meta)
+          if (auto it = s.meta->find(x_null_when_absent); it != s.meta->end())
+            for (const boost::json::value& name : it->second.value.as_array())
+              extra[std::string(name.as_string())].null_when_absent = true;
         std::optional additional_properties = a.additional_properties;
         // объект только с any полями лишь требует их наличия (см. render_options)
         auto describes = [](const ir::object_field_info& f) {

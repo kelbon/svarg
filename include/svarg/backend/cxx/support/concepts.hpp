@@ -223,6 +223,8 @@ struct field_info {
   // параметр-массив/объект: каждый элемент отдельно (ids=1&ids=2). nullopt - по умолчанию для места
   // параметра (см. param_style.hpp)
   std::optional<bool> explode = std::nullopt;
+  // необязательное поле, отсутствие которого сериализуется в JSON как null (в спеке required, но nullable)
+  bool null_when_absent = false;
 };
 
 template <typename T>

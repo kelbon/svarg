@@ -196,8 +196,9 @@ ir::array_schema lowering_context::make_array_type(const schema_object& schema, 
 }
 
 ir::object_schema lowering_context::make_object_type(const schema_object& schema, const fs::path& file,
-                                                     json_pointer jp) {
+                                                     json_pointer jp, ir::schema& owner) {
   ir::object_schema ot;
+  boost::json::array null_when_absent;
   if (schema.properties) {
     for (auto& [prop_name, prop_sor] : *schema.properties) {
       ir::object_field_info fi;
@@ -207,12 +208,16 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
       if (field_schema.default_ && !field_schema.nullable)
         fi.default_value = field_schema.default_;
       bool listed_required = schema.required && std::ranges::contains(*schema.required, prop_name);
-      if (field_schema.nullable || field_schema.default_) {
+      if (field_schema.nullable) {
+        // null - это отсутствие поля, поэтому оно необязательное, но спека требует его: отсутствующее
+        // сериализуется как null (см. x_null_when_absent)
         fi.required = false;
-        if (listed_required) {
-          emit_warn(file, jp, "property `{}` marked as required, but {}. `required` ignored", prop_name,
-                    field_schema.nullable ? "has nullable type" : "has default");
-        }
+        if (listed_required)
+          null_when_absent.emplace_back(prop_name);
+      } else if (field_schema.default_) {
+        fi.required = false;
+        if (listed_required)
+          emit_warn(file, jp, "property `{}` marked as required, but has default. `required` ignored", prop_name);
       } else if (schema.required) {
         if (field_schema.is_write_only() || field_schema.is_read_only()) {
           // readOnly/writeOnly означает, что по сути есть два типа - для запроса и ответа и required зависит
@@ -245,6 +250,11 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
   if (schema.additionalProperties) {
     ot.additional_properties =
         resolve_schema(*schema.additionalProperties, file, jp / "additionalProperties", *this).ir_schema;
+  }
+  if (!null_when_absent.empty()) {
+    if (!owner.meta)
+      owner.meta.emplace();
+    (*owner.meta)[std::string(x_null_when_absent)] = Any(boost::json::value(std::move(null_when_absent)));
   }
   return ot;
 }
@@ -488,7 +498,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       const auto& t = rtypes[0];
 
       if (t == "object") {
-        res.type.data = make_object_type(schema, file, jp);
+        res.type.data = make_object_type(schema, file, jp, res);
       } else if (t == "array") {
         res.type.data = make_array_type(schema, file, jp);
       } else {
@@ -510,7 +520,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
           part.jsonptr = res.jsonptr / std::format("@{}", t);
           part.name = std::nullopt;
           if (t == "object")
-            part.type.data = make_object_type(schema, file, jp);
+            part.type.data = make_object_type(schema, file, jp, part);
           else
             part.type.data = make_array_type(schema, file, jp);
           ir::schema_ref r = part.ref();

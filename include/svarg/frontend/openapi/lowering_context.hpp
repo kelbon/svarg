@@ -104,7 +104,9 @@ struct lowering_context {
 
   // file - относительно specs dir, jp должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
-  ir::object_schema make_object_type(const schema_object& schema, const fs::path& file, json_pointer jp);
+  // `owner` - схема этого объекта, в её meta записывается x_null_when_absent
+  ir::object_schema make_object_type(const schema_object& schema, const fs::path& file, json_pointer jp,
+                                     ir::schema& owner);
   ir::array_schema make_array_type(const schema_object& schema, const fs::path& file, json_pointer jp);
 
   template <typename... Args>

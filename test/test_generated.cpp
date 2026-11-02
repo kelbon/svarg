@@ -220,6 +220,14 @@ TEST("json media type by specialization") {
   REQUIRE(!from_response(http, back).failed() && back.body.a == "x");
 }
 
+TEST("required nullable field") {
+  api::components::schemas::Nulls n;
+  REQUIRE(svarg::to_json(n) == boost::json::parse(R"({"a": null})"));  // b не required
+  n.a = "x";
+  REQUIRE(svarg::to_json(n) == boost::json::parse(R"({"a": "x"})"));
+  REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": null})"), n).failed() && !n.a);
+}
+
 TEST("required recursive field") {
   api::components::schemas::Tree t;
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"children": [{"children": []}]})"), t).failed());
