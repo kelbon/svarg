@@ -81,7 +81,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME METEL
   GIT_REPOSITORY https://github.com/kelbon/metel
-  GIT_TAG v0.0.9
+  GIT_TAG v0.0.10
 )
 
 if (svarg_ENABLE_TESTING)

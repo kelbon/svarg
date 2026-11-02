@@ -63,18 +63,6 @@ constexpr std::strong_ordering compare_ci(std::string_view a, std::string_view b
   return a.size() <=> b.size();
 }
 
-constexpr bool starts_with_ci(std::string_view str, std::string_view prefix) noexcept {
-  if (prefix.size() > str.size())
-    return false;
-  for (size_t i = 0; i < prefix.size(); ++i) {
-    char a = str[i];
-    char b = prefix[i];
-    if (to_lower_ascii(b) != to_lower_ascii(a))
-      return false;
-  }
-  return true;
-}
-
 // precondition: prefix уже lowered
 constexpr bool starts_with_ci_prefix_lowered(std::string_view str, std::string_view prefix) noexcept {
   if (prefix.size() > str.size())
@@ -90,7 +78,11 @@ constexpr bool starts_with_ci_prefix_lowered(std::string_view str, std::string_v
 }
 
 constexpr bool is_equal_ci(std::string_view a, std::string_view b) {
-  return compare_ci(a, b) == std::strong_ordering::equal;
+  return a.size() == b.size() && compare_ci(a, b) == std::strong_ordering::equal;
+}
+
+[[nodiscard]] constexpr bool starts_with_ci(std::string_view str, std::string_view prefix) noexcept {
+  return prefix.size() <= str.size() && is_equal_ci(str.substr(0, prefix.size()), prefix);
 }
 
 struct str_less_ci {

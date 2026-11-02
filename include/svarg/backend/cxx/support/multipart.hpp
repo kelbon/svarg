@@ -27,7 +27,8 @@ namespace noexport {
 
 [[nodiscard]] inline std::string make_multipart_boundary() {
   // RFC 2046: до 70 символов из bchars, не должен встречаться в данных. 24 случайных символа
-  static constexpr std::string_view alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  static constexpr std::string_view alphabet =
+      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   thread_local std::mt19937_64 gen{std::random_device{}()};
   std::string b = "svarg-";
   std::uniform_int_distribution<size_t> dist(0, alphabet.size() - 1);

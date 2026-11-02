@@ -262,6 +262,7 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
     std::string cookie_header;
     FOR_EACH_FIELD_INDEX_OF(cookies_t<Op>) {
       if (is_field_present<I>(op.cookies)) {
+        // clang-format off
         serialize_param_pairs<param_location_e::cookie, I>(
             op.cookies, [&](std::string_view k, std::string_view v) {
               if (!cookie_header.empty()) {
@@ -273,6 +274,7 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
               cookie_header += '=';
               cookie_header += v;
             });
+        // clang-format on
       }
     };
     if (!cookie_header.empty())
@@ -351,7 +353,8 @@ template <an_operation Op>
     }
     if constexpr (has_cookie_params<Op>) {
       if (name == cookie_hdr) {
-        ec = visit_cookies(value, [&](std::string_view k, std::string_view v) { return cookies.on_pair(k, v); });
+        ec = visit_cookies(value,
+                           [&](std::string_view k, std::string_view v) { return cookies.on_pair(k, v); });
         if (ec)
           return ec;
         continue;
