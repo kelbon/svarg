@@ -5,6 +5,8 @@
 #include <clinok/cli_interface.hpp>
 
 #include <svarg/frontend/openapi/generate_ir.hpp>
+#include <svarg/from_json_value.hpp>
+#include <svarg/utils/yamljson.hpp>
 #include <print>
 
 enum struct format_e {
@@ -94,7 +96,21 @@ int main(int argc, char* argv[]) try {
     inputs.push_back(fs::relative(std::move(p), cliopts.specs_dir));
   }
 
-  ir::ir_object ir = openapi2ir(cliopts.specs_dir, std::move(inputs), options);
+  ir::ir_object ir;
+  if (cliopts.input_format == cli::input_format_e::ir) {
+    if (inputs.size() != 1) {
+      std::println("expected exactly one IR file");
+      return -1;
+    }
+    pass_as_json(cliopts.specs_dir / inputs.front(),
+                 [&](std::string_view json) { ir = from_json<ir::ir_object>(boost::json::parse(json)); });
+    // IR мог быть написан руками
+    ir.validate();
+    if (cliopts.optimize)
+      ir = ir::optimization_pipeline(std::move(ir), options.ir_opts);
+  } else {
+    ir = openapi2ir(cliopts.specs_dir, std::move(inputs), options);
+  }
   if (!cliopts.passes.empty()) {
     for (auto v : cliopts.passes | std::views::split(' ')) {
       if (v.empty())

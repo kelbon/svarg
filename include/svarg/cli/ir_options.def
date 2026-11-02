@@ -11,6 +11,12 @@ DECLARE_STRING_ENUM(allow_remove_e, noone, only_inline_schemas, any)
 OPTION(allow_remove_e, allow_remove, "which schemas optimization is allowed to remove", default("only_inline_schemas"))
 RENAME(allow_remove, "allow-remove")
 
+// openapi - спеки, ir - один файл с IR (вывод svarg-ir, json или yaml): к нему применяются только --passes
+// (или -O2), без того, что фронтенд делает всегда
+DECLARE_STRING_ENUM(input_format_e, openapi, ir)
+OPTION(input_format_e, input_format, "format of input files: openapi specs or one IR file", default("openapi"))
+RENAME(input_format, "input-format")
+
 // если имя не указано и дефолтное "a" уже занято, берётся другое
 STRING(out, "name of output file", default(""))
 ALIAS(o, out)
