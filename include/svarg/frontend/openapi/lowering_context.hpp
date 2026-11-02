@@ -136,8 +136,10 @@ struct lowering_context {
   std::set<ir::body> request_body_lowering(request_body_object, fs::path file, json_pointer jp);
   ir::response_desc response_lowering(std::optional<std::string_view> statusstr, const response_object& rsp,
                                       fs::path file, json_pointer);
-  ir::discriminator_desc discriminator_lowering(const discriminator_object& d,
-                                                const arrayof<ir::schema_ref>& schemas);
+  // nullopt - дискриминатор не используется (см. реализацию)
+  std::optional<ir::discriminator_desc> discriminator_lowering(const discriminator_object& d,
+                                                               const arrayof<ir::schema_ref>& schemas,
+                                                               const fs::path& file, const json_pointer& jp);
   // `jp` указывает на сам header object (или ссылку на него)
   ir::header header_lowering(std::string_view name, const reference_or<header_object>& hdr, fs::path file,
                              json_pointer jp);

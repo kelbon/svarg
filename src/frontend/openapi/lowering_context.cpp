@@ -244,8 +244,16 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
   return ot;
 }
 
-ir::discriminator_desc lowering_context::discriminator_lowering(const discriminator_object& d,
-                                                                const arrayof<ir::schema_ref>& schemas) {
+std::optional<ir::discriminator_desc> lowering_context::discriminator_lowering(
+    const discriminator_object& d, const arrayof<ir::schema_ref>& schemas, const fs::path& file,
+    const json_pointer& jp) {
+  // OpenAPI: "inline schemas will not be considered" - значение дискриминатора сопоставляется только с
+  // именованными схемами. Значение, которое должна принять инлайн схема, тогда отвергалось бы, поэтому
+  // дискриминатор не используется, варианты различаются как без него
+  if (std::ranges::any_of(schemas, [](const ir::schema_ref& s) { return !s.name; })) {
+    emit_warn(file, jp, "discriminator `{}` ignored: anyOf/oneOf contains inline schemas", d.propertyName);
+    return std::nullopt;
+  }
   // дискриминатор оставляется даже если есть тривиальные схемы
   // бекенд может это считатЬ, например, дискриминаторов только для объектов в oneof/anyof
   // а для фундаментальных типов определять содержимое без помощи дискриминатора
@@ -260,8 +268,6 @@ ir::discriminator_desc lowering_context::discriminator_lowering(const discrimina
     return std::string_view(it->second);
   };
   for (auto& s : schemas) {
-    if (!s.name)
-      throw semantic_error("schema in anyOf/oneOf must have name");
     ird.mapping[std::string(from_mapping_or_just_name(*s.name))] = s;
   }
   return ird;
@@ -531,14 +537,14 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     ir::anyof_schema t;
     resolve_array("anyOf", *schema.anyOf, t.schemas);
     if (schema.discriminator)
-      t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas);
+      t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas, file, jp);
     collect_result("anyOf", std::move(t));
   }
   if (schema.oneOf) {
     ir::oneof_schema t;
     resolve_array("oneOf", *schema.oneOf, t.schemas);
     if (schema.discriminator)
-      t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas);
+      t.discriminator = discriminator_lowering(*schema.discriminator, t.schemas, file, jp);
     collect_result("oneOf", std::move(t));
   }
   if (schema.not_) {

@@ -101,6 +101,36 @@ paths:
   REQUIRE(o.webhooks && o.webhooks->size() == 2);
 }
 
+TEST("discriminator with inline schemas is ignored") {
+  // как POST /repos/{owner}/{repo}/check-runs в спеке GitHub
+  svarg::write_into("inline_discriminator.yaml", R"(
+openapi: 3.0.3
+info: {title: d, version: "1"}
+paths: {}
+components:
+  schemas:
+    Run:
+      type: object
+      discriminator: {propertyName: status}
+      oneOf:
+        - properties: {status: {enum: [completed]}}
+          required: [status, conclusion]
+        - properties: {status: {enum: [queued, in_progress]}}
+)");
+  svarg::openapi_options opts;
+  opts.ir_opts.enable_optimizations = false;
+  svarg::ir::ir_object o =
+      svarg::openapi2ir(std::filesystem::current_path(), {"./inline_discriminator.yaml"}, opts);
+  bool found = false;
+  for (const svarg::ir::schema& s : *o.schemas) {
+    if (const auto* oneof = s.type.if_oneof()) {
+      found = true;
+      REQUIRE(!oneof->discriminator);
+    }
+  }
+  REQUIRE(found);
+}
+
 TEST("parse_spec") {
   svarg::openapi_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);
