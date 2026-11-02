@@ -1318,7 +1318,9 @@ ir::ir_object lowering_context::generate_specs(fs::path specsdir, std::vector<fs
   // парсинг спек
 
   for (fs::path& s : specs2generate) {
-    s = find_existing_file(std::move(s), specs_dir);
+    // ищется относительно самой specs_dir: `where` - файл, рядом с которым ищут, а у specs_dir / "" родитель -
+    // specs_dir (у specs_dir - её родитель, и одноимённый файл уровнем выше подменял бы спеку)
+    s = find_existing_file(std::move(s), specs_dir / "");
     if (!specs.contains(s))
       specs[s] = parse_spec(jcache.load(specs_dir / s), opts);
   }

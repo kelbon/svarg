@@ -168,6 +168,23 @@ components:
   REQUIRE(no_items && no_items->element.is_fundamental(svarg::ir::fundamental_e::any));
 }
 
+TEST("spec is searched in specs dir") {
+  // одноимённый файл уровнем выше specs dir не должен подменять спеку
+  std::filesystem::create_directories("specs_subdir");
+  svarg::write_into("same_name.yaml", "openapi: 3.1.0\ninfo: {title: wrong, version: '1'}\npaths: {}\n");
+  svarg::write_into("specs_subdir/same_name.yaml", R"(
+openapi: 3.1.0
+info: {title: right, version: "1"}
+paths: {}
+components:
+  schemas:
+    S: {type: object}
+)");
+  svarg::ir::ir_object o =
+      svarg::openapi2ir(std::filesystem::current_path() / "specs_subdir", {"same_name.yaml"}, {});
+  REQUIRE(o.schemas && o.schemas->size() == 1);
+}
+
 TEST("parse_spec") {
   svarg::openapi_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);
