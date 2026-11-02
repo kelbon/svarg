@@ -7,6 +7,10 @@ STRING(passes, "list of additional optimization passes separated by whitespace. 
 
 ALIAS(O2, optimize)
 
+DECLARE_STRING_ENUM(allow_remove_e, noone, only_inline_schemas, any)
+OPTION(allow_remove_e, allow_remove, "which schemas optimization is allowed to remove", default("only_inline_schemas"))
+RENAME(allow_remove, "allow-remove")
+
 // если имя не указано и дефолтное "a" уже занято, берётся другое
 STRING(out, "name of output file", default(""))
 ALIAS(o, out)

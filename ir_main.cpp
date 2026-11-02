@@ -32,6 +32,17 @@ int main(int argc, char* argv[]) try {
   openapi_options options;
   options.unsetted_additional_properties = cliopts.unsetted_additional_properties;
   options.ir_opts.enable_optimizations = cliopts.optimize;
+  switch (cliopts.allow_remove) {
+    case cli::allow_remove_e::noone:
+      options.ir_opts.allow_rm_unused = ir::remove_category_e::noone;
+      break;
+    case cli::allow_remove_e::only_inline_schemas:
+      options.ir_opts.allow_rm_unused = ir::remove_category_e::only_inline_schemas;
+      break;
+    case cli::allow_remove_e::any:
+      options.ir_opts.allow_rm_unused = ir::remove_category_e::any;
+      break;
+  }
   std::optional f = ss::string_switch<format_e>(cliopts.out_format)
                         .case_("yaml", format_e::yaml)
                         .case_("json", format_e::json)
