@@ -363,6 +363,7 @@ TEST("json pointers are correct (optimized + rm unused)") {
   ir = ir::pass_rm_trivial_schemas(std::move(ir), opts).ir;
 
   opts.marked_used.insert(ir::schema_ref{
+      .name = "Unused",
       .spec = "api-b",
       .jsonptr = "/components/schemas/Unused"_jp,
   });

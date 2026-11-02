@@ -105,7 +105,7 @@ struct schema_ref {
     return operator<=>(r) == std::strong_ordering::equal;
   }
   std::strong_ordering operator<=>(const schema_ref& r) const noexcept {
-    return std::tie(spec, jsonptr, name) <=> std::tie(r.spec, r.jsonptr, name);
+    return std::tie(spec, jsonptr, name) <=> std::tie(r.spec, r.jsonptr, r.name);
   }
 };
 
