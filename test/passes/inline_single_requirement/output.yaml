@@ -1,0 +1,62 @@
+"schemas":
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/DoubleNot"
+    "name": "DoubleNot"
+    "type":
+      "not":
+        "type":
+          "spec": "spec"
+          "jsonptr": "/components/schemas/DoubleNot/not"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/DoubleNot/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "spec"
+          "jsonptr": "/components/schemas/DoubleNot/not"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/DoubleNot/not"
+    "type":
+      "not":
+        "type":
+          "spec": "@string@"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/DoubleNot/not/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "@string@"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/NotWithPattern"
+    "name": "NotWithPattern"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "spec"
+        "jsonptr": "/components/schemas/NotWithPattern/@not"
+      - "spec": "spec"
+        "jsonptr": "/components/schemas/NotWithPattern/constraints"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/NotWithPattern/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "@string@"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/NotWithPattern/constraints"
+    "type":
+      "constraints":
+        "pattern": "^a"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/Pattern"
+    "name": "Pattern"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "spec"
+        "jsonptr": "/components/schemas/Pattern/constraints"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/Pattern/constraints"
+    "type":
+      "constraints":
+        "pattern": "^a"

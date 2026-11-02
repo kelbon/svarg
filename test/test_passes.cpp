@@ -189,5 +189,13 @@ TEST("rm useless requirements flattens any requirement") {
                   make_pipe(&ir::pass_rm_useless_requirements, &ir::pass_rm_unused_schemas)));
 }
 
+// {not: X} фронтенд делает схемой any с единственным требованием not X, rur заменяет её на not X
+TEST("rm useless requirements inlines single requirement of any") {
+  openapi_options opts;
+  opts.ir_opts.enable_optimizations = false;
+  REQUIRE(test_spec("inline_single_requirement/spec.yaml", "inline_single_requirement/output.yaml", opts,
+                    &ir::pass_rm_useless_requirements));
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;

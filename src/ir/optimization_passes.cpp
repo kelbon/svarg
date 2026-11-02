@@ -437,6 +437,33 @@ static std::optional<size_t> find_weak(const arrayof<schema_ref>& reqs, access_s
   return std::nullopt;
 }
 
+// схема типа `any` с единственным требованием эквивалентна этому требованию. Так фронтенд OpenAPI
+// представляет {not: X}: any + required: [not X], после замены cf может упростить сам not.
+// Не заменяется: на схему ограничений (у неё нет своего типа), на именованную схему (получился бы второй
+// такой же тип) и на enum, тип которого - само требование
+static size_t inline_single_requirement(schema& s, access_schema get) {
+  const fundamental_e* t = s.type.if_fundamental();
+  if (!t || *t != fundamental_e::any || !s.required || s.required->size() != 1)
+    return 0;
+  const schema_ref r = s.required->front();
+  if (std::optional f = r.if_fundamental()) {
+    // any + required: [never] -> never (any как требование убирает find_weak)
+    if (*f != fundamental_e::never)
+      return 0;
+    s.type.data = fundamental_e::never;
+    s.required.reset();
+    return 1;
+  }
+  const schema& inner = get(r);
+  if (inner.name || r.refers_to(s) || inner.type.is_constraints())
+    return 0;
+  if (const enum_schema* e = inner.type.if_enum(); e && e->type.refers_to(inner))
+    return 0;
+  s.type = inner.type;
+  s.required = inner.required;
+  return 1;
+}
+
 pass_result pass_rm_useless_requirements(ir_object ir, const ir_options& options) {
   if (!ir.schemas)
     return {std::move(ir), 0};
@@ -475,6 +502,7 @@ pass_result pass_rm_useless_requirements(ir_object ir, const ir_options& options
       if (s.required->empty())
         s.required.reset();
     }
+    count += inline_single_requirement(s, get);
   }
   assert(validate_ir_object(ir));
   return {std::move(ir), count};

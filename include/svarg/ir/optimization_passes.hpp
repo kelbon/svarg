@@ -28,7 +28,8 @@ struct pass_result {
 [[nodiscard]] pass_result pass_combinators_flatten(ir_object, const ir_options&);
 
 // удаляет требования, которые ничего не добавляют (не удаляет сами схемы требований, если они стали
-// неиспользуемымми)
+// неиспользуемымми), и заменяет схему any с единственным требованием на это требование
+// (any + required: [not X] -> not X)
 [[nodiscard]] pass_result pass_rm_useless_requirements(ir_object, const ir_options&);
 
 // anyOf: [enum строк, string] -> открытый enum строк (enum_schema::open): известные значения, но допустима

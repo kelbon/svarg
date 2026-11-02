@@ -1,0 +1,18 @@
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths: {}
+components:
+  schemas:
+    # any + required: [not<DoubleNot/not>], DoubleNot/not: any + required: [not<string>]
+    DoubleNot:
+      not:
+        not:
+          type: string
+    # ограничения своего типа не имеют - не меняется
+    Pattern:
+      pattern: '^a'
+    # два требования - не меняется
+    NotWithPattern:
+      not:
+        type: string
+      pattern: '^a'
