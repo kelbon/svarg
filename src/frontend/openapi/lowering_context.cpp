@@ -188,6 +188,15 @@ object_and_path<T> resolve_ref_and_ret(reference_or<T> x, fs::path file, json_po
   }
 }
 
+ir::array_schema lowering_context::make_array_type(const schema_object& schema, const fs::path& file,
+                                                   json_pointer jp) {
+  ir::array_schema at;
+  // без items - массив чего угодно
+  at.element = schema.items ? resolve_schema(*schema.items, file, jp / "items", *this).ir_schema
+                            : ir::make_fundamental_ref(ir::fundamental_e::any);
+  return at;
+}
+
 ir::object_schema lowering_context::make_object_type(const schema_object& schema, const fs::path& file,
                                                      json_pointer jp) {
   ir::object_schema ot;
@@ -282,8 +291,8 @@ std::optional<ir::discriminator_desc> lowering_context::discriminator_lowering(
         ird.mapping[value] = schemas[*i];
         mapped[*i] = true;
       } else {
-        emit_warn(file, jp, "discriminator mapping `{}: {}` does not refer to anyOf/oneOf schema, ignored", value,
-                  target);
+        emit_warn(file, jp, "discriminator mapping `{}: {}` does not refer to anyOf/oneOf schema, ignored",
+                  value, target);
       }
     }
   }
@@ -486,11 +495,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       if (t == "object") {
         res.type.data = make_object_type(schema, file, jp);
       } else if (t == "array") {
-        ir::array_schema at;
-        if (!schema.items)
-          throw parse_error("schema with type 'array' must contain 'items'");
-        at.element = resolve_schema(*schema.items, file, jp / "items", *this).ir_schema;
-        res.type.data = std::move(at);
+        res.type.data = make_array_type(schema, file, jp);
       } else {
         // Всё остальное — фундаментальный тип
         ir::fundamental_e fe;
@@ -499,10 +504,26 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
         res.type.data = fe;
       }
     } else {
-      // Несколько схем => anyOf из фундаментальных schema_ref-ов
-      // Например: ["string", "null"] или ["integer", "string"]
+      // Несколько типов => anyOf, например ["integer", "string"] (null уже убран в nullable при разборе).
+      // object и array - отдельные схемы <схема>/@object и <схема>/@array, свойства и items у них общие с
+      // самой схемой
       ir::anyof_schema anyof;
       for (auto& t : rtypes) {
+        if (t == "object" || t == "array") {
+          ir::schema part;
+          part.spec = res.spec;
+          part.jsonptr = res.jsonptr / std::format("@{}", t);
+          part.name = std::nullopt;
+          if (t == "object")
+            part.type.data = make_object_type(schema, file, jp);
+          else
+            part.type.data = make_array_type(schema, file, jp);
+          ir::schema_ref r = part.ref();
+          if (!result_ir.schemas->insert(std::move(part)).second)
+            throw validate_error("schema {}#{} already exists", r.spec, r.jsonptr->escaped());
+          anyof.schemas.push_back(std::move(r));
+          continue;
+        }
         ir::fundamental_e fe;
         if (!efromstr(t, fe))
           throw bad_enum_value<ir::fundamental_e>(t);

@@ -131,6 +131,41 @@ components:
   REQUIRE(found);
 }
 
+TEST("several types with object and array") {
+  // OpenAPI 3.1, как custom-property-value в спеке GitHub; null - это nullable, items может не быть
+  svarg::write_into("several_types.yaml", R"(
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths: {}
+components:
+  schemas:
+    Multi:
+      type: [string, array, object, "null"]
+      properties:
+        a: {type: integer}
+      required: [a]
+    NoItems:
+      type: array
+)");
+  svarg::openapi_options opts;
+  opts.ir_opts.enable_optimizations = false;
+  svarg::ir::ir_object o = svarg::openapi2ir(std::filesystem::current_path(), {"./several_types.yaml"}, opts);
+  auto get = [&](std::string_view ptr) -> const svarg::ir::schema& {
+    for (const svarg::ir::schema& s : *o.schemas)
+      if (s.jsonptr.escaped() == ptr)
+        return s;
+    throw std::runtime_error(std::string(ptr));
+  };
+  const auto* anyof = get("/components/schemas/Multi").type.if_anyof();
+  REQUIRE(anyof && anyof->schemas.size() == 3);
+  const auto* arr = get("/components/schemas/Multi/@array").type.if_array();
+  REQUIRE(arr && arr->element.is_fundamental(svarg::ir::fundamental_e::any));
+  const auto* obj = get("/components/schemas/Multi/@object").type.if_object();
+  REQUIRE(obj && obj->fields.size() == 1 && obj->find_field("a") && obj->find_field("a")->required);
+  const auto* no_items = get("/components/schemas/NoItems").type.if_array();
+  REQUIRE(no_items && no_items->element.is_fundamental(svarg::ir::fundamental_e::any));
+}
+
 TEST("parse_spec") {
   svarg::openapi_options options;
   svarg::openapi_object o1 = svarg::parse_spec_file("./test_specs/TS29510_Nnrf_NFDiscovery.yaml", options);

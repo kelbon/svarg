@@ -105,6 +105,7 @@ struct lowering_context {
   // file - относительно specs dir, jp должен указывать на место где лежит schema
   // если встречает инлайн схемы - складывает их в types
   ir::object_schema make_object_type(const schema_object& schema, const fs::path& file, json_pointer jp);
+  ir::array_schema make_array_type(const schema_object& schema, const fs::path& file, json_pointer jp);
 
   template <typename... Args>
   void emit_warn(const fs::path& where, const json_pointer& jp, std::format_string<Args...> fmt,
