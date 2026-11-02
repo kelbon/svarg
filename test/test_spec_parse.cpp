@@ -13,6 +13,18 @@ TEST("json is an yaml") {
   REQUIRE(boost::json::parse(json) == boost::json::parse(out));
 }
 
+TEST("yaml with document marker") {
+  // так начинается, например, спека GitHub
+  REQUIRE(boost::json::parse(svarg::yaml2json("---\na: 1\n")) == boost::json::parse(R"({"a": 1})"));
+  bool thrown = false;
+  try {
+    (void)svarg::yaml2json("---\na: 1\n---\nb: 2\n");
+  } catch (std::exception&) {
+    thrown = true;
+  }
+  REQUIRE(thrown);
+}
+
 TEST("generate ir from openapi") {
   svarg::ir::ir_object o = svarg::openapi2ir(
       std::filesystem::current_path(),

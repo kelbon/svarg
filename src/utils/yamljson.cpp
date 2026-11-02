@@ -5,6 +5,7 @@
 // не спрашивайте... ryml гениален. ПОРЯДОК ХЕДЕРОВ ВАЖЕН
 #include <ryml_std.hpp>
 
+#include <format>
 #include <fstream>
 #include <strswitch/strswitch.hpp>
 
@@ -34,7 +35,15 @@ void pass_as_json(fs::path path, fn_cref<void(std::string_view) const> fn) {
 
 std::string yaml2json(std::string_view yaml) {
   ryml::Tree tree = ryml::parse_in_arena(ryml::csubstr(yaml.data(), yaml.size()));
-  return ryml::emitrs_json<std::string>(tree);
+  ryml::id_type root = tree.root_id();
+  // файл, начинающийся с `---`, rapidyaml разбирает как поток документов
+  if (tree.is_stream(root)) {
+    if (tree.num_children(root) != 1)
+      throw std::invalid_argument(
+          std::format("expected one YAML document, got {}", size_t(tree.num_children(root))));
+    root = tree.first_child(root);
+  }
+  return ryml::emitrs_json<std::string>(tree, root);
 }
 
 inline void force_block_style(ryml::NodeRef node) {
