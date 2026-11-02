@@ -48,4 +48,9 @@ struct pass_result {
 // также заодно убирает невозможные allof типа allof<int, string>
 [[nodiscard]] pass_result pass_transform_allofs(ir_object, const ir_options&);
 
+// схемы без имени с одинаковым содержимым (тип, требования, meta) заменяются одной (первой в порядке
+// ir.schemas), остальные удаляются. Например, одинаковые инлайн массивы строк с minItems: 1 в разных полях
+// становятся одним типом. Не применяется, если удалять схемы нельзя (remove_category_e::noone)
+[[nodiscard]] pass_result pass_merge_equal_schemas(ir_object, const ir_options&);
+
 }  // namespace svarg::ir

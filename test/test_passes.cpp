@@ -197,5 +197,12 @@ TEST("rm useless requirements inlines single requirement of any") {
                     &ir::pass_rm_useless_requirements));
 }
 
+TEST("merge equal schemas") {
+  openapi_options opts;
+  opts.ir_opts.enable_optimizations = false;
+  REQUIRE(test_spec("merge_equal_schemas/spec.yaml", "merge_equal_schemas/output.yaml", opts,
+                    &ir::pass_merge_equal_schemas));
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;

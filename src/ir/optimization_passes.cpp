@@ -1,6 +1,9 @@
 #include "svarg/ir/optimization_passes.hpp"
 #include "svarg/ir/ir_visitor.hpp"
 #include "svarg/utils/algo.hpp"
+#include "svarg/to_json_value.hpp"
+
+#include <boost/json/serialize.hpp>
 
 #include <ranges>
 #include <print>
@@ -41,6 +44,8 @@ ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
     do_pass(pass_rm_useless_requirements);
     do_pass(pass_rm_trivial_schemas);
     do_pass(pass_rm_unused_schemas);
+
+    do_pass(pass_merge_equal_schemas);
 
     if (!count)
       break;
@@ -645,6 +650,76 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
       ++count;
       // заменяем allof на один объект
       s.type.data = std::move(obj);
+    }
+  }
+  assert(validate_ir_object(ir));
+  return {std::move(ir), count};
+}
+
+// содержимое схемы: всё, кроме spec, jsonptr и name. Ссылки на схемы сравниваются как ссылки
+static std::string schema_content(const schema& s) {
+  return boost::json::serialize(boost::json::array{
+      to_json(s.type),
+      s.required ? to_json(*s.required) : boost::json::value{},
+      s.meta ? to_json(*s.meta) : boost::json::value{},
+  });
+}
+
+// схемы тел с encoding: encoding описывает свойства именно этой схемы в этом теле, поэтому такие схемы
+// не сливаются, даже если одинаковы
+struct encoded_bodies_collector : ir_visitor_base {
+  std::unordered_set<schema_ref> schemas;
+
+  using ir_visitor_base::operator();
+
+  void operator()(const body& b) {
+    if ((b.membersEncoding && !b.membersEncoding->empty()) || (b.membersHeaders && !b.membersHeaders->empty()))
+      schemas.insert(b.schema);
+  }
+};
+
+pass_result pass_merge_equal_schemas(ir_object ir, const ir_options& options) {
+  if (!ir.schemas || options.allow_rm_unused == remove_category_e::noone)
+    return {std::move(ir), 0};
+  ir.validate();
+  encoded_bodies_collector encoded;
+  encoded.visit(ir);
+  size_t count = 0;
+  // схемы, отличающиеся только ссылками на одинаковые схемы, становятся одинаковыми после слияния тех
+  for (MAYBE_EVER) {
+    // первая (в порядке ir.schemas) схема с таким содержимым остаётся, остальные заменяются на неё
+    std::unordered_map<std::string, schema_ref> first;
+    std::unordered_map<schema_ref, schema_ref> replace;
+    for (const schema& s : *ir.schemas) {
+      if (s.name || options.marked_used.contains(s.ref()) || encoded.schemas.contains(s.ref()))
+        continue;
+      auto [it, inserted] = first.try_emplace(schema_content(s), s.ref());
+      if (!inserted)
+        replace.emplace(s.ref(), it->second);
+    }
+    if (replace.empty())
+      break;
+    count += replace.size();
+    auto redirect = [&](schema_ref& r) {
+      if (r.is_fundamental())
+        return;
+      if (auto it = replace.find(r); it != replace.end())
+        r = it->second;
+    };
+    schema_ref_vtor redirector(redirect);
+    redirector.visit(ir);
+    for (auto& [from, _] : replace)
+      ir.schemas->erase(ir.schemas->find(from));
+    // слитые требования могли совпасть
+    for (const schema& cs : *ir.schemas) {
+      if (!cs.required)
+        continue;
+      auto& reqs = const_cast<schema&>(cs).required.value();
+      arrayof<schema_ref> unique;
+      for (schema_ref& r : reqs)
+        if (!std::ranges::contains(unique, r))
+          unique.push_back(std::move(r));
+      reqs = std::move(unique);
     }
   }
   assert(validate_ir_object(ir));

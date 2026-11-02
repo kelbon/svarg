@@ -1,0 +1,47 @@
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths: {}
+components:
+  schemas:
+    A:
+      type: object
+      properties:
+        # одинаковые инлайн массивы с одинаковыми ограничениями - одна схема
+        x:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        y:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        # объекты с одинаковыми, но разными инлайн полями - одинаковы после слияния полей
+        p:
+          type: object
+          properties:
+            v:
+              type: array
+              items:
+                type: integer
+              maxItems: 3
+        q:
+          type: object
+          properties:
+            v:
+              type: array
+              items:
+                type: integer
+              maxItems: 3
+    # именованные схемы не сливаются
+    B:
+      type: array
+      items:
+        type: string
+      minItems: 1
+    C:
+      type: array
+      items:
+        type: string
+      minItems: 1

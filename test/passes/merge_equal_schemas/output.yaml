@@ -1,0 +1,85 @@
+"schemas":
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/A"
+    "name": "A"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "spec"
+              "jsonptr": "/components/schemas/A/properties/p"
+            "name": "p"
+            "required": false
+          - "type":
+              "spec": "spec"
+              "jsonptr": "/components/schemas/A/properties/p"
+            "name": "q"
+            "required": false
+          - "type":
+              "spec": "spec"
+              "jsonptr": "/components/schemas/A/properties/x"
+            "name": "x"
+            "required": false
+          - "type":
+              "spec": "spec"
+              "jsonptr": "/components/schemas/A/properties/x"
+            "name": "y"
+            "required": false
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/A/properties/p"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "spec"
+              "jsonptr": "/components/schemas/A/properties/p/properties/v"
+            "name": "v"
+            "required": false
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/A/properties/p/properties/v"
+    "type":
+      "array":
+        "element":
+          "spec": "@integer@"
+    "required":
+      - "spec": "spec"
+        "jsonptr": "/components/schemas/A/properties/p/properties/v/constraints"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/A/properties/p/properties/v/constraints"
+    "type":
+      "constraints":
+        "maxItems": 3
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/A/properties/x"
+    "type":
+      "array":
+        "element":
+          "spec": "@string@"
+    "required":
+      - "spec": "spec"
+        "jsonptr": "/components/schemas/A/properties/x/constraints"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/A/properties/x/constraints"
+    "type":
+      "constraints":
+        "minItems": 1
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/B"
+    "name": "B"
+    "type":
+      "array":
+        "element":
+          "spec": "@string@"
+    "required":
+      - "spec": "spec"
+        "jsonptr": "/components/schemas/A/properties/x/constraints"
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/C"
+    "name": "C"
+    "type":
+      "array":
+        "element":
+          "spec": "@string@"
+    "required":
+      - "spec": "spec"
+        "jsonptr": "/components/schemas/A/properties/x/constraints"
