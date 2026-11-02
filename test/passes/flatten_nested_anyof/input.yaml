@@ -1,0 +1,22 @@
+"schemas":
+  - "spec": "flatten_pass.yaml"
+    "jsonptr": "/components/schemas/DeepNestedAnyOf"
+    "name": "DeepNestedAnyOf"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "flatten_pass.yaml"
+            "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0"
+  - "spec": "flatten_pass.yaml"
+    "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "flatten_pass.yaml"
+            "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0/anyOf/0"
+  - "spec": "flatten_pass.yaml"
+    "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0/anyOf/0"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "@string@"

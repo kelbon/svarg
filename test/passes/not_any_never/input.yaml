@@ -1,0 +1,24 @@
+"schemas":
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/Abc"
+    "name": "Abc"
+    "type":
+      "array":
+        "element":
+          "name": "NotAny"
+          "spec": "hmm.yaml"
+          "jsonptr": "/components/schemas/NotAny"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/NotAny"
+    "name": "NotAny"
+    "type":
+      "not":
+        "type":
+          "spec": "@any@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/NotNever"
+    "name": "NotNever"
+    "type":
+      "not":
+        "type":
+          "spec": "@never@"

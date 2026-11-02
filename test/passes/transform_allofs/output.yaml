@@ -1,0 +1,23 @@
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF1"
+    "name": "AOF1"
+    "type":
+      "fundamental": "never"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF2"
+    "name": "AOF2"
+    "type":
+      "fundamental": "never"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Obj"
+    "name": "Obj"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "f1"
+            "required": false
+        "additional_properties":
+          "spec": "@never@"

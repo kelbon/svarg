@@ -1,0 +1,33 @@
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF1"
+    "name": "AOF1"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@string@"
+          - "name": "Obj"
+            "spec": "testir"
+            "jsonptr": "/components/schemas/Obj"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/AOF2"
+    "name": "AOF2"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@string@"
+          - "name": "Obj"
+            "spec": "testir"
+            "jsonptr": "/components/schemas/Obj"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Obj"
+    "name": "Obj"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "f1"
+            "required": false
+        "additional_properties":
+          "spec": "@never@"

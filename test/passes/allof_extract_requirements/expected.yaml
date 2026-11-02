@@ -1,0 +1,109 @@
+"schemas":
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Svc"
+    "name": "Svc"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "a"
+            "required": false
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X"
+    "name": "X"
+    "type":
+      "allOf":
+        "schemas":
+          - "name": "Svc"
+            "spec": "t"
+            "jsonptr": "/components/schemas/Svc"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/X/allOf/1"
+      - "spec": "t"
+        "jsonptr": "/components/schemas/X/allOf/2"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/X/allOf/1/@not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "t"
+          "jsonptr": "/components/schemas/X/allOf/1/not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1/not"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "x"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/2"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "y"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y"
+    "name": "Y"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "t"
+            "jsonptr": "/components/schemas/Y/allOf/0"
+          - "spec": "t"
+            "jsonptr": "/components/schemas/Y/allOf/1"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/Y/allOf/0/@not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "t"
+          "jsonptr": "/components/schemas/Y/allOf/0/not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0/not"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "x"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/1"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "y"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"

@@ -1,0 +1,9 @@
+"schemas":
+  - "spec": "flatten_pass.yaml"
+    "jsonptr": "/components/schemas/DedupAnyOf"
+    "name": "DedupAnyOf"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "@integer@"
+          - "spec": "@string@"

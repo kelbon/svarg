@@ -1,0 +1,50 @@
+"schemas":
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/FlattenAllOf"
+    "name": "FlattenAllOf"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@boolean@"
+          - "spec": "@integer@"
+          - "spec": "@string@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/FlattenAllOf/allOf/1"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@boolean@"
+          - "spec": "@integer@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/FlattenAnyOf"
+    "name": "FlattenAnyOf"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "@boolean@"
+          - "spec": "@integer@"
+          - "spec": "@null@"
+          - "spec": "@string@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/FlattenAnyOf/anyOf/1"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "@boolean@"
+          - "spec": "@integer@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/FlattenOneOf"
+    "name": "FlattenOneOf"
+    "type":
+      "oneOf":
+        "schemas":
+          - "spec": "@boolean@"
+          - "spec": "@integer@"
+          - "spec": "@string@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/FlattenOneOf/oneOf/1"
+    "type":
+      "oneOf":
+        "schemas":
+          - "spec": "@boolean@"
+          - "spec": "@integer@"

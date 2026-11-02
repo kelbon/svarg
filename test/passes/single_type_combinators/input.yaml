@@ -1,0 +1,22 @@
+"schemas":
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/SingleAllof"
+    "name": "SingleAllof"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@string@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/SingleAnyof"
+    "name": "SingleAnyof"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "@string@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/SingleOneof"
+    "name": "SingleOneof"
+    "type":
+      "oneOf":
+        "schemas":
+          - "spec": "@string@"

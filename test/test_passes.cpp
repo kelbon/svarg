@@ -1,10 +1,20 @@
+#include <print>
 
 #include "moko3/moko3.hpp"
+#include "svarg/from_json_value.hpp"
+#include "svarg/to_json_value.hpp"
 #include "svarg/ir/optimization_passes.hpp"
+#include "svarg/frontend/openapi/generate_ir.hpp"
+#include "svarg/utils/yamljson.hpp"
 
 using namespace svarg;
 using ir::ir_object;
 using ir::ir_options;
+
+// входы и ожидаемые результаты - файлы IR (в формате вывода svarg-ir) или спеки, читаются прямо из исходников
+static const fs::path passes_dir = fs::path(__FILE__).parent_path() / "passes";
+// true - записать результаты в ожидаемые файлы вместо сравнения (только руками, затем смотреть git diff)
+static constexpr bool update_expected = false;
 
 auto pass_all = [](ir_object ir, ir_options opts) -> ir::pass_result {
   return {ir::optimization_pipeline(std::move(ir), opts), 0};
@@ -22,271 +32,94 @@ auto make_pipe(auto*... passes) {
     return ir::pass_result{std::move(ir), count};
   };
 }
-static bool test_pass(std::string_view input_ir, std::string_view expected_ir, const ir_options& options,
-                      auto pass) {
-  ir_object in = from_yaml<ir_object>(input_ir);
-  in = pass(std::move(in), options).ir;
-  ir_object expected = from_yaml<ir_object>(expected_ir);
-  return in == expected;
+
+// IR может быть написан руками, поэтому проверяется
+static ir_object load_ir(const fs::path& file) {
+  ir_object ir;
+  pass_as_json(passes_dir / file,
+               [&](std::string_view json) { ir = from_json<ir_object>(boost::json::parse(json)); });
+  ir.validate();
+  return ir;
+}
+
+// сравнение через json: ir_object::operator== сравнивает схемы только по spec/jsonptr/name
+static bool check_result(const ir_object& result, const fs::path& expected_file) {
+  if (update_expected) {
+    write_into(passes_dir / expected_file, to_yaml_string(result));
+    return true;
+  }
+  if (to_json(result) == to_json(load_ir(expected_file)))
+    return true;
+  std::println(stderr, "result differs from {}:\n{}", expected_file.generic_string(), to_yaml_string(result));
+  return false;
+}
+
+// вход - IR из файла
+static bool test_ir(const fs::path& input_file, const fs::path& expected_file, const ir_options& options,
+                    auto pass) {
+  return check_result(pass(load_ir(input_file), options).ir, expected_file);
+}
+
+// вход - IR, который фронтенд OpenAPI делает из спеки (с тем, что он делает всегда)
+static bool test_spec(const fs::path& spec_file, const fs::path& expected_file,
+                      const openapi_options& options, auto pass) {
+  ir_object ir = openapi2ir(passes_dir, {spec_file}, options);
+  return check_result(pass(std::move(ir), options.ir_opts).ir, expected_file);
 }
 
 TEST("rm duplicates anyOf") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "flatten_pass.yaml"
-    "jsonptr": "/components/schemas/DedupAnyOf"
-    "name": "DedupAnyOf"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@integer@"
-          - "spec": "@string@"
-          - "spec": "@string@"
-)";
-  std::string_view output = R"(
-"schemas":
-  - "spec": "flatten_pass.yaml"
-    "jsonptr": "/components/schemas/DedupAnyOf"
-    "name": "DedupAnyOf"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@integer@"
-          - "spec": "@string@"
-)";
-
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  REQUIRE(test_pass(input, output, opts, &ir::pass_combinators_flatten));
+  REQUIRE(test_ir("rm_duplicates_anyof/input.yaml", "rm_duplicates_anyof/output.yaml", opts,
+                  &ir::pass_combinators_flatten));
 }
 
 TEST("flatten nested anyOf") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "flatten_pass.yaml"
-    "jsonptr": "/components/schemas/DeepNestedAnyOf"
-    "name": "DeepNestedAnyOf"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "flatten_pass.yaml"
-            "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0"
-  - "spec": "flatten_pass.yaml"
-    "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "flatten_pass.yaml"
-            "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0/anyOf/0"
-  - "spec": "flatten_pass.yaml"
-    "jsonptr": "/components/schemas/DeepNestedAnyOf/anyOf/0/anyOf/0"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@string@"
-)";
-  std::string_view output = R"(
-"schemas":
-  - "spec": "flatten_pass.yaml"
-    "jsonptr": "/components/schemas/DeepNestedAnyOf"
-    "name": "DeepNestedAnyOf"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@string@"
-)";
-
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  REQUIRE(test_pass(input, output, opts, &ir::pass_combinators_flatten));
+  REQUIRE(test_ir("flatten_nested_anyof/input.yaml", "flatten_nested_anyof/output.yaml", opts,
+                  &ir::pass_combinators_flatten));
   opts.allow_rm_unused = svarg::ir::remove_category_e::any;
-  REQUIRE(test_pass(output, "", opts, &ir::pass_rm_unused_schemas));
+  REQUIRE(test_ir("flatten_nested_anyof/output.yaml", "empty.yaml", opts, &ir::pass_rm_unused_schemas));
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  REQUIRE(test_pass(output, output, opts, make_pipe(&ir::pass_rm_trivial_schemas)));
+  REQUIRE(test_ir("flatten_nested_anyof/output.yaml", "flatten_nested_anyof/output.yaml", opts,
+                  make_pipe(&ir::pass_rm_trivial_schemas)));
 }
 
 TEST("double not") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/Abc"
-    "name": "Abc"
-    "type":
-      "object":
-        "fields": []
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/DoubleNot"
-    "name": "DoubleNot"
-    "type":
-      "not":
-        "type":
-          "spec": "hmm.yaml"
-          "jsonptr": "/components/schemas/DoubleNot/not"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/DoubleNot/not"
-    "type":
-      "not":
-        "type":
-          "spec": "@string@"
-)";
   // верхний not заменяется на Abc, тот что посередине остаётся висеть бесполезный
-  std::string_view output = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/Abc"
-    "name": "Abc"
-    "type":
-      "object":
-        "fields": []
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/DoubleNot/not"
-    "type":
-      "not":
-        "type":
-          "spec": "@string@"
-)";
-
-  std::string_view output_after_rm_unused = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/Abc"
-    "name": "Abc"
-    "type":
-      "object":
-        "fields": []
-        "additional_properties":
-          "spec": "@never@"
-)";
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  REQUIRE(test_pass(input, output, opts, &ir::pass_combinators_flatten));
+  REQUIRE(test_ir("double_not/input.yaml", "double_not/output.yaml", opts, &ir::pass_combinators_flatten));
   opts.allow_rm_unused = svarg::ir::remove_category_e::only_inline_schemas;
-  REQUIRE(test_pass(output, output_after_rm_unused, opts, &ir::pass_rm_unused_schemas));
+  REQUIRE(test_ir("double_not/output.yaml", "double_not/output_after_rm_unused.yaml", opts,
+                  &ir::pass_rm_unused_schemas));
   opts.allow_rm_unused = svarg::ir::remove_category_e::any;
-  REQUIRE(test_pass(output, "", opts, &ir::pass_rm_unused_schemas));
+  REQUIRE(test_ir("double_not/output.yaml", "empty.yaml", opts, &ir::pass_rm_unused_schemas));
 }
 
 TEST("triple not") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/TripleNot"
-    "name": "TripleNot"
-    "type":
-      "not":
-        "type":
-          "spec": "hmm.yaml"
-          "jsonptr": "/components/schemas/TripleNot/not"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/TripleNot/not"
-    "type":
-      "not":
-        "type":
-          "spec": "hmm.yaml"
-          "jsonptr": "/components/schemas/TripleNot/not/not"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/TripleNot/not/not"
-    "type":
-      "not":
-        "type":
-          "spec": "@string@"
-  )";
-
   // остаётся not string
-  std::string_view output = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/TripleNot/not/not"
-    "type":
-      "not":
-        "type":
-          "spec": "@string@"
-)";
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  REQUIRE(test_pass(input, output, opts, &ir::pass_combinators_flatten));
+  REQUIRE(test_ir("triple_not/input.yaml", "triple_not/output.yaml", opts, &ir::pass_combinators_flatten));
   opts.allow_rm_unused = svarg::ir::remove_category_e::any;
-  REQUIRE(test_pass(output, "", opts, &ir::pass_rm_unused_schemas));
+  REQUIRE(test_ir("triple_not/output.yaml", "empty.yaml", opts, &ir::pass_rm_unused_schemas));
 }
 
 TEST("not any/never") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/Abc"
-    "name": "Abc"
-    "type":
-      "array":
-        "element":
-          "name": "NotAny"
-          "spec": "hmm.yaml"
-          "jsonptr": "/components/schemas/NotAny"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/NotAny"
-    "name": "NotAny"
-    "type":
-      "not":
-        "type":
-          "spec": "@any@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/NotNever"
-    "name": "NotNever"
-    "type":
-      "not":
-        "type":
-          "spec": "@never@"
-)";
-
   // NotNever/NotAny удаляются и заменяются в местах использования на any/never
-  std::string_view output = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/Abc"
-    "name": "Abc"
-    "type":
-      "array":
-        "element":
-          "spec": "@never@"
-)";
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  REQUIRE(test_pass(input, output, opts, &ir::pass_combinators_flatten));
+  REQUIRE(
+      test_ir("not_any_never/input.yaml", "not_any_never/output.yaml", opts, &ir::pass_combinators_flatten));
 }
 
 TEST("single type in anyof/allof/oneof") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/SingleAllof"
-    "name": "SingleAllof"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@string@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/SingleAnyof"
-    "name": "SingleAnyof"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@string@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/SingleOneof"
-    "name": "SingleOneof"
-    "type":
-      "oneOf":
-        "schemas":
-          - "spec": "@string@"
-
-)";
   // преобразуются в просто типы, но не удаляются как фундаментальные, так как именованы
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::any;
-  REQUIRE(test_pass(input, "{}", opts, &ir::pass_combinators_flatten));
+  REQUIRE(test_ir("single_type_combinators/input.yaml", "empty.yaml", opts, &ir::pass_combinators_flatten));
 }
 
 TEST("multilevel oneof/anyof/allof") {
@@ -316,762 +149,44 @@ TEST("multilevel oneof/anyof/allof") {
             - type: integer
             - type: boolean
   */
-  std::string_view input = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAllOf"
-    "name": "FlattenAllOf"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@string@"
-          - "spec": "hmm.yaml"
-            "jsonptr": "/components/schemas/FlattenAllOf/allOf/1"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAllOf/allOf/1"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAnyOf"
-    "name": "FlattenAnyOf"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@null@"
-          - "spec": "@string@"
-          - "spec": "hmm.yaml"
-            "jsonptr": "/components/schemas/FlattenAnyOf/anyOf/1"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAnyOf/anyOf/1"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenOneOf"
-    "name": "FlattenOneOf"
-    "type":
-      "oneOf":
-        "schemas":
-          - "spec": "@string@"
-          - "spec": "hmm.yaml"
-            "jsonptr": "/components/schemas/FlattenOneOf/oneOf/1"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenOneOf/oneOf/1"
-    "type":
-      "oneOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-
-)";
-  std::string_view output = R"(
-"schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAllOf"
-    "name": "FlattenAllOf"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-          - "spec": "@string@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAllOf/allOf/1"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAnyOf"
-    "name": "FlattenAnyOf"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-          - "spec": "@null@"
-          - "spec": "@string@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAnyOf/anyOf/1"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenOneOf"
-    "name": "FlattenOneOf"
-    "type":
-      "oneOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-          - "spec": "@string@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenOneOf/oneOf/1"
-    "type":
-      "oneOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-)";
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
-  REQUIRE(test_pass(input, output, opts, &ir::pass_combinators_flatten));
+  REQUIRE(test_ir("multilevel_combinators/input.yaml", "multilevel_combinators/output.yaml", opts,
+                  &ir::pass_combinators_flatten));
 
-  std::string_view output_rus = R"(
-  "schemas":
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAllOf"
-    "name": "FlattenAllOf"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-          - "spec": "@string@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenAnyOf"
-    "name": "FlattenAnyOf"
-    "type":
-      "anyOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-          - "spec": "@null@"
-          - "spec": "@string@"
-  - "spec": "hmm.yaml"
-    "jsonptr": "/components/schemas/FlattenOneOf"
-    "name": "FlattenOneOf"
-    "type":
-      "oneOf":
-        "schemas":
-          - "spec": "@boolean@"
-          - "spec": "@integer@"
-          - "spec": "@string@"
-
-  )";
   opts.allow_rm_unused = svarg::ir::remove_category_e::only_inline_schemas;
-  REQUIRE(test_pass(input, output_rus, opts,
-                    make_pipe(&ir::pass_combinators_flatten, &ir::pass_rm_unused_schemas)));
+  REQUIRE(test_ir("multilevel_combinators/input.yaml", "multilevel_combinators/output_rus.yaml", opts,
+                  make_pipe(&ir::pass_combinators_flatten, &ir::pass_rm_unused_schemas)));
 }
 
 TEST("pass transform allofs") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/AOF1"
-    "name": "AOF1"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@string@"
-          - "name": "Obj"
-            "spec": "testir"
-            "jsonptr": "/components/schemas/Obj"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/AOF2"
-    "name": "AOF2"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@string@"
-          - "name": "Obj"
-            "spec": "testir"
-            "jsonptr": "/components/schemas/Obj"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Obj"
-    "name": "Obj"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@string@"
-            "name": "f1"
-            "required": false
-        "additional_properties":
-          "spec": "@never@"
-  )";
-  std::string_view output = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/AOF1"
-    "name": "AOF1"
-    "type":
-      "fundamental": "never"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/AOF2"
-    "name": "AOF2"
-    "type":
-      "fundamental": "never"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Obj"
-    "name": "Obj"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@string@"
-            "name": "f1"
-            "required": false
-        "additional_properties":
-          "spec": "@never@"
-)";
-
-  REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
+  REQUIRE(test_ir("transform_allofs/input.yaml", "transform_allofs/output.yaml", ir_options{},
+                  &ir::pass_transform_allofs));
 }
 
 TEST("pass transform allofs 2") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/BaseEventCollection"
-    "name": "BaseEventCollection"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@integer@"
-            "name": "collectionTimestamp"
-            "required": true
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
-            "name": "records"
-            "required": true
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
-    "type":
-      "array":
-        "element":
-          "spec": "@any@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection"
-    "name": "QoEMetricsCollection"
-    "type":
-      "allOf":
-        "schemas":
-          - "name": "BaseEventCollection"
-            "spec": "testir"
-            "jsonptr": "/components/schemas/BaseEventCollection"
-          - "spec": "testir"
-            "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
-            "name": "abc"
-            "required": false
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
-            "name": "records"
-            "required": true
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
-    "type":
-      "object":
-        "fields": []
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
-    "type":
-      "array":
-        "element":
-          "spec": "@string@"
-)";
-  std::string_view output = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/BaseEventCollection"
-    "name": "BaseEventCollection"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@integer@"
-            "name": "collectionTimestamp"
-            "required": true
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
-            "name": "records"
-            "required": true
-
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
-    "type":
-      "array":
-        "element":
-          "spec": "@any@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection"
-    "name": "QoEMetricsCollection"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@integer@"
-            "name": "collectionTimestamp"
-            "required": true
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
-            "name": "records"
-            "required": true
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
-            "name": "abc"
-            "required": false
-
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
-            "name": "abc"
-            "required": false
-          - "type":
-              "spec": "testir"
-              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
-            "name": "records"
-            "required": true
-
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
-    "type":
-      "object":
-        "fields": []
-
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
-    "type":
-      "array":
-        "element":
-          "spec": "@string@"
-)";
-
-  REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
+  REQUIRE(test_ir("transform_allofs_2/input.yaml", "transform_allofs_2/output.yaml", ir_options{},
+                  &ir::pass_transform_allofs));
 }
 
 // allOf из строк с ограничениями: тип сводится к строке, ограничения всех частей сохраняются
 TEST("allof extract requirements") {
-  // IR получен из спеки (svarg-ir -s <dir> t.yaml), ожидаемый результат - svarg-ir --passes aer:
-  // openapi: 3.1.0
-  // info: {title: t, version: "1"}
-  // paths: {}
-  // components:
-  //   schemas:
-  //     Svc:
-  //       type: object
-  //       properties:
-  //         a:
-  //           type: string
-  //     X:
-  //       allOf:
-  //         - $ref: '#/components/schemas/Svc'
-  //         - not:
-  //             required: [x]
-  //         - required: [y]
-  //         - {}
-  //     # только требования: выбирать представление не из чего, не меняется
-  //     Y:
-  //       allOf:
-  //         - not:
-  //             required: [x]
-  //         - required: [y]
-  std::string_view input = R"("schemas":
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Svc"
-    "name": "Svc"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@string@"
-            "name": "a"
-            "required": false
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X"
-    "name": "X"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "@any@"
-          - "name": "Svc"
-            "spec": "t"
-            "jsonptr": "/components/schemas/Svc"
-          - "spec": "t"
-            "jsonptr": "/components/schemas/X/allOf/1"
-          - "spec": "t"
-            "jsonptr": "/components/schemas/X/allOf/2"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/1"
-    "type":
-      "fundamental": "any"
-    "required":
-      - "spec": "t"
-        "jsonptr": "/components/schemas/X/allOf/1/@not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/1/@not"
-    "type":
-      "not":
-        "type":
-          "spec": "t"
-          "jsonptr": "/components/schemas/X/allOf/1/not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/1/not"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "x"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/2"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "y"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y"
-    "name": "Y"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "t"
-            "jsonptr": "/components/schemas/Y/allOf/0"
-          - "spec": "t"
-            "jsonptr": "/components/schemas/Y/allOf/1"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/0"
-    "type":
-      "fundamental": "any"
-    "required":
-      - "spec": "t"
-        "jsonptr": "/components/schemas/Y/allOf/0/@not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/0/@not"
-    "type":
-      "not":
-        "type":
-          "spec": "t"
-          "jsonptr": "/components/schemas/Y/allOf/0/not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/0/not"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "x"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/1"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "y"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-)";
-  std::string_view expected = R"("schemas":
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Svc"
-    "name": "Svc"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@string@"
-            "name": "a"
-            "required": false
-        "additional_properties":
-          "spec": "@never@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X"
-    "name": "X"
-    "type":
-      "allOf":
-        "schemas":
-          - "name": "Svc"
-            "spec": "t"
-            "jsonptr": "/components/schemas/Svc"
-    "required":
-      - "spec": "t"
-        "jsonptr": "/components/schemas/X/allOf/1"
-      - "spec": "t"
-        "jsonptr": "/components/schemas/X/allOf/2"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/1"
-    "type":
-      "fundamental": "any"
-    "required":
-      - "spec": "t"
-        "jsonptr": "/components/schemas/X/allOf/1/@not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/1/@not"
-    "type":
-      "not":
-        "type":
-          "spec": "t"
-          "jsonptr": "/components/schemas/X/allOf/1/not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/1/not"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "x"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/X/allOf/2"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "y"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y"
-    "name": "Y"
-    "type":
-      "allOf":
-        "schemas":
-          - "spec": "t"
-            "jsonptr": "/components/schemas/Y/allOf/0"
-          - "spec": "t"
-            "jsonptr": "/components/schemas/Y/allOf/1"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/0"
-    "type":
-      "fundamental": "any"
-    "required":
-      - "spec": "t"
-        "jsonptr": "/components/schemas/Y/allOf/0/@not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/0/@not"
-    "type":
-      "not":
-        "type":
-          "spec": "t"
-          "jsonptr": "/components/schemas/Y/allOf/0/not"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/0/not"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "x"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-  - "spec": "t"
-    "jsonptr": "/components/schemas/Y/allOf/1"
-    "type":
-      "object":
-        "fields":
-          - "type":
-              "spec": "@any@"
-            "name": "y"
-            "required": true
-        "additional_properties":
-          "spec": "@any@"
-)";
   ir_options opts;
-  REQUIRE(test_pass(input, expected, opts, &ir::pass_allof_extract_requirements));
+  REQUIRE(test_ir("allof_extract_requirements/input.yaml", "allof_extract_requirements/expected.yaml", opts,
+                  &ir::pass_allof_extract_requirements));
 }
 
 TEST("pass transform allofs keeps constraints") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Code"
-    "name": "Code"
-    "type":
-      "allOf":
-        "schemas":
-          - "name": "Base"
-            "spec": "testir"
-            "jsonptr": "/components/schemas/Base"
-          - "spec": "testir"
-            "jsonptr": "/components/schemas/Code/allOf/1"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Base"
-    "name": "Base"
-    "type":
-      "fundamental": "string"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Base/constraints"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Base/constraints"
-    "type":
-      "constraints":
-        "pattern": "^[0-9]+$"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Code/allOf/1"
-    "type":
-      "fundamental": "any"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Code/allOf/1/constraints"
-    "type":
-      "constraints":
-        "maxLength": 3
-  )";
-  std::string_view output = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Code"
-    "name": "Code"
-    "type":
-      "fundamental": "string"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Base/constraints"
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Base"
-    "name": "Base"
-    "type":
-      "fundamental": "string"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Base/constraints"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Base/constraints"
-    "type":
-      "constraints":
-        "pattern": "^[0-9]+$"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Code/allOf/1"
-    "type":
-      "fundamental": "any"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Code/allOf/1/constraints"
-    "type":
-      "constraints":
-        "maxLength": 3
-)";
-
-  REQUIRE(test_pass(input, output, ir_options{}, &ir::pass_transform_allofs));
+  REQUIRE(test_ir("transform_allofs_keeps_constraints/input.yaml",
+                  "transform_allofs_keeps_constraints/output.yaml", ir_options{},
+                  &ir::pass_transform_allofs));
 }
 
 // type: string + allOf: [{pattern: ...}, {pattern: ...}]: требование типа any заменяется своими требованиями
 TEST("rm useless requirements flattens any requirement") {
-  std::string_view input = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Ipv6Prefix"
-    "name": "Ipv6Prefix"
-    "type":
-      "fundamental": "string"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Ipv6Prefix/allOf"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Ipv6Prefix/allOf"
-    "type":
-      "fundamental": "any"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
-    "type":
-      "constraints":
-        "pattern": "^a"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
-    "type":
-      "constraints":
-        "pattern": "b$"
-  )";
-  std::string_view output = R"(
-"schemas":
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Ipv6Prefix"
-    "name": "Ipv6Prefix"
-    "type":
-      "fundamental": "string"
-    "required":
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
-      - "spec": "testir"
-        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
-    "type":
-      "constraints":
-        "pattern": "^a"
-  - "spec": "testir"
-    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
-    "type":
-      "constraints":
-        "pattern": "b$"
-)";
-
   ir_options opts;
-  REQUIRE(test_pass(input, output, opts,
-                    make_pipe(&ir::pass_rm_useless_requirements, &ir::pass_rm_unused_schemas)));
+  REQUIRE(test_ir("rm_useless_requirements_any/input.yaml", "rm_useless_requirements_any/output.yaml", opts,
+                  make_pipe(&ir::pass_rm_useless_requirements, &ir::pass_rm_unused_schemas)));
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

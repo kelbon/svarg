@@ -1,0 +1,76 @@
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/BaseEventCollection"
+    "name": "BaseEventCollection"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@integer@"
+            "name": "collectionTimestamp"
+            "required": true
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
+            "name": "records"
+            "required": true
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/BaseEventCollection/properties/records"
+    "type":
+      "array":
+        "element":
+          "spec": "@any@"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection"
+    "name": "QoEMetricsCollection"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@integer@"
+            "name": "collectionTimestamp"
+            "required": true
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+            "name": "records"
+            "required": true
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+            "name": "abc"
+            "required": false
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+            "name": "abc"
+            "required": false
+          - "type":
+              "spec": "testir"
+              "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+            "name": "records"
+            "required": true
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/abc"
+    "type":
+      "object":
+        "fields": []
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/QoEMetricsCollection/allOf/1/properties/records"
+    "type":
+      "array":
+        "element":
+          "spec": "@string@"

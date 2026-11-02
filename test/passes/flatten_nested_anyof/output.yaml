@@ -1,0 +1,8 @@
+"schemas":
+  - "spec": "flatten_pass.yaml"
+    "jsonptr": "/components/schemas/DeepNestedAnyOf"
+    "name": "DeepNestedAnyOf"
+    "type":
+      "anyOf":
+        "schemas":
+          - "spec": "@string@"

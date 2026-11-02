@@ -1,0 +1,36 @@
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code"
+    "name": "Code"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Base/constraints"
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Base"
+    "name": "Base"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Base/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Base/constraints"
+    "type":
+      "constraints":
+        "pattern": "^[0-9]+$"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code/allOf/1"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Code/allOf/1/constraints"
+    "type":
+      "constraints":
+        "maxLength": 3

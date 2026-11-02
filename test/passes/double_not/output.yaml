@@ -1,0 +1,15 @@
+"schemas":
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/Abc"
+    "name": "Abc"
+    "type":
+      "object":
+        "fields": []
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/DoubleNot/not"
+    "type":
+      "not":
+        "type":
+          "spec": "@string@"

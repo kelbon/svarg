@@ -1,0 +1,21 @@
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix"
+    "name": "Ipv6Prefix"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/0/constraints"
+    "type":
+      "constraints":
+        "pattern": "^a"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Ipv6Prefix/allOf/1/constraints"
+    "type":
+      "constraints":
+        "pattern": "b$"
