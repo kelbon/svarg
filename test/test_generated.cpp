@@ -211,6 +211,15 @@ TEST("property named like a service member") {
   REQUIRE(svarg::to_json(item).as_object().at("fields") == "f");
 }
 
+TEST("json media type by specialization") {
+  api::postKv::response_201 rsp;
+  rsp.body.a = "x";
+  hidi::http_response http = make_response(rsp);
+  REQUIRE(http.body_strview() == R"({"a":"x"})");
+  api::postKv::response_201 back;
+  REQUIRE(!from_response(http, back).failed() && back.body.a == "x");
+}
+
 TEST("required recursive field") {
   api::components::schemas::Tree t;
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"children": [{"children": []}]})"), t).failed());

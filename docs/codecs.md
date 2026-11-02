@@ -44,6 +44,15 @@ struct svarg::cxx_support::media_codec<"+xml"> : my_xml_codec {};  // любой
 
 Порядок выбора: `media_codec<медиа тип>`, `media_codec<суффикс>`, встроенный.
 
+Встроенный кодек тоже можно подключить к своему медиа типу. Например, медиа тип JSON без суффикса `+json`
+(`application/vnd.github.object` в спеке GitHub) иначе считается сырым, и объектная схема с ним не
+компилируется:
+
+```cpp
+template <>
+struct svarg::cxx_support::media_codec<"application/vnd.github.object"> : svarg::cxx_support::json_codec {};
+```
+
 Специализация должна быть видна во всех сгенерированных файлах, иначе разные единицы трансляции выберут разные
 кодеки. Поэтому заголовок с ней подключается опцией генератора:
 

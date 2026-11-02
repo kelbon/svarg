@@ -68,3 +68,7 @@ struct svarg::cxx_support::media_codec<"+kv"> : test_codecs::kv_codec {};
 // по точному медиа типу
 template <>
 struct svarg::cxx_support::media_codec<"application/x-upper"> : test_codecs::upper_codec {};
+
+// JSON без суффикса +json: встроенный json_codec для своего медиа типа
+template <>
+struct svarg::cxx_support::media_codec<"application/vnd.test.object"> : svarg::cxx_support::json_codec {};
