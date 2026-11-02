@@ -168,6 +168,36 @@ components:
   REQUIRE(no_items && no_items->element.is_fundamental(svarg::ir::fundamental_e::any));
 }
 
+TEST("error location") {
+  // место ошибки - JSON указатель места ссылки и сама схема, на которую ссылаются
+  svarg::write_into("error_location.yaml", R"(
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a/{x}:
+    get:
+      parameters: [{name: x, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bad'
+components:
+  schemas:
+    Bad:
+      type: [string, foo]
+)");
+  std::string error;
+  try {
+    (void)svarg::openapi2ir(std::filesystem::current_path(), {"./error_location.yaml"}, {});
+  } catch (std::exception& e) {
+    error = e.what();
+  }
+  REQUIRE(error.contains("#/paths/~1a~1{x}/get/") && error.contains("in error_location.yaml#/components/schemas/Bad: "));
+}
+
 TEST("spec is searched in specs dir") {
   // одноимённый файл уровнем выше specs dir не должен подменять спеку
   std::filesystem::create_directories("specs_subdir");

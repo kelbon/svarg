@@ -614,7 +614,12 @@ resolved_schema lowering_context::resolve_schema_ref(reference_object ref, fs::p
   // любой json ptr, но это... такое). Если ссылались не на components/schemas, то варнинг уже был
   std::optional<std::string> name = try_get_name(jp);
   resolved_schema res;
-  res.ir_schema = schema_lowering(schema, refered_file, std::move(jp), name).ref();
+  try {
+    res.ir_schema = schema_lowering(schema, refered_file, jp, name).ref();
+  } catch (std::exception& e) {
+    // ошибка в схеме, на которую ссылаются: место ссылки добавят выше
+    throw parse_error("in {}#{}: {}", refered_file.generic_string(), jp.escaped(), e.what());
+  }
   res.front_schema = std::move(schema);
   return res;
 }
@@ -633,6 +638,14 @@ struct refvtor {
 };
 
 // пылесосит объект в поисках всех схем, в том числе в других файлах на которые ссылаются $ref
+// место ошибки собирается JSON указателем при подъёме: "/a/b: сообщение"
+[[nodiscard]] static std::string prepend_error_location(std::string_view segment, std::string_view what) {
+  std::string seg = jp_escape_required(segment) ? jp_escape_segment(segment) : std::string(segment);
+  if (what.starts_with('/'))
+    return std::format("/{}{}", seg, what);
+  return std::format("/{}: {}", seg, what);
+}
+
 struct schemas_collector {
  private:
   const fs::path& obj_file;
@@ -646,9 +659,9 @@ struct schemas_collector {
       : obj_file(obj_file), ctx(&ctx) {
   }
 
-#define SVARG_ADD_EXCEPTION_INFO(EXTYPE, INFO) \
-  catch (std::exception & e) {                 \
-    throw EXTYPE("{}/{}", INFO, e.what());     \
+#define SVARG_ADD_EXCEPTION_INFO(EXTYPE, INFO)                  \
+  catch (std::exception & e) {                                  \
+    throw EXTYPE("{}", prepend_error_location(INFO, e.what())); \
   }
   void dbgprint(std::string_view name) {
     // for (std::string_view s : currentjp.segments())
@@ -1321,8 +1334,14 @@ ir::ir_object lowering_context::generate_specs(fs::path specsdir, std::vector<fs
     // ищется относительно самой specs_dir: `where` - файл, рядом с которым ищут, а у specs_dir / "" родитель -
     // specs_dir (у specs_dir - её родитель, и одноимённый файл уровнем выше подменял бы спеку)
     s = find_existing_file(std::move(s), specs_dir / "");
-    if (!specs.contains(s))
-      specs[s] = parse_spec(jcache.load(specs_dir / s), opts);
+    if (!specs.contains(s)) {
+      try {
+        specs[s] = parse_spec(jcache.load(specs_dir / s), opts);
+      } catch (std::exception& e) {
+        std::string_view what = e.what();
+        throw parse_error("{}: {}", s.generic_string(), what.substr(std::min(what.find_first_not_of(' '), what.size())));
+      }
+    }
   }
 
   // перевод в IR
@@ -1332,7 +1351,8 @@ ir::ir_object lowering_context::generate_specs(fs::path specsdir, std::vector<fs
       // результат собирается в this->result_ir
       visit_and_generate_ir(specs.at(p), p);
     } catch (std::exception& e) {
-      throw parse_error("{}/{}", p.generic_string(), e.what());
+      std::string_view what = e.what();
+      throw parse_error("{}{}{}", p.generic_string(), what.starts_with('/') ? "#" : ": ", what);
     }
   }
   // сортируем все массивы, чтобы получать всегда одинаковый IR
