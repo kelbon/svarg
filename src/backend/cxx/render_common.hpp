@@ -144,10 +144,10 @@ inline std::string render_string(std::string_view s) {
   return std::format("\"{}\"", detail::escape_plain(s));
 }
 
-// static constexpr parse_tag - по нему рантайм определяет вид сгенерированного типа
+// static constexpr svarg_parse_tag - по нему рантайм определяет вид сгенерированного типа
 inline std::string render_parse_tag(cxx_support::parse_tag_e tag) {
   return std::format(
-      "\nstatic constexpr svarg::cxx_support::parse_tag_e parse_tag = "
+      "\nstatic constexpr svarg::cxx_support::parse_tag_e svarg_parse_tag = "
       "svarg::cxx_support::parse_tag_e::{};\n\n",
       e2str(tag));
 }

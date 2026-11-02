@@ -10,7 +10,7 @@ namespace svarg::cxx_support {
 template <typename T>
 using required_schemas_t = decltype([] {
   if constexpr (has_required_schemas<T>)
-    return std::type_identity<typename T::required_schemas>{};
+    return std::type_identity<typename T::svarg_required_schemas>{};
   else
     return std::type_identity<metel::typelist<>>{};
 }())::type;

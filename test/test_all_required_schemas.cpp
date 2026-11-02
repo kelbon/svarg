@@ -9,7 +9,7 @@ using svarg::cxx_support::is_recursive_requirement;
 TEST("all required schemas") {
   struct A {
     // self reference
-    using required_schemas = metel::typelist<int, A>;
+    using svarg_required_schemas = metel::typelist<int, A>;
   };
   static_assert(std::is_same_v<all_required_schemas_t<A>, metel::typelist<int>>);
   static_assert(is_recursive_requirement<A, A>());
@@ -18,11 +18,11 @@ TEST("all required schemas") {
   struct C;
   struct B {
     // взаимная рекурсия
-    using required_schemas = metel::typelist<C>;
+    using svarg_required_schemas = metel::typelist<C>;
   };
   static_assert(std::is_same_v<all_required_schemas_t<B>, metel::typelist<C>>);
   struct C {
-    using required_schemas = metel::typelist<B>;
+    using svarg_required_schemas = metel::typelist<B>;
   };
 
   static_assert(std::is_same_v<all_required_schemas_t<C>, metel::typelist<B>>);
@@ -35,7 +35,7 @@ TEST("all required schemas") {
 
   struct D {
     // зависимость на рекурсивный тип
-    using required_schemas = metel::typelist<int, A>;
+    using svarg_required_schemas = metel::typelist<int, A>;
   };
 
   static_assert(std::is_same_v<all_required_schemas_t<D>, metel::typelist<int, A>>);
@@ -44,12 +44,12 @@ TEST("all required schemas") {
 
   struct E {
     // нет зависимостей
-    using required_schemas = metel::typelist<>;
+    using svarg_required_schemas = metel::typelist<>;
   };
   static_assert(std::is_same_v<all_required_schemas_t<E>, metel::typelist<>>);
 
   static_assert(!has_recursive_requirements<E>());
-  // вообще нет required_schemas
+  // вообще нет svarg_required_schemas
   struct J {};
 
   static_assert(std::is_same_v<all_required_schemas_t<J>, metel::typelist<>>);

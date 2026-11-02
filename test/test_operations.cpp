@@ -2,45 +2,45 @@
 
 #include "svarg/backend/cxx/support/common_types.hpp"
 
-// операция повторяет то, что генерирует бекенд: структуры параметров без parse_tag,
+// операция повторяет то, что генерирует бекенд: структуры параметров без svarg_parse_tag,
 // сначала обязательные поля, затем опциональные
 
 using namespace svarg::cxx_support;
 
 struct name_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::fundamental;
 
-  std::string _implfield;
+  std::string svarg_implfield;
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{.min_length = 2u, .pattern = "^[a-z]+$"},
   }};
 };
 
 struct even_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::fundamental;
 
-  integer _implfield;
+  integer svarg_implfield;
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{.multiple_of = bound_t(int64_t(2))},
   }};
 };
 
 struct color_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::string_enum;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::string_enum;
 
-  enum struct values_e { red, green };
-  using enum values_e;
+  enum struct svarg_values_e { red, green };
+  using enum svarg_values_e;
 
   static constexpr std::array<std::string_view, 2> values = {"red", "green"};
 
-  values_e _implfield;
+  svarg_values_e svarg_implfield;
 };
 
 // GET /v1/{id}/items/{n}
 struct get_item {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::operation;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::operation;
 
   static constexpr inline std::string_view method = "GET";
 
@@ -55,9 +55,9 @@ struct get_item {
     name_t id;
     even_t n;
 
-    using additional_properties_type = void;
+    using svarg_additional_properties_type = void;
 
-    static constexpr std::array<field_info, 2> fields = {
+    static constexpr std::array<field_info, 2> svarg_fields = {
         {{.name = "id", .required = true}, {.name = "n", .required = true}}};
   };
   struct query_t {
@@ -65,27 +65,27 @@ struct get_item {
     std::optional<std::string> s;
     std::optional<color_t> c;
 
-    using additional_properties_type = void;
+    using svarg_additional_properties_type = void;
 
-    static constexpr std::array<field_info, 3> fields = {
+    static constexpr std::array<field_info, 3> svarg_fields = {
         {{.name = "q", .required = true}, {.name = "s"}, {.name = "c"}}};
   };
   struct headers_t {
     even_t x_even;
     std::optional<color_t> x_color;
 
-    using additional_properties_type = void;
+    using svarg_additional_properties_type = void;
 
-    static constexpr std::array<field_info, 2> fields = {
+    static constexpr std::array<field_info, 2> svarg_fields = {
         {{.name = "x-even", .required = true}, {.name = "x-color"}}};
   };
   struct cookies_t {
     std::optional<std::string> a;
     std::optional<name_t> b;
 
-    using additional_properties_type = void;
+    using svarg_additional_properties_type = void;
 
-    static constexpr std::array<field_info, 2> fields = {{{.name = "a"}, {.name = "b"}}};
+    static constexpr std::array<field_info, 2> svarg_fields = {{{.name = "a"}, {.name = "b"}}};
   };
 
   path_t path;
@@ -95,16 +95,16 @@ struct get_item {
 };
 
 struct item_response {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::response;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::response;
 
   static constexpr int status = 200;
 
   struct headers_t {
     name_t x_name;
 
-    using additional_properties_type = void;
+    using svarg_additional_properties_type = void;
 
-    static constexpr std::array<field_info, 1> fields = {{{.name = "x-name", .required = true}}};
+    static constexpr std::array<field_info, 1> svarg_fields = {{{.name = "x-name", .required = true}}};
   };
   headers_t headers;
 
@@ -115,7 +115,7 @@ struct item_response {
 
 // PUT /name с необязательным телом
 struct put_name {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::operation;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::operation;
 
   static constexpr inline std::string_view method = "PUT";
   static constexpr std::string_view path_expr = "/name";
@@ -129,11 +129,11 @@ struct put_name {
 
 static get_item make_op() {
   get_item op;
-  op.path.id._implfield = "abc";
-  op.path.n._implfield = 4;
-  op.query.q._implfield = "xy";
+  op.path.id.svarg_implfield = "abc";
+  op.path.n.svarg_implfield = 4;
+  op.query.q.svarg_implfield = "xy";
   op.query.s = "a&b c";
-  op.headers.x_even._implfield = 2;
+  op.headers.x_even.svarg_implfield = 2;
   op.headers.x_color = color_t{color_t::green};
   op.cookies.b = name_t{"zz"};
   return op;
@@ -174,10 +174,10 @@ TEST("request roundtrip") {
 
   get_item out;
   REQUIRE(!from_request(req, out).failed());
-  REQUIRE(out.path.id._implfield == "abc" && out.path.n._implfield == 4);
-  REQUIRE(out.query.q._implfield == "xy" && out.query.s == "a&b c" && !out.query.c);
-  REQUIRE(out.headers.x_even._implfield == 2 && out.headers.x_color->_implfield == color_t::green);
-  REQUIRE(out.cookies.a == "1" && out.cookies.b->_implfield == "zz");
+  REQUIRE(out.path.id.svarg_implfield == "abc" && out.path.n.svarg_implfield == 4);
+  REQUIRE(out.query.q.svarg_implfield == "xy" && out.query.s == "a&b c" && !out.query.c);
+  REQUIRE(out.headers.x_even.svarg_implfield == 2 && out.headers.x_color->svarg_implfield == color_t::green);
+  REQUIRE(out.cookies.a == "1" && out.cookies.b->svarg_implfield == "zz");
 }
 
 TEST("invalid request") {
@@ -209,14 +209,14 @@ static bool parses(const http_request& req, put_name& op) {
 
 TEST("request body") {
   put_name op;
-  op.body.emplace()._implfield = "abc";
+  op.body.emplace().svarg_implfield = "abc";
   http_request req = make_request(op);
   REQUIRE(req.body.content_type == "application/json");
   REQUIRE(req.body.strview() == R"("abc")");
 
   put_name out;
   REQUIRE(parses(req, out));
-  REQUIRE(out.body && out.body->_implfield == "abc");
+  REQUIRE(out.body && out.body->svarg_implfield == "abc");
 
   req.body.content_type = "Application/JSON; charset=utf-8";
   REQUIRE(parses(req, out));
@@ -240,14 +240,14 @@ TEST("request body") {
 
 TEST("response") {
   item_response rsp;
-  rsp.headers.x_name._implfield = "ok";
-  rsp.body._implfield = 6;
+  rsp.headers.x_name.svarg_implfield = "ok";
+  rsp.body.svarg_implfield = 6;
   http_response raw = make_response(rsp);
   REQUIRE(raw.status == 200);
 
   item_response out;
   REQUIRE(!from_response(raw, out).failed());
-  REQUIRE(out.headers.x_name._implfield == "ok" && out.body._implfield == 6);
+  REQUIRE(out.headers.x_name.svarg_implfield == "ok" && out.body.svarg_implfield == 6);
 
   http_response bad = raw;
   bad.headers.front().hvalue = "NO";

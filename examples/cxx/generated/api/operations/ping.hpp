@@ -7,7 +7,8 @@
 namespace api {
 
 struct ping {
-  static constexpr svarg::cxx_support::parse_tag_e parse_tag = svarg::cxx_support::parse_tag_e::operation;
+  static constexpr svarg::cxx_support::parse_tag_e svarg_parse_tag =
+      svarg::cxx_support::parse_tag_e::operation;
 
   static constexpr inline std::string_view spec = "api";
 
@@ -19,7 +20,8 @@ struct ping {
   static constexpr std::string_view path_expr = "/ping";
 
   struct response_200 {
-    static constexpr svarg::cxx_support::parse_tag_e parse_tag = svarg::cxx_support::parse_tag_e::response;
+    static constexpr svarg::cxx_support::parse_tag_e svarg_parse_tag =
+        svarg::cxx_support::parse_tag_e::response;
 
     static constexpr int status = 200;
 

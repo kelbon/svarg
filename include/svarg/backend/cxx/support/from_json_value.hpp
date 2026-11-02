@@ -60,7 +60,7 @@ struct from_json_value<T> {
     if (it == T::values.end())
       return validate_error("string {} cannot be value of enum {}", str, type_name<T>());
     // енам генерируется так, что порядок имён совпадает с порядком в массиве
-    get_special_field(v) = typename T::values_e(std::distance(T::values.begin(), it));
+    get_special_field(v) = typename T::svarg_values_e(std::distance(T::values.begin(), it));
     return {};
   }
 };
@@ -133,13 +133,13 @@ namespace noexport {
 // он, остальные не пробуются (для oneOf не проверяется, что подходит ровно один). pre: j.is_object()
 template <typename T>
 [[nodiscard]] error_code parse_discriminated(const boost::json::value& j, T& v) {
-  const boost::json::value* d = j.get_object().if_contains(T::discriminator_field);
+  const boost::json::value* d = j.get_object().if_contains(T::svarg_discriminator_field);
   if (!d || !d->is_string()) {
     return parse_error("discriminator property `{}` of `{}` is missing or is not a string",
-                       std::string_view(T::discriminator_field), type_name<T>());
+                       std::string_view(T::svarg_discriminator_field), type_name<T>());
   }
   std::string_view value = d->get_string();
-  return T::discriminate(value, [&]<typename X>() -> error_code {
+  return T::svarg_discriminate(value, [&]<typename X>() -> error_code {
     if constexpr (std::is_void_v<X>) {
       return parse_error("unknown discriminator value `{}` of `{}`", value, type_name<T>());
     } else {

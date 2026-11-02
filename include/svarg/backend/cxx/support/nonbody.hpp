@@ -28,7 +28,7 @@ namespace noexport {
 template <typename T>
 constexpr bool is_nullable_wrapper = !std::is_same_v<svarg::noexport::deoptional_type_t<T>, T>;
 
-// требования проверяются по JSON значению, но строить его нужно только если есть required_schemas,
+// требования проверяются по JSON значению, но строить его нужно только если есть svarg_required_schemas,
 // для ограничений достаточно разобранного значения
 template <typename T>
 [[nodiscard]] error_code validate_nonbody(const T& v) {
@@ -82,7 +82,7 @@ template <typename T>
     if (it == U::values.end())
       return validate_error("string `{}` cannot be value of enum {}", str, type_name<U>());
     // порядок значений енама совпадает с порядком в массиве
-    get_special_field(out) = typename U::values_e(std::distance(U::values.begin(), it));
+    get_special_field(out) = typename U::svarg_values_e(std::distance(U::values.begin(), it));
     return {};
   } else if constexpr (an_open_string_enum<U>) {
     out.value = str;

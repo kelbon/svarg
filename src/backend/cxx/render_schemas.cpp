@@ -27,7 +27,7 @@ static std::string render_bound(const number& n) {
 // поля в порядке объявления cxx_support::constraints_t (designated initializers)
 static std::string render_constraints(const std::vector<const ir::constraints_schema*>& cs) {
   std::string result = std::format(
-      "static constexpr std::array<::svarg::cxx_support::constraints_t, {}> constraints = {{{{\n", cs.size());
+      "static constexpr std::array<::svarg::cxx_support::constraints_t, {}> svarg_constraints = {{{{\n", cs.size());
   for (const ir::constraints_schema* c : cs) {
     std::string fields;
     auto add = [&](std::string_view name, std::string value) {
@@ -89,7 +89,7 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
     if (ref != s && !ref.is_fundamental())  // рекурсия
       out.insert(ref);  // если ref уже там был, то автоматически обрабатывается
   };
-  // схемы-требования упоминаются в required_schemas, ограничения рендерятся внутрь и файла не имеют
+  // схемы-требования упоминаются в svarg_required_schemas, ограничения рендерятся внутрь и файла не имеют
   if (t.required) {
     for (const ir::schema_ref& r : *t.required)
       if (r.is_fundamental() || !schemaof(r).type.is_constraints())
@@ -174,13 +174,13 @@ static const ir::discriminator_desc* discriminator_of(const ir::schema_type& t) 
 
 std::string renderer::render_discriminator(const ir::discriminator_desc& d, std::string_view relspec,
                                            const json_pointer& relative) const {
-  // discriminator_field
-  std::string result = std::format("\nstatic constexpr inline std::string_view discriminator_field = {};\n\n",
+  // svarg_discriminator_field
+  std::string result = std::format("\nstatic constexpr inline std::string_view svarg_discriminator_field = {};\n\n",
                                    render_string(d.propertyName));
   // vtor вызывается с типом варианта, void - значение не найдено: vtor.template operator()<X>()
   result += "// `vtor` must accept type, e.g. []<typename X>() { ... }, X = void if value is unknown\n";
-  // discriminate
-  result += "static decltype(auto) discriminate(std::string_view str, auto&& vtor) {\n";
+  // svarg_discriminate
+  result += "static decltype(auto) svarg_discriminate(std::string_view str, auto&& vtor) {\n";
   for (auto&& [str, type] : d.mapping) {
     result += std::format("if (str == {}) {{ return vtor.template operator()<{}>(); }}\n", render_string(str),
                           render_schema_ref(type, relspec, relative).typeref);
@@ -188,8 +188,8 @@ std::string renderer::render_discriminator(const ir::discriminator_desc& d, std:
   result += "return vtor.template operator()<void>();\n";
   result += "}\n";
 
-  // discriminator_for
-  result += "template<typename T> static std::string_view discriminator_for() {\n";
+  // svarg_discriminator_for
+  result += "template<typename T> static std::string_view svarg_discriminator_for() {\n";
   for (auto&& [str, type] : d.mapping) {
     result += std::format("if constexpr (std::is_same_v<T, {}>) {{ return std::string_view({}); }}\n",
                           render_schema_ref(type, relspec, relative).typeref, render_string(str));
@@ -464,7 +464,7 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
       r += std::format(", .explode = {}", *info->explode);
     return r + "},\n";
   };
-  result += std::format("static constexpr std::array<::svarg::cxx_support::field_info, {}> fields = {{{{\n",
+  result += std::format("static constexpr std::array<::svarg::cxx_support::field_info, {}> svarg_fields = {{{{\n",
                         fields.size());
   for (auto&& f : fields)
     if (f.required)
@@ -476,7 +476,7 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
   // доступ к полю по индексу (в порядке fields) без boost::pfr, который дорог для компиляции
   if (!fields.empty()) {
     result +=
-        "static constexpr bool has_svarg_field = true;\n"
+        "static constexpr bool svarg_has_field = true;\n"
         "template <size_t I>\n"
         "[[nodiscard]] constexpr decltype(auto) svarg_field(this auto&& self) noexcept {\n";
     size_t i = 0;
@@ -514,7 +514,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         parsed_requirements.push_back(r);
     }
     if (!parsed_requirements.empty()) {
-      res += std::format("using required_schemas = {}<{}>;\n", typelist_str,
+      res += std::format("using svarg_required_schemas = {}<{}>;\n", typelist_str,
                          render_schemas_array(parsed_requirements, s.spec, s.jsonptr));
     }
     if (!constraints.empty())
@@ -583,15 +583,21 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           for (auto&& v : e.values)
             result += std::format("{}, ", render_string(as_text(v.value)));
           result += "};\n";  // end values
-          result += "enum struct values_e {";
+          result += "enum struct svarg_values_e {";
+          // константы попадают в структуру (using enum): совпавшая с её членом или другой константой
+          // (например "+1" и "-1" в простом режиме) получает суффикс '_', как у открытого enum
+          std::set<std::string> used = {"values", "get", std::string(cxx_support::special_field_name),
+                                        get_schema_name(s, options)};
           for (auto&& v : e.values) {
             // боюсь представить идентификатор созданный из какого-то объекта, но ты сам виноват если такое
             // делаешь
-            result += std::format("{},", make_cxx_ident(as_text(v.value), options));
+            std::string ident = make_cxx_ident(as_text(v.value), options);
+            while (!used.insert(ident).second)
+              ident += '_';
+            result += std::format("{},", ident);
           }
-          result += "};\nusing enum values_e;\n\n";  // end values_e
-          // возможное пересечение имён using enum / special_field_name игнорируется
-          result += render_special_field("values_e");
+          result += "};\nusing enum svarg_values_e;\n\n";  // end svarg_values_e
+          result += render_special_field("svarg_values_e");
         } else {
           result += render_parse_tag(cxx_support::parse_tag_e::enum_);
           result += std::format("static const inline std::array<{}, {}> values = {{", type, e.values.size());
@@ -655,7 +661,7 @@ std::string renderer::render_open_string_enum(const ir::enum_schema& e, const ir
   std::string name = get_schema_name(s, options);
   std::string result = render_parse_tag(cxx_support::parse_tag_e::open_string_enum);
   result += "// известные значения, допустима любая строка\n";
-  std::set<std::string> used = {"value", "values", "is_known", "parse_tag", name};
+  std::set<std::string> used = {"value", "values", "is_known", name};
   std::vector<std::string> consts;
   for (auto&& v : e.values) {
     std::string text =

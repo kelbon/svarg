@@ -8,33 +8,33 @@ using namespace svarg::cxx_support;
 using svarg::arrayof;
 
 struct name_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::fundamental;
 
-  std::string _implfield;
+  std::string svarg_implfield;
 
   // два ограничения: например после allOf<Base, {...}> требования обеих частей складываются
-  static constexpr std::array<constraints_t, 2> constraints = {{
+  static constexpr std::array<constraints_t, 2> svarg_constraints = {{
       constraints_t{.min_length = 2u, .max_length = 4u},
       constraints_t{.pattern = "^[a-z]+$"},
   }};
 };
 
 struct utf8_name_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::fundamental;
 
-  std::string _implfield;
+  std::string svarg_implfield;
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{.max_length = 3u},
   }};
 };
 
 struct even_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::fundamental;
 
-  integer _implfield;
+  integer svarg_implfield;
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{
           .minimum = bound_t(int64_t(0)),
           .maximum = bound_t(int64_t(10)),
@@ -44,11 +44,11 @@ struct even_t {
 };
 
 struct ratio_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::fundamental;
 
-  number _implfield;
+  number svarg_implfield;
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{
           .exclusive_minimum = bound_t(double(0.5)),
           .exclusive_maximum = bound_t(double(1.5)),
@@ -58,83 +58,83 @@ struct ratio_t {
 };
 
 struct ids_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::array;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::array;
 
-  arrayof<integer> _implfield;
+  arrayof<integer> svarg_implfield;
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{.min_items = 1u, .max_items = 3u, .unique_items = true},
   }};
 };
 
 struct patch_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::object;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::object;
 
   std::optional<std::string> a;
   std::optional<std::string> b;
 
-  using additional_properties_type = void;
+  using svarg_additional_properties_type = void;
 
-  static constexpr std::array<field_info, 2> fields = {{{.name = "a"}, {.name = "b"}}};
+  static constexpr std::array<field_info, 2> svarg_fields = {{{.name = "a"}, {.name = "b"}}};
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{.min_properties = 1u},
   }};
 };
 
 // своё ограничение + схема-требование (например allOf с $ref)
 struct short_name_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::fundamental;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::fundamental;
 
-  std::string _implfield;
+  std::string svarg_implfield;
 
-  using required_schemas = metel::typelist<name_t>;
+  using svarg_required_schemas = metel::typelist<name_t>;
 
-  static constexpr std::array<constraints_t, 1> constraints = {{
+  static constexpr std::array<constraints_t, 1> svarg_constraints = {{
       constraints_t{.max_length = 3u},
   }};
 };
 
 struct color_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::string_enum;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::string_enum;
 
-  enum struct values_e { red, green };
-  using enum values_e;
+  enum struct svarg_values_e { red, green };
+  using enum svarg_values_e;
 
   static constexpr std::array<std::string_view, 2> values = {"red", "green"};
 
-  values_e _implfield;
+  svarg_values_e svarg_implfield;
 };
 
 struct level_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::enum_;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::enum_;
 
   static constexpr std::array<integer, 2> values = {1, 3};
 
-  integer _implfield;
+  integer svarg_implfield;
 };
 
 struct with_extra_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::object;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::object;
 
   std::optional<std::string> a;
 
-  using additional_properties_type = integer;
-  additional_properties_t<additional_properties_type> _additional_properties;
+  using svarg_additional_properties_type = integer;
+  additional_properties_t<svarg_additional_properties_type> svarg_additional_properties;
 
-  static constexpr std::array<field_info, 1> fields = {{{.name = "a"}}};
+  static constexpr std::array<field_info, 1> svarg_fields = {{{.name = "a"}}};
 };
 
 // additionalProperties: false
 struct closed_t {
-  static constexpr parse_tag_e parse_tag = parse_tag_e::object;
+  static constexpr parse_tag_e svarg_parse_tag = parse_tag_e::object;
 
   std::optional<std::string> a;
 
-  using additional_properties_type = void;
-  static constexpr bool additional_properties_forbidden = true;
+  using svarg_additional_properties_type = void;
+  static constexpr bool svarg_additional_properties_forbidden = true;
 
-  static constexpr std::array<field_info, 1> fields = {{{.name = "a"}}};
+  static constexpr std::array<field_info, 1> svarg_fields = {{{.name = "a"}}};
 };
 
 template <typename T>
@@ -199,7 +199,7 @@ TEST("object constraints") {
 TEST("additional properties") {
   with_extra_t v;
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": "x", "n": 1})"), v).failed());
-  REQUIRE(v.a == "x" && v._additional_properties.size() == 1 && v._additional_properties.at("n") == 1);
+  REQUIRE(v.a == "x" && v.svarg_additional_properties.size() == 1 && v.svarg_additional_properties.at("n") == 1);
   REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": "x", "n": 1})"));
   REQUIRE(!parses<with_extra_t>(R"({"a": "x", "n": "y"})"));  // неописанное свойство по своей схеме
   // additionalProperties не задано - неописанные свойства пропускаются
@@ -228,7 +228,7 @@ static bool parses_nonbody(std::string_view str) {
 TEST("nonbody string") {
   name_t v;
   REQUIRE(!parse_nonbody_from("abc", v).failed());
-  REQUIRE(v._implfield == "abc");
+  REQUIRE(v.svarg_implfield == "abc");
   REQUIRE(!parses_nonbody<name_t>(R"("ab")"));  // кавычки - часть значения
   REQUIRE(!parses_nonbody<name_t>("a"));        // minLength
   REQUIRE(!parses_nonbody<name_t>("AB"));       // pattern
@@ -258,7 +258,7 @@ TEST("nonbody numbers") {
 TEST("nonbody enums") {
   color_t c;
   REQUIRE(!parse_nonbody_from("green", c).failed());
-  REQUIRE(c._implfield == color_t::green);
+  REQUIRE(c.svarg_implfield == color_t::green);
   REQUIRE(!parses_nonbody<color_t>("blue"));
   REQUIRE(serialize_nonbody_into(c) == "green");
 
@@ -270,7 +270,7 @@ TEST("nonbody enums") {
 TEST("nonbody optional") {
   std::optional<even_t> v;
   REQUIRE(!parse_nonbody_from("4", v).failed());
-  REQUIRE(v && v->_implfield == 4);
+  REQUIRE(v && v->svarg_implfield == 4);
   REQUIRE(serialize_nonbody_into(v) == "4");
 }
 

@@ -430,6 +430,11 @@ components:
           $ref: "#/components/schemas/Pet"
         anyPet:
           $ref: "#/components/schemas/AnyPet"
+        reaction:
+          $ref: "#/components/schemas/Reaction"
+        # совпадало со служебным именем структуры (теперь svarg_fields)
+        fields:
+          type: string
     # not как требование (как NfTypeCond в 3GPP TS 29.510): поля other быть не должно
     # и требование из схем, где есть только required (как anyOf у NFProfile): остальные поля допустимы
     Filter:
@@ -455,6 +460,10 @@ components:
       type: string
       enum: [a, b]
       default: b
+    # значения совпадают с членами структуры enum (get, values) и друг с другом ("+1" и "-1" в простом режиме)
+    Reaction:
+      type: string
+      enum: ["+1", "-1", get, values]
     # oneOf с дискриминатором: значение из mapping (kitty) и неявное (имя схемы Dog). Без дискриминатора
     # {petType: ...} подходил бы под оба варианта
     Pet:

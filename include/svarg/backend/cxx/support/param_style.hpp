@@ -65,7 +65,7 @@ struct array_items_type<std::vector<X, A>> {
 template <typename V>
   requires(an_array<V>)
 struct array_items_type<V> {
-  using type = std::remove_cvref_t<decltype(std::declval<V&>()._implfield)>;
+  using type = std::remove_cvref_t<decltype(std::declval<V&>().svarg_implfield)>;
 };
 
 template <typename V>

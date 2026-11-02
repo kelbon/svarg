@@ -80,11 +80,11 @@ struct to_json_value<T> {
                              throw serialize_error("cannot serialize empty oneOf");
                            },
                            [](auto&& var) -> std::string_view {
-                             return T::template discriminator_for<std::remove_cvref_t<decltype(var)>>();
+                             return T::template svarg_discriminator_for<std::remove_cvref_t<decltype(var)>>();
                            }});
         // на случай если пользователь не заполнил или заполнил неверно
         if (!discriminator.empty())
-          j.get_object()[T::discriminator_field] = boost::json::string(discriminator);
+          j.get_object()[T::svarg_discriminator_field] = boost::json::string(discriminator);
       }
     }
     cxx_support::validate_required_schemas(j, v).rethrow_if_failed();

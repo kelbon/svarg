@@ -272,7 +272,7 @@ error_code multipart_codec::parse(std::string_view content_type, std::string_vie
                                type_name<T>());
         }
         if (filled.test(*index))
-          return parse_error("duplicate multipart part for property `{}`", T::fields[*index].name);
+          return parse_error("duplicate multipart part for property `{}`", T::svarg_fields[*index].name);
         filled.set(*index);
         return visit_field_index<fields_count<T>()>(
             [&]<size_t I>() { return noexport::parse_part<T, I>(headers, part, out); }, *index);

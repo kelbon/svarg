@@ -191,6 +191,26 @@ static http_request with_base_path(http_request req, std::string_view base_path)
   return req;
 }
 
+TEST("enum constants colliding with members") {
+  using api::components::schemas::Reaction;
+  // совпавшая константа получает суффикс '_'
+  static_assert(Reaction::values[0] == "+1" && Reaction::values[1] == "-1");
+  Reaction r;
+  r.get() = Reaction::_1_;
+  REQUIRE(svarg::to_json(r) == "-1");
+  r.get() = Reaction::get_;
+  REQUIRE(svarg::to_json(r) == "get");
+  r.get() = Reaction::values_;
+  REQUIRE(svarg::to_json(r) == "values");
+}
+
+TEST("property named like a service member") {
+  api::components::schemas::Item item;
+  item.name = "n";
+  item.fields = "f";
+  REQUIRE(svarg::to_json(item).as_object().at("fields") == "f");
+}
+
 TEST("discriminator") {
   using api::components::schemas::AnyPet;
   using api::components::schemas::Cat;

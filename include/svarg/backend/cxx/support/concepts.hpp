@@ -49,18 +49,18 @@ enum struct parse_tag_e {
   // просто комбинаторы, недостаточно тривиальные чтобы сделать их алиасами
 
   // имя "спецполя" = <special_field_name>
-  // у каждого может быть using required_schemas = typelist<...>;
+  // у каждого может быть using svarg_required_schemas = typelist<...>;
 
   fundamental,  // какой-то фундаментал с ограничениями
   array,        // одно спецполе array
-  anyof,        // одно спецполе anyof + возможен discriminator_field + discriminate(string_view, auto&& vtor)
-  oneof,        // одно спецполе anyof + возможен discriminator_field + discriminate(string_view, auto&& vtor)
+  anyof,        // одно спецполе anyof + возможен svarg_discriminator_field + svarg_discriminate(string_view, auto&& vtor)
+  oneof,        // одно спецполе anyof + возможен svarg_discriminator_field + svarg_discriminate(string_view, auto&& vtor)
   allof,        // одно спецполе - allof с именем <special_field_name>
   not_a,        // одно спецполе
 
   // не комбинаторы
   object,  // сначала требуемые поля, затем опциональные + fields (описания полей) +
-           // additional_properties_type / additional_properties
+           // svarg_additional_properties_type / svarg_additional_properties
   enum_,
   string_enum,
   open_string_enum,  // std::string value + известные значения values, допустима любая строка
@@ -137,17 +137,17 @@ constexpr std::string_view e2str(parse_tag_e e) noexcept {
 // который по умолчанию бросает 500
 
 template <typename T>
-constexpr bool has_required_schemas = requires { typename T::required_schemas; };
+constexpr bool has_required_schemas = requires { typename T::svarg_required_schemas; };
 
 template <typename T>
 concept has_parse_tag = requires {
-  { std::decay_t<T>::parse_tag } -> std::same_as<const parse_tag_e&>;
+  { std::decay_t<T>::svarg_parse_tag } -> std::same_as<const parse_tag_e&>;
 };
 
 template <typename T>
 constexpr bool tagged_as(parse_tag_e t) noexcept {
   if constexpr (has_parse_tag<T>)
-    return t == std::decay_t<T>::parse_tag;
+    return t == std::decay_t<T>::svarg_parse_tag;
   else
     return false;
 }
@@ -166,12 +166,12 @@ struct noop_fn {
 // oneof/anyof
 template <typename T>
 constexpr bool has_discriminator = requires(std::string_view discriminator_value) {
-  { T::discriminator_field } -> std::convertible_to<std::string_view>;
-  { T::discriminate(discriminator_value, noexport::noop_fn{}) };
+  { T::svarg_discriminator_field } -> std::convertible_to<std::string_view>;
+  { T::svarg_discriminate(discriminator_value, noexport::noop_fn{}) };
 };
 
 template <typename T>
-constexpr inline parse_tag_e parse_tag_of = std::decay_t<T>::parse_tag;
+constexpr inline parse_tag_e parse_tag_of = std::decay_t<T>::svarg_parse_tag;
 
 template <typename T>
 concept an_fundamental = tagged_as<T>(parse_tag_e::fundamental);
@@ -227,8 +227,8 @@ struct field_info {
 
 template <typename T>
 concept has_named_fields = requires {
-  { T::fields[0] } -> std::convertible_to<const field_info&>;
-} || requires { requires T::fields.size() == 0; };
+  { T::svarg_fields[0] } -> std::convertible_to<const field_info&>;
+} || requires { requires T::svarg_fields.size() == 0; };
 
 template <a_body T>
 consteval std::string_view get_content_type() {
@@ -320,25 +320,25 @@ template <typename T>
 
 template <typename T>
 constexpr bool has_additional_properties = [] {
-  if constexpr (requires { typename T::additional_properties_type; })
-    return !std::is_void_v<typename T::additional_properties_type>;
+  if constexpr (requires { typename T::svarg_additional_properties_type; })
+    return !std::is_void_v<typename T::svarg_additional_properties_type>;
   else
     return false;
 }();
 
 // additionalProperties: false - неописанные свойства объекта отвергаются при разборе. Иначе они разбираются
-// в _additional_properties (has_additional_properties) или пропускаются
+// в svarg_additional_properties (has_additional_properties) или пропускаются
 template <typename T>
 constexpr bool forbids_additional_properties = [] {
-  if constexpr (requires { T::additional_properties_forbidden; })
-    return T::additional_properties_forbidden;
+  if constexpr (requires { T::svarg_additional_properties_forbidden; })
+    return T::svarg_additional_properties_forbidden;
   else
     return false;
 }();
 
 template <size_t I, typename T>
 [[nodiscard]] consteval const field_info& get_field_info() noexcept {
-  return std::decay_t<T>::fields[I];
+  return std::decay_t<T>::svarg_fields[I];
 }
 
 template <size_t I, typename T>
@@ -356,20 +356,20 @@ template <size_t I, typename T>
     return {};
 }
 
-// сгенерированные типы перечисляют поля сами (fields, svarg_field<I>, единственное поле _implfield),
+// сгенерированные типы перечисляют поля сами (svarg_fields, svarg_field<I>, единственное поле svarg_implfield),
 // boost::pfr - только для написанных вручную структур: он дорог для компиляции
 template <typename T>
-constexpr bool has_generated_fields = requires { requires T::has_svarg_field; };
+constexpr bool has_generated_fields = requires { requires T::svarg_has_field; };
 
 template <typename T>
-constexpr bool has_single_value_field = requires(T& t) { t._implfield; };
+constexpr bool has_single_value_field = requires(T& t) { t.svarg_implfield; };
 
 template <typename T>
 consteval size_t fields_count() {
   static_assert(metel::is_decayed_v<T>);
   if constexpr (has_named_fields<T>) {
     // fields - только объявленные свойства, поле additional properties (последнее) в них не входит
-    return std::decay_t<T>::fields.size();
+    return std::decay_t<T>::svarg_fields.size();
   } else if constexpr (has_single_value_field<T>) {
     return 1;
   } else if constexpr (std::is_aggregate_v<T>) {
@@ -386,7 +386,7 @@ template <size_t I, typename T>
     return std::forward<T>(t).template svarg_field<I>();
   } else if constexpr (has_single_value_field<U> && !has_named_fields<U>) {
     static_assert(I == 0);
-    return noadl::forwardLike<T>(t._implfield);
+    return noadl::forwardLike<T>(t.svarg_implfield);
   } else {
     return boost::pfr::get<I>(std::forward<T>(t));
   }

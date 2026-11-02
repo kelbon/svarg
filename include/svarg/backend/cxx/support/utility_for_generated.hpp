@@ -19,29 +19,29 @@ constexpr decltype(auto) visit_field_index(F&& f, size_t i) {
 }
 
 // имя максимально кривое для наименьшей вероятности пересечения с другими именами
-static constexpr std::string_view special_field_name = "_implfield";
+static constexpr std::string_view special_field_name = "svarg_implfield";
 
 template <typename T>
 [[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
   static_assert(fields_count<std::remove_const_t<T>>() == 1);
   // <special_field_name>
-  return in._implfield;
+  return in.svarg_implfield;
 }
 
 // additional_properties
 
 template <typename T>
-using additional_properties_schema_t = typename std::decay_t<T>::additional_properties_type;
+using additional_properties_schema_t = typename std::decay_t<T>::svarg_additional_properties_type;
 
-constexpr inline std::string_view additional_properties_schema_alias_name = "additional_properties_type";
-constexpr inline std::string_view additional_properties_field_name = "_additional_properties";
-constexpr inline std::string_view additional_properties_forbidden_name = "additional_properties_forbidden";
+constexpr inline std::string_view additional_properties_schema_alias_name = "svarg_additional_properties_type";
+constexpr inline std::string_view additional_properties_field_name = "svarg_additional_properties";
+constexpr inline std::string_view additional_properties_forbidden_name = "svarg_additional_properties_forbidden";
 
 template <typename T>
 constexpr auto& get_additional_properties(T& x) noexcept {
-  static_assert(std::is_same_v<decltype(x._additional_properties),
+  static_assert(std::is_same_v<decltype(x.svarg_additional_properties),
                                additional_properties_t<additional_properties_schema_t<T>>>);
-  return x._additional_properties;
+  return x.svarg_additional_properties;
 }
 
 // object
@@ -54,7 +54,7 @@ consteval bool valid_generated_object() {
 
   if constexpr (has_additional_properties<T> && has_generated_fields<T>) {
     // поля доступны через svarg_field, положение additional properties не важно
-    return std::is_same_v<decltype(T::_additional_properties),
+    return std::is_same_v<decltype(T::svarg_additional_properties),
                           additional_properties_t<additional_properties_schema_t<T>>>;
   } else if constexpr (has_additional_properties<T>) {
     // для pfr лежит последним полем и с правильным типом

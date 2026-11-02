@@ -53,7 +53,7 @@ struct constraints_t {
 };
 
 template <typename T>
-concept has_constraints = requires { std::decay_t<T>::constraints; };
+concept has_constraints = requires { std::decay_t<T>::svarg_constraints; };
 
 namespace noexport {
 
@@ -140,13 +140,13 @@ template <typename T>
 // регулярное выражение компилируется один раз на ограничение
 template <typename Owner, size_t I>
 [[nodiscard]] const std::regex& pattern_regex() {
-  static const std::regex re(std::string(Owner::constraints[I].pattern), std::regex::ECMAScript);
+  static const std::regex re(std::string(Owner::svarg_constraints[I].pattern), std::regex::ECMAScript);
   return re;
 }
 
 template <typename Owner, size_t I>
 [[nodiscard]] error_code check_string(std::string_view s) {
-  constexpr const constraints_t& c = Owner::constraints[I];
+  constexpr const constraints_t& c = Owner::svarg_constraints[I];
   if constexpr (c.min_length || c.max_length) {
     size_t len = utf8_length(s);
     if (c.min_length && len < *c.min_length)
@@ -163,7 +163,7 @@ template <typename Owner, size_t I>
 
 template <typename Owner, size_t I>
 [[nodiscard]] error_code check_number(bound_t v) {
-  constexpr const constraints_t& c = Owner::constraints[I];
+  constexpr const constraints_t& c = Owner::svarg_constraints[I];
   using std::is_lt, std::is_gt, std::is_lteq, std::is_gteq;
   if (c.minimum && is_lt(compare_numbers(v, *c.minimum)))
     return validate_error("{} is less than minimum {}", bound_str(v), bound_str(*c.minimum));
@@ -182,7 +182,7 @@ template <typename Owner, size_t I>
 
 template <typename Owner, size_t I, typename T>
 [[nodiscard]] error_code check_array(const arrayof<T>& arr) {
-  constexpr const constraints_t& c = Owner::constraints[I];
+  constexpr const constraints_t& c = Owner::svarg_constraints[I];
   if (c.min_items && arr.size() < *c.min_items)
     return validate_error("array size {} is less than minItems {}", arr.size(), *c.min_items);
   if (c.max_items && arr.size() > *c.max_items)
@@ -203,7 +203,7 @@ template <typename Owner, size_t I, typename T>
 
 template <typename Owner, size_t I>
 [[nodiscard]] error_code check_properties_count(size_t count) {
-  constexpr const constraints_t& c = Owner::constraints[I];
+  constexpr const constraints_t& c = Owner::svarg_constraints[I];
   if (c.min_properties && count < *c.min_properties)
     return validate_error("object has {} properties, less than minProperties {}", count, *c.min_properties);
   if (c.max_properties && count > *c.max_properties)
@@ -260,7 +260,7 @@ template <typename Owner, size_t I, typename V>
 // проверяет все ограничения типа `T` для разобранного значения `v`
 template <has_constraints T>
 [[nodiscard]] error_code check_constraints(const T& v) {
-  constexpr size_t n = std::tuple_size_v<std::decay_t<decltype(T::constraints)>>;
+  constexpr size_t n = std::tuple_size_v<std::decay_t<decltype(T::svarg_constraints)>>;
   error_code ec;
   [&]<size_t... Is>(std::index_sequence<Is...>) {
     auto one = [&]<size_t I>(std::index_sequence<I>) {
