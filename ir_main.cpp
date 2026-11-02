@@ -21,6 +21,7 @@ inline const std::unordered_map<std::string_view, pass_ptr> passes_map{
   {"cf", svarg::ir::pass_combinators_flatten},
   {"rur", svarg::ir::pass_rm_useless_requirements},
   {"ta", svarg::ir::pass_transform_allofs},
+  {"aer", svarg::ir::pass_allof_extract_requirements},
 };
 // clang-format on
 

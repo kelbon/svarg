@@ -1,7 +1,8 @@
 
 TAG(optimize, "enable optimizations")
 STRING(passes, "list of additional optimization passes separated by whitespace. Allowed names: "
-"rts - remove trivial schemas, rus - remove unused schemas, cf - combinators flatten, rur - remove useless requirements, ta - transform allofs",
+"rts - remove trivial schemas, rus - remove unused schemas, cf - combinators flatten, rur - remove useless requirements, ta - transform allofs, "
+"aer - allof extract requirements",
  default(""))
 
 ALIAS(O2, optimize)

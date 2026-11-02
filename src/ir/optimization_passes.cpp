@@ -29,6 +29,7 @@ ir_object optimization_pipeline(ir_object ir, const ir_options& options) {
   for (MAYBE_EVER) {
     count = 0;
 
+    do_pass(pass_allof_extract_requirements);
     do_pass(pass_combinators_flatten);
     do_pass(pass_transform_allofs);
     //  после объединения oneOf некоторые схемы могут оказаться неиспользованными
@@ -482,6 +483,49 @@ pass_result pass_rm_useless_requirements(ir_object ir, const ir_options& options
 template <typename... Args>
 static void emit_warn(std::format_string<Args...> fmt, Args&&... args) {
   std::println(fmt, std::forward<Args>(args)...);
+}
+
+pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
+  if (!ir.schemas)
+    return {std::move(ir), 0};
+  ir.validate();
+  access_schema get(*ir.schemas);
+  auto is_any = [](const schema_ref& r) { return r.is_fundamental(fundamental_e::any); };
+  // член allOf не влияет на представление
+  auto only_requirements = [&](const schema_ref& r) {
+    if (is_any(r))
+      return true;
+    if (r.is_fundamental())
+      return false;
+    const schema& m = get(r);
+    if (const fundamental_e* f = m.type.if_fundamental(); f && *f == fundamental_e::any)
+      return true;
+    const object_schema* obj = m.type.if_object();
+    return obj && is_any(obj->additional_properties) &&
+           std::ranges::all_of(obj->fields, [&](const object_field_info& f) { return is_any(f.type); });
+  };
+  size_t count = 0;
+  for (const schema& cs : *ir.schemas) {
+    // spec/jsonptr не меняются
+    schema& s = const_cast<schema&>(cs);
+    allof_schema* allof = s.type.if_allof();
+    if (!allof || std::ranges::all_of(allof->schemas, only_requirements) ||
+        std::ranges::none_of(allof->schemas, only_requirements))
+      continue;
+    arrayof<schema_ref> moved;
+    for (const schema_ref& r : allof->schemas)
+      // any без требований ничего не проверяет
+      if (only_requirements(r) && !is_any(r))
+        moved.push_back(r);
+    std::erase_if(allof->schemas, only_requirements);
+    if (!moved.empty()) {
+      s.add_requirements(moved);
+      remove_duplicates(*s.required);
+    }
+    ++count;
+  }
+  assert(validate_ir_object(ir));
+  return {std::move(ir), count};
 }
 
 [[nodiscard]] pass_result pass_transform_allofs(ir_object ir, const ir_options& options) {

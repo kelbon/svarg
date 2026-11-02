@@ -35,6 +35,13 @@ struct pass_result {
 // любая строка. Так в спеках описываются расширяемые перечисления (NFType в 3GPP)
 [[nodiscard]] pass_result pass_open_enums(ir_object, const ir_options&);
 
+// выносит из allOf в требования схемы члены, которые не влияют на представление: схема без типа (any, в том
+// числе с требованиями: not, ограничения) и объект, который только требует наличия полей (все поля и
+// additionalProperties - any, как {required: [a]}). allOf[X, not A] -> allOf[X] с требованием not A,
+// остальное (allOf<X> -> X, слияние объектов) делают другие проходы. Если в allOf не остаётся других членов,
+// он не меняется
+[[nodiscard]] pass_result pass_allof_extract_requirements(ir_object, const ir_options&);
+
 // преобразует allOf из только фундаментальных типов в какой-то из них
 // allOf'ы с объектами объединяет в один объект, эмулируя "наследование"
 // также заодно убирает невозможные allof типа allof<int, string>

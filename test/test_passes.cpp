@@ -682,6 +682,255 @@ TEST("pass transform allofs 2") {
 }
 
 // allOf из строк с ограничениями: тип сводится к строке, ограничения всех частей сохраняются
+TEST("allof extract requirements") {
+  // IR получен из спеки (svarg-ir -s <dir> t.yaml), ожидаемый результат - svarg-ir --passes aer:
+  // openapi: 3.1.0
+  // info: {title: t, version: "1"}
+  // paths: {}
+  // components:
+  //   schemas:
+  //     Svc:
+  //       type: object
+  //       properties:
+  //         a:
+  //           type: string
+  //     X:
+  //       allOf:
+  //         - $ref: '#/components/schemas/Svc'
+  //         - not:
+  //             required: [x]
+  //         - required: [y]
+  //         - {}
+  //     # только требования: выбирать представление не из чего, не меняется
+  //     Y:
+  //       allOf:
+  //         - not:
+  //             required: [x]
+  //         - required: [y]
+  std::string_view input = R"("schemas":
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Svc"
+    "name": "Svc"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "a"
+            "required": false
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X"
+    "name": "X"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "@any@"
+          - "name": "Svc"
+            "spec": "t"
+            "jsonptr": "/components/schemas/Svc"
+          - "spec": "t"
+            "jsonptr": "/components/schemas/X/allOf/1"
+          - "spec": "t"
+            "jsonptr": "/components/schemas/X/allOf/2"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/X/allOf/1/@not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "t"
+          "jsonptr": "/components/schemas/X/allOf/1/not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1/not"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "x"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/2"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "y"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y"
+    "name": "Y"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "t"
+            "jsonptr": "/components/schemas/Y/allOf/0"
+          - "spec": "t"
+            "jsonptr": "/components/schemas/Y/allOf/1"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/Y/allOf/0/@not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "t"
+          "jsonptr": "/components/schemas/Y/allOf/0/not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0/not"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "x"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/1"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "y"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+)";
+  std::string_view expected = R"("schemas":
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Svc"
+    "name": "Svc"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "a"
+            "required": false
+        "additional_properties":
+          "spec": "@never@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X"
+    "name": "X"
+    "type":
+      "allOf":
+        "schemas":
+          - "name": "Svc"
+            "spec": "t"
+            "jsonptr": "/components/schemas/Svc"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/X/allOf/1"
+      - "spec": "t"
+        "jsonptr": "/components/schemas/X/allOf/2"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/X/allOf/1/@not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "t"
+          "jsonptr": "/components/schemas/X/allOf/1/not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/1/not"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "x"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/X/allOf/2"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "y"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y"
+    "name": "Y"
+    "type":
+      "allOf":
+        "schemas":
+          - "spec": "t"
+            "jsonptr": "/components/schemas/Y/allOf/0"
+          - "spec": "t"
+            "jsonptr": "/components/schemas/Y/allOf/1"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0"
+    "type":
+      "fundamental": "any"
+    "required":
+      - "spec": "t"
+        "jsonptr": "/components/schemas/Y/allOf/0/@not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0/@not"
+    "type":
+      "not":
+        "type":
+          "spec": "t"
+          "jsonptr": "/components/schemas/Y/allOf/0/not"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/0/not"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "x"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+  - "spec": "t"
+    "jsonptr": "/components/schemas/Y/allOf/1"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "y"
+            "required": true
+        "additional_properties":
+          "spec": "@any@"
+)";
+  ir_options opts;
+  REQUIRE(test_pass(input, expected, opts, &ir::pass_allof_extract_requirements));
+}
+
 TEST("pass transform allofs keeps constraints") {
   std::string_view input = R"(
 "schemas":
