@@ -66,3 +66,18 @@ target_include_directories(test_generated PRIVATE "${SVARG_TEST_GENERATED_DIR}"
                                                   "${CMAKE_CURRENT_SOURCE_DIR}/generated_api")
 target_link_libraries(test_generated PRIVATE svarg_cxx_supportlib)
 target_link_libraries(test_router PRIVATE svarg_cxx_supportlib)
+
+# test_generated_names - код из generated_api/names.yaml в "непростом" режиме имён
+add_custom_command(
+    OUTPUT "${SVARG_TEST_GENERATED_DIR}/names/server.hpp" "${SVARG_TEST_GENERATED_DIR}/names/client.hpp"
+           "${SVARG_TEST_GENERATED_DIR}/names/names.cpp"
+    COMMAND svarg --out "${SVARG_TEST_GENERATED_DIR}" --specs-dir "${CMAKE_CURRENT_SOURCE_DIR}/generated_api"
+            --simple-identifiers false names.yaml
+    DEPENDS svarg "${CMAKE_CURRENT_SOURCE_DIR}/generated_api/names.yaml"
+    VERBATIM
+)
+target_sources(test_generated_names PRIVATE "${SVARG_TEST_GENERATED_DIR}/names/server.hpp"
+                                            "${SVARG_TEST_GENERATED_DIR}/names/client.hpp"
+                                            "${SVARG_TEST_GENERATED_DIR}/names/names.cpp")
+target_include_directories(test_generated_names PRIVATE "${SVARG_TEST_GENERATED_DIR}")
+target_link_libraries(test_generated_names PRIVATE svarg_cxx_supportlib)

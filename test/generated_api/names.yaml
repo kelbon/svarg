@@ -1,0 +1,38 @@
+# имена, которые в простом режиме совпадают (генерируется с --simple-identifiers false, см. test/CMakeLists.txt)
+openapi: 3.1.0
+info: {title: names, version: "1"}
+servers: [{url: /}]
+paths:
+  /holder:
+    get:
+      operationId: getHolder
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Holder"
+components:
+  schemas:
+    label:
+      type: object
+      properties:
+        n:
+          type: string
+    Holder:
+      type: object
+      required: [label]
+      properties:
+        # поле с тем же именем, что и тип: короткое имя типа было бы скрыто полем
+        label:
+          $ref: "#/components/schemas/label"
+        labels:
+          type: array
+          items:
+            $ref: "#/components/schemas/label"
+        # в простом режиме оба - _1
+        "+1":
+          type: integer
+        "-1":
+          type: integer

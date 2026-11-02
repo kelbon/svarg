@@ -33,6 +33,10 @@ std::string renderer::make_namespace(std::string_view spec, json_pointer jp) con
 
 std::string renderer::make_namespace(std::string_view spec, const json_pointer& jp,
                                      std::string_view relative_spec, const json_pointer& relative) const {
+  // в "непростом" режиме имена типов полные: короткое имя могло бы оказаться скрыто членом структуры с тем
+  // же именем (поле label типа label)
+  if (!options.simple_cxx_identifiers)
+    return std::format("::{}", make_namespace(spec, jp));
   return namespace_relative(make_namespace(relative_spec, relative), make_namespace(spec, jp));
 }
 
