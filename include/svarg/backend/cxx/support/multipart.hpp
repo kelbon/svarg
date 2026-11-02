@@ -251,8 +251,11 @@ error_code multipart_codec::parse(std::string_view content_type, std::string_vie
           if (!is_equal_ci(kind, "form-data") || name == disposition.end())
             return parse_error("form-data part without Content-Disposition name");
           index = get_field_index<T>(name->second);
-          if (!index)
-            return parse_error("unexpected form-data part `{}` in `{}`", name->second, type_name<T>());
+          if (!index) {
+            if constexpr (forbids_additional_properties<T>)
+              return parse_error("unexpected form-data part `{}` in `{}`", name->second, type_name<T>());
+            return {};
+          }
         } else {
           // RFC 2046: без Content-Type часть - text/plain
           std::string_view part_type = headers.get("content-type");

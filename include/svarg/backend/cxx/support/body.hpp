@@ -59,8 +59,10 @@ struct form_codec {
               return e;
             get_additional_properties(out).try_emplace(std::string(name), std::move(property));
             return {};
-          } else {
+          } else if constexpr (forbids_additional_properties<T>) {
             return parse_error("field `{}` unexpected in type `{}`", name, type_name<T>());
+          } else {
+            return {};
           }
         });
     if (ec)

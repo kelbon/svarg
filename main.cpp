@@ -97,7 +97,6 @@ int main(int argc, char* argv[]) try {
 
   std::vector<fs::path> specs2generate(inputs.begin(), inputs.end());
   openapi_options options;
-  options.unsetted_additional_properties = cliopts.unsetted_additional_properties;
   for (auto&& inc : cliopts.include_dirs.args) {
     if (!fs::exists(inc) || !fs::is_directory(inc)) {
       std::println("include directory `{}` does not exists", inc);
@@ -135,6 +134,7 @@ int main(int argc, char* argv[]) try {
   renoptions.dry_run = cliopts.dry_run;
   renoptions.simple_cxx_identifiers = cliopts.simple_identifiers;
   renoptions.file_prefix = cliopts.file_prefix;
+  renoptions.unsetted_additional_properties = cliopts.unsetted_additional_properties;
   for (const std::string& ct : cliopts.stream_content_types.args) {
     std::string mt(without_media_type_parameters(monomorph_media_type(ct)));
     if (!std::ranges::contains(renoptions.stream_content_types, mt))

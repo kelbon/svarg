@@ -529,7 +529,7 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
     if (const fundamental_e* f = m.type.if_fundamental(); f && *f == fundamental_e::any)
       return true;
     const object_schema* obj = m.type.if_object();
-    return obj && is_any(obj->additional_properties) &&
+    return obj && (!obj->additional_properties || is_any(*obj->additional_properties)) &&
            std::ranges::all_of(obj->fields, [&](const object_field_info& f) { return is_any(f.type); });
   };
   size_t count = 0;

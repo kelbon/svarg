@@ -125,6 +125,18 @@ struct with_extra_t {
   static constexpr std::array<field_info, 1> fields = {{{.name = "a"}}};
 };
 
+// additionalProperties: false
+struct closed_t {
+  static constexpr parse_tag_e parse_tag = parse_tag_e::object;
+
+  std::optional<std::string> a;
+
+  using additional_properties_type = void;
+  static constexpr bool additional_properties_forbidden = true;
+
+  static constexpr std::array<field_info, 1> fields = {{{.name = "a"}}};
+};
+
 template <typename T>
 static bool parses(std::string_view json) {
   T v;
@@ -189,6 +201,14 @@ TEST("additional properties") {
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": "x", "n": 1})"), v).failed());
   REQUIRE(v.a == "x" && v._additional_properties.size() == 1 && v._additional_properties.at("n") == 1);
   REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": "x", "n": 1})"));
+  REQUIRE(!parses<with_extra_t>(R"({"a": "x", "n": "y"})"));  // неописанное свойство по своей схеме
+  // additionalProperties не задано - неописанные свойства пропускаются
+  patch_t p;
+  REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": "x", "c": 1})"), p).failed());
+  REQUIRE(p.a == "x" && !p.b);
+  // additionalProperties: false - отвергаются
+  REQUIRE(parses<closed_t>(R"({"a": "x"})"));
+  REQUIRE(!parses<closed_t>(R"({"a": "x", "c": 1})"));
 }
 
 TEST("parsed value is kept") {

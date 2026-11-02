@@ -186,8 +186,11 @@ template <typename V>
 [[nodiscard]] error_code add_object_property(std::string_view key, std::string_view value,
                                              boost::json::value& acc) {
   std::optional<size_t> index = get_field_index<V>(key);
-  if (!index)
-    return parse_error("unexpected property `{}` of `{}`", key, type_name<V>());
+  if (!index) {
+    if constexpr (forbids_additional_properties<V>)
+      return parse_error("unexpected property `{}` of `{}`", key, type_name<V>());
+    return {};
+  }
   if (acc.is_null())
     acc = boost::json::object();
   return visit_field_index<fields_count<V>()>(

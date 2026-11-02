@@ -35,6 +35,7 @@ using additional_properties_schema_t = typename std::decay_t<T>::additional_prop
 
 constexpr inline std::string_view additional_properties_schema_alias_name = "additional_properties_type";
 constexpr inline std::string_view additional_properties_field_name = "_additional_properties";
+constexpr inline std::string_view additional_properties_forbidden_name = "additional_properties_forbidden";
 
 template <typename T>
 constexpr auto& get_additional_properties(T& x) noexcept {

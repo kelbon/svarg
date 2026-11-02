@@ -225,16 +225,14 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
         continue;
       }
     }
-    {
-      if constexpr (cxx_support::an_object<A> && cxx_support::has_additional_properties<A>) {
-        cxx_support::additional_properties_schema_t<A> property;
-        ec = try_from_json(value, property);
-        if (ec)
-          return ec;
-        cxx_support::get_additional_properties(v).try_emplace(key, std::move(property));
-      } else {
-        return parse_error("field `{}` unexpected in type `{}`", std::string_view(key), type_name<A>());
-      }
+    if constexpr (cxx_support::has_additional_properties<A>) {
+      cxx_support::additional_properties_schema_t<A> property;
+      ec = try_from_json(value, property);
+      if (ec)
+        return ec;
+      cxx_support::get_additional_properties(v).try_emplace(key, std::move(property));
+    } else if constexpr (cxx_support::forbids_additional_properties<A>) {
+      return parse_error("field `{}` unexpected in type `{}`", std::string_view(key), type_name<A>());
     }
   }
   if (unparsed.any()) {

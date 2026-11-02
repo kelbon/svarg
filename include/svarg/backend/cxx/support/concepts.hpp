@@ -326,6 +326,16 @@ constexpr bool has_additional_properties = [] {
     return false;
 }();
 
+// additionalProperties: false - неописанные свойства объекта отвергаются при разборе. Иначе они разбираются
+// в _additional_properties (has_additional_properties) или пропускаются
+template <typename T>
+constexpr bool forbids_additional_properties = [] {
+  if constexpr (requires { T::additional_properties_forbidden; })
+    return T::additional_properties_forbidden;
+  else
+    return false;
+}();
+
 template <size_t I, typename T>
 [[nodiscard]] consteval const field_info& get_field_info() noexcept {
   return std::decay_t<T>::fields[I];

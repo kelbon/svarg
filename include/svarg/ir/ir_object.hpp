@@ -205,7 +205,7 @@ struct object_schema {
   SVARG_IR_TYPE;
 
   arrayof<object_field_info> fields;
-  schema_ref additional_properties;
+  std::optional<schema_ref> additional_properties;
 
   object_field_info* find_field(std::string_view name) noexcept {
     for (auto& f : fields)
@@ -230,7 +230,8 @@ struct object_schema {
       }
       *existing_field = field;
     }
-    additional_properties = other.additional_properties;
+    if (other.additional_properties)
+      additional_properties = other.additional_properties;
   }
 };
 

@@ -113,7 +113,8 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
       // ограничения рендерятся внутрь владельца и ни на что не ссылаются
       [&](const ir::constraints_schema&) {},
       [&](const ir::object_schema& a) {
-        collect(a.additional_properties);
+        if (a.additional_properties)
+          collect(*a.additional_properties);
         for (auto& f : a.fields)
           collect(f.type);
         // схемы хедеров частей multipart рендерятся внутрь
@@ -424,8 +425,13 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
     if (!f.required)
       result += render_field(f);
   }
+  // не задано - неописанные свойства пропускаются при разборе, never - отвергаются
   if (!additional_properties || additional_properties->is_fundamental(ir::fundamental_e::never)) {
-    result += std::format("\nusing {} = void;\n\n", cxx_support::additional_properties_schema_alias_name);
+    result += std::format("\nusing {} = void;\n", cxx_support::additional_properties_schema_alias_name);
+    if (additional_properties)
+      result += std::format("static constexpr bool {} = true;\n",
+                            cxx_support::additional_properties_forbidden_name);
+    result += "\n";
   } else {
     result += std::format("\nusing {} = {};\n\n", cxx_support::additional_properties_schema_alias_name,
                           render_schema_ref(*additional_properties, relspec, relative).typeref);
@@ -616,8 +622,16 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
         if (body && body->membersEncoding)
           for (auto& [prop, ct] : *body->membersEncoding)
             extra[prop].encoding = ct.str();
+        std::optional additional_properties = a.additional_properties;
+        // объект только с any полями лишь требует их наличия (см. render_options)
+        auto describes = [](const ir::object_field_info& f) {
+          return !f.type.is_fundamental(ir::fundamental_e::any);
+        };
+        if (!additional_properties && !options.unsetted_additional_properties &&
+            std::ranges::any_of(a.fields, describes))
+          additional_properties = ir::make_fundamental_ref(ir::fundamental_e::never);
         result += render_object_fields(a.fields, s.spec, s.jsonptr, /*fields_owner=*/s.ref(),
-                                       a.additional_properties, part_headers, &extra);
+                                       additional_properties, part_headers, &extra);
         return result;
       },
   };

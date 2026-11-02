@@ -23,6 +23,11 @@ struct render_options {
   // медиа типы тела ответа, которое передаётся потоком (в нижнем регистре, без параметров). Структура такого
   // ответа без тела: сервер отправляет его ctx.stream_response, клиент получает частями в колбэк
   std::vector<std::string> stream_content_types = {"application/octet-stream"};
+  // незаданный additionalProperties объекта: true - неописанные свойства допустимы (пропускаются при
+  // разборе), false - как additionalProperties: false. Объект, все поля которого any (только required, как
+  // anyOf: [{required: [fqdn]}, ...] у NFProfile, или просто type: object), ничего не описывает, а только
+  // требует наличия полей, поэтому для него опция игнорируется: запрет отверг бы любой объект с другими полями
+  bool unsetted_additional_properties = true;
 };
 
 // то, что попадает в field_info поля помимо имени и обязательности

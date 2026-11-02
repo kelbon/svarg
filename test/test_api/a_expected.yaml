@@ -42,8 +42,6 @@
               "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/quantity"
             "name": "quantity"
             "required": true
-        "additional_properties":
-          "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema/properties/itemId"
     "type":
@@ -92,8 +90,6 @@
               "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
             "name": "status"
             "required": false
-        "additional_properties":
-          "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/components/schemas/OrderStatusEvent/properties/status"
     "name": "orderStatusEvent_e"
@@ -131,8 +127,6 @@
               "jsonptr": "/components/schemas/Order"
             "name": "address"
             "required": false
-        "additional_properties":
-          "spec": "@never@"
   - "spec": "api-a"
     "jsonptr": "/components/schemas/User/properties/id"
     "type":
@@ -248,8 +242,6 @@
               "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId"
             "name": "orderId"
             "required": false
-        "additional_properties":
-          "spec": "@never@"
     "meta":
       "x-format-hint": "int64"
   - "spec": "api-a"
@@ -288,8 +280,6 @@
               "jsonptr": "/components/schemas/Error/properties/message"
             "name": "message"
             "required": false
-        "additional_properties":
-          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Error/properties/code"
     "type":
@@ -330,8 +320,6 @@
               "jsonptr": "/components/schemas/Money/properties/currency"
             "name": "currency"
             "required": false
-        "additional_properties":
-          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Money/properties/amount"
     "type":
@@ -381,8 +369,6 @@
               "jsonptr": "/components/schemas/Order/properties/status"
             "name": "status"
             "required": false
-        "additional_properties":
-          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/id"
     "type":
@@ -421,8 +407,6 @@
               "jsonptr": "/components/schemas/Order/properties/item/properties/title"
             "name": "title"
             "required": true
-        "additional_properties":
-          "spec": "@never@"
   - "spec": "api-b"
     "jsonptr": "/components/schemas/Order/properties/item/properties/id"
     "type":

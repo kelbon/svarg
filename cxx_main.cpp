@@ -37,6 +37,7 @@ int main(int argc, char* argv[]) try {
     ir = ir::optimization_pipeline(std::move(ir), ir::ir_options{});
   cxx::render_options options;
   options.simple_cxx_identifiers = cliopts.simple_identifiers;
+  options.unsetted_additional_properties = cliopts.unsetted_additional_properties;
   cxx::renderer r(ir, options);
   r.render2cxx(cliopts.out);
   auto onfile = [](const fs::path& p, bool success) {
