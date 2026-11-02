@@ -5,4 +5,16 @@
     "type":
       "array":
         "element":
-          "spec": "@never@"
+          "name": "NotAny"
+          "spec": "hmm.yaml"
+          "jsonptr": "/components/schemas/NotAny"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/NotAny"
+    "name": "NotAny"
+    "type":
+      "fundamental": "never"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/NotNever"
+    "name": "NotNever"
+    "type":
+      "fundamental": "any"

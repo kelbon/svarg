@@ -158,7 +158,7 @@ struct access_schema {
 // на что заменить this_schema
 using maybe_replace = std::optional<schema_ref>;
 
-static maybe_replace flatten_not(schema& this_schema, not_schema& n, access_schema get, size_t& changes) {
+static maybe_replace flatten_not_impl(schema& this_schema, not_schema& n, access_schema get) {
   auto handle_not_fundamental = [&](fundamental_e f) -> maybe_replace {
     if (f == fundamental_e::never)
       return make_fundamental_ref(fundamental_e::any);  // not<@never@> -> @any@
@@ -181,6 +181,21 @@ static maybe_replace flatten_not(schema& this_schema, not_schema& n, access_sche
     return handle_not_fundamental(*ot.type.if_fundamental());
   }
   return std::nullopt;
+}
+
+static maybe_replace flatten_not(schema& this_schema, not_schema& n, access_schema get, size_t& changes,
+                                 const ir_options& options) {
+  maybe_replace r = flatten_not_impl(this_schema, n, get);
+  // замена удаляет схему. Именованную - только если это разрешено (как anyOf<X> -> X), иначе она остаётся,
+  // но с фундаментальным типом, если он получился
+  if (r && this_schema.name && options.allow_rm_unused != remove_category_e::any) {
+    if (std::optional f = r->if_fundamental()) {
+      this_schema.type.data = *f;
+      ++changes;
+    }
+    return std::nullopt;
+  }
+  return r;
 }
 
 // anyof/allof/oneof
@@ -280,7 +295,7 @@ static maybe_replace flatten_combinator(const schema& s, const schemas_t& all_sc
   auto& this_schema = const_cast<schema&>(s);
   access_schema accessor(all_schemas);
   matcher vtor{
-      [&](not_schema& n) -> maybe_replace { return flatten_not(this_schema, n, accessor, changes); },
+      [&](not_schema& n) -> maybe_replace { return flatten_not(this_schema, n, accessor, changes, options); },
       [](array_schema& arr) -> maybe_replace { return std::nullopt; },
       [](object_schema&) -> maybe_replace { return std::nullopt; },
       [](enum_schema&) -> maybe_replace { return std::nullopt; },

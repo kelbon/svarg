@@ -1,5 +1,12 @@
 "schemas":
   - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/TripleNot"
+    "name": "TripleNot"
+    "type":
+      "not":
+        "type":
+          "spec": "@string@"
+  - "spec": "hmm.yaml"
     "jsonptr": "/components/schemas/TripleNot/not/not"
     "type":
       "not":

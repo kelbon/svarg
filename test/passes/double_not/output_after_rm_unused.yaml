@@ -7,3 +7,8 @@
         "fields": []
         "additional_properties":
           "spec": "@never@"
+  - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/DoubleNot"
+    "name": "DoubleNot"
+    "type":
+      "fundamental": "string"

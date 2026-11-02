@@ -87,7 +87,7 @@ TEST("flatten nested anyOf") {
 }
 
 TEST("double not") {
-  // верхний not заменяется на Abc, тот что посередине остаётся висеть бесполезный
+  // именованная DoubleNot при noone не удаляется, а становится string; средний not остаётся бесполезным
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
   REQUIRE(test_ir("double_not/input.yaml", "double_not/output.yaml", opts, &ir::pass_combinators_flatten));
@@ -99,7 +99,7 @@ TEST("double not") {
 }
 
 TEST("triple not") {
-  // остаётся not string
+  // TripleNot становится not string
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
   REQUIRE(test_ir("triple_not/input.yaml", "triple_not/output.yaml", opts, &ir::pass_combinators_flatten));
@@ -108,7 +108,7 @@ TEST("triple not") {
 }
 
 TEST("not any/never") {
-  // NotNever/NotAny удаляются и заменяются в местах использования на any/never
+  // именованные NotNever/NotAny при noone не удаляются, а становятся any/never
   ir_options opts;
   opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
   REQUIRE(

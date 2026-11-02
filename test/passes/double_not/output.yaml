@@ -8,6 +8,11 @@
         "additional_properties":
           "spec": "@never@"
   - "spec": "hmm.yaml"
+    "jsonptr": "/components/schemas/DoubleNot"
+    "name": "DoubleNot"
+    "type":
+      "fundamental": "string"
+  - "spec": "hmm.yaml"
     "jsonptr": "/components/schemas/DoubleNot/not"
     "type":
       "not":
