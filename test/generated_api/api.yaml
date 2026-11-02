@@ -435,6 +435,8 @@ components:
         # совпадало со служебным именем структуры (теперь svarg_fields)
         fields:
           type: string
+        tree:
+          $ref: "#/components/schemas/Tree"
     # not как требование (как NfTypeCond в 3GPP TS 29.510): поля other быть не должно
     # и требование из схем, где есть только required (как anyOf у NFProfile): остальные поля допустимы
     Filter:
@@ -460,6 +462,15 @@ components:
       type: string
       enum: [a, b]
       default: b
+    # обязательное рекурсивное поле (через массив)
+    Tree:
+      type: object
+      required: [children]
+      properties:
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tree"
     # значения совпадают с членами структуры enum (get, values) и друг с другом ("+1" и "-1" в простом режиме)
     Reaction:
       type: string

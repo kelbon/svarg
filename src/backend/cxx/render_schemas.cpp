@@ -385,10 +385,9 @@ const ir::body* renderer::find_body_encodings(const ir::schema& s) const {
 
 std::string renderer::render_object_field(const ir::object_field_info& field, std::string_view relspec,
                                           const json_pointer& relative, bool recursive_field) const {
-  if (recursive_field && field.required) {
-    throw render_error("field `{}` in type `{}#{}` recursive and required", field.name, relspec,
-                       relative.escaped());
-  }
+  // обязательное рекурсивное поле - box<T> (render_required_field): рекурсия часто идёт через массив или
+  // anyOf/oneOf (account.external_accounts.data в спеке Stripe), и данные конечны. Отличать такую рекурсию от
+  // прямой было бы сложно, а бесконечное значение просто не разберётся
   // поле со значением по умолчанию присутствует всегда (рекурсивное остаётся опциональным)
   if (field.default_value && !recursive_field) {
     return std::format("{} = {}", render_required_field(field.type, field.name, relspec, relative, false),

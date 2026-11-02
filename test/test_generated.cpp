@@ -211,6 +211,14 @@ TEST("property named like a service member") {
   REQUIRE(svarg::to_json(item).as_object().at("fields") == "f");
 }
 
+TEST("required recursive field") {
+  api::components::schemas::Tree t;
+  REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"children": [{"children": []}]})"), t).failed());
+  REQUIRE(t.children->size() == 1 && (*t.children)[0].children->empty());
+  REQUIRE(svarg::to_json(t) == boost::json::parse(R"({"children": [{"children": []}]})"));
+  REQUIRE(svarg::try_from_json(boost::json::parse("{}"), t).failed());
+}
+
 TEST("discriminator") {
   using api::components::schemas::AnyPet;
   using api::components::schemas::Cat;
