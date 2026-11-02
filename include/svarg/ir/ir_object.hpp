@@ -228,6 +228,11 @@ struct object_schema {
         fields.push_back(field);
         continue;
       }
+      // поле any (например, только перечислено в required) не сужает тип: any && T == T
+      if (field.type.is_fundamental(fundamental_e::any)) {
+        existing_field->required = existing_field->required || field.required;
+        continue;
+      }
       *existing_field = field;
     }
     if (other.additional_properties)

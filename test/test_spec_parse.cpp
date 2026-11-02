@@ -143,7 +143,7 @@ components:
       type: [string, array, object, "null"]
       properties:
         a: {type: integer}
-      required: [a]
+      required: [a, b]
     NoItems:
       type: array
 )");
@@ -160,8 +160,10 @@ components:
   REQUIRE(anyof && anyof->schemas.size() == 3);
   const auto* arr = get("/components/schemas/Multi/@array").type.if_array();
   REQUIRE(arr && arr->element.is_fundamental(svarg::ir::fundamental_e::any));
+  // b только в required - обязательное поле any
   const auto* obj = get("/components/schemas/Multi/@object").type.if_object();
-  REQUIRE(obj && obj->fields.size() == 1 && obj->find_field("a") && obj->find_field("a")->required);
+  REQUIRE(obj && obj->fields.size() == 2 && obj->find_field("b") && obj->find_field("b")->required &&
+          obj->find_field("b")->type.is_fundamental(svarg::ir::fundamental_e::any));
   const auto* no_items = get("/components/schemas/NoItems").type.if_array();
   REQUIRE(no_items && no_items->element.is_fundamental(svarg::ir::fundamental_e::any));
 }

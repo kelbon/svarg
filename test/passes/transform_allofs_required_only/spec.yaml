@@ -1,0 +1,19 @@
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths: {}
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        x:
+          type: string
+    # x только в required: становится обязательным, но остаётся string
+    Derived:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            y:
+              type: integer
+          required: [x, y]

@@ -197,6 +197,14 @@ TEST("rm useless requirements inlines single requirement of any") {
                     &ir::pass_rm_useless_requirements));
 }
 
+// поле, которое только перечислено в required, при слиянии не меняет тип поля базы
+TEST("pass transform allofs required only field") {
+  openapi_options opts;
+  opts.ir_opts.enable_optimizations = false;
+  REQUIRE(test_spec("transform_allofs_required_only/spec.yaml", "transform_allofs_required_only/output.yaml",
+                    opts, &ir::pass_transform_allofs));
+}
+
 TEST("merge equal schemas") {
   openapi_options opts;
   opts.ir_opts.enable_optimizations = false;

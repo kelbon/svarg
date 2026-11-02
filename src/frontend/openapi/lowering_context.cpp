@@ -201,12 +201,6 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
                                                      json_pointer jp) {
   ir::object_schema ot;
   if (schema.properties) {
-    if (schema.required) {
-      for (const string& x : *schema.required) {
-        if (!std::ranges::contains(*schema.properties | std::views::keys, x))
-          emit_warn(file, jp, "required property `{}` does not appear in `properties`, ignored", x);
-      }
-    }
     for (auto& [prop_name, prop_sor] : *schema.properties) {
       ir::object_field_info fi;
       fi.name = prop_name;
@@ -237,9 +231,12 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
       }
       ot.fields.push_back(std::move(fi));
     }
-  } else if (schema.required) {
-    // неявно считаем будто properties определены с type: true
+  }
+  if (schema.required) {
+    // обязательные свойства, которых нет в properties - будто они определены с type: true
     for (auto& name : *schema.required) {
+      if (schema.properties && schema.properties->contains(name))
+        continue;
       ir::object_field_info fi;
       fi.name = name;
       fi.type = ir::make_fundamental_ref(ir::fundamental_e::any);

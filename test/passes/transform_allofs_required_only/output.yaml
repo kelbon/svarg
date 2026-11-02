@@ -1,0 +1,38 @@
+"schemas":
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/Base"
+    "name": "Base"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "x"
+            "required": false
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/Derived"
+    "name": "Derived"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@string@"
+            "name": "x"
+            "required": true
+          - "type":
+              "spec": "@integer@"
+            "name": "y"
+            "required": true
+  - "spec": "spec"
+    "jsonptr": "/components/schemas/Derived/allOf/1"
+    "type":
+      "object":
+        "fields":
+          - "type":
+              "spec": "@any@"
+            "name": "x"
+            "required": true
+          - "type":
+              "spec": "@integer@"
+            "name": "y"
+            "required": true
