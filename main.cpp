@@ -147,7 +147,11 @@ int main(int argc, char* argv[]) try {
       renoptions.stream_content_types.push_back(std::move(mt));
   }
   cxx::renderer r(ir, renoptions);
-  std::vector generated = r.render2cxx(cliopts.out);
+  // .cpp спек из командной строки пишутся всегда (имя спеки - имя файла без расширения, как во фронтенде)
+  std::vector<std::string> sources_for;
+  for (const fs::path& p : specs2generate)
+    sources_for.push_back(p.filename().replace_extension().generic_string());
+  std::vector generated = r.render2cxx(cliopts.out, sources_for);
   if (cliopts.dry_run) {
     std::string filelist;
     for (const fs::path& p : generated) {

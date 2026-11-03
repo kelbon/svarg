@@ -75,7 +75,10 @@ struct renderer {
 
   // генерирует всё в `output_dir`. Возвращает список сгенерированных путей без дубликатов, сортированный по
   // пути, а затем по расширению файла
-  std::vector<fs::path> render2cxx(fs::path output_dir) const;
+  // `sources_for` - спеки (имена файлов без расширения), для которых <spec>/<spec>.cpp и его части пишутся
+  // всегда, даже пустыми: так набор .cpp зависит только от входных спек и опций (svarg_generate_cxx знает его
+  // без запуска svarg)
+  std::vector<fs::path> render2cxx(fs::path output_dir, const std::vector<std::string>& sources_for = {}) const;
 
  private:
   render_options options;
