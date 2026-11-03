@@ -371,7 +371,7 @@ paths:
       operationId: getBlob
       responses:
         "200":
-          description: бинарное тело без схемы (3.1), поток по умолчанию
+          description: бинарное тело без схемы (3.1)
           content:
             application/octet-stream: {}
         "404":
@@ -405,6 +405,24 @@ paths:
               schema:
                 type: integer
           content:
+            text/event-stream:
+              schema:
+                type: string
+  /chat:
+    get:
+      operationId: getChat
+      parameters:
+        - name: stream
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: JSON целиком или поток, как stream у chat completions
+          content:
+            application/json:
+              schema:
+                type: string
             text/event-stream:
               schema:
                 type: string

@@ -21,7 +21,7 @@ int main() {
 
   hidi::h2client h2{hidi::endpoint(addr)};
   // транспорт можно обернуть в свои middleware (ретраи, хедеры...), см. any_client.hpp
-  api::client cli{svarg::cxx_support::client_ref(h2)};
+  api::client cli{svarg::cxx_support::client_ref(&h2)};
 
   bool done = false;
   auto ping = [&]() -> dd::task<void> {

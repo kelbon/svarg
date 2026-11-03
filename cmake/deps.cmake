@@ -67,7 +67,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME HIDI
   GIT_REPOSITORY https://github.com/kelbon/hidi
-  GIT_TAG v0.13.4
+  GIT_TAG v0.14.0
   OPTIONS "HIDI_USE_CPM ON"
 )
 

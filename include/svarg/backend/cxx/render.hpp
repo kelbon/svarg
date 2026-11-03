@@ -9,29 +9,25 @@ namespace svarg::cxx {
 
 struct render_options {
   // если `false`, то алгоритм преобразования строк в cxx идентификаторы
-  // будет гарантировать несовпадение имён, но имена будут иногда более сложные, а ссылки на типы - полными
-  // (::spec::components::schemas::X), чтобы поле с тем же именем не скрывало тип
+  // будет гарантировать несовпадение имён, но имена будут иногда более сложные
   bool simple_cxx_identifiers = true;
   // не генерирует ничего, только возвращает список путей сгенерированных файлов
-  // сортированных по именам + раширениям
+  // сортированных по именам + раcширениям
   bool dry_run = false;
   // инлайн-подсхемы типа `X` лежат в неймспейсе `X<suffix>`, например Item_::properties::kind,
   // чтобы неймспейс не конфликтовал с самим типом
   std::string inline_scope_suffix = "_";
-  // вставляется в начало каждого сгенерированного заголовка после рантайма, например
-  // `#include "my_codecs.hpp"` со специализациями media_codec (см. support/codec.hpp)
+  // вставляется в начало каждого сгенерированного заголовка
   std::string file_prefix;
-  // медиа типы тела ответа, которое передаётся потоком (в нижнем регистре, без параметров). Структура такого
-  // ответа без тела: сервер отправляет его ctx.stream_response, клиент получает частями в колбэк
+  // какие медиа типы считать потоками
   std::vector<std::string> stream_content_types = {"application/octet-stream"};
   // незаданный additionalProperties объекта: true - неописанные свойства допустимы (пропускаются при
   // разборе), false - как additionalProperties: false. Объект, все поля которого any (только required, как
   // anyOf: [{required: [fqdn]}, ...] у NFProfile, или просто type: object), ничего не описывает, а только
-  // требует наличия полей, поэтому для него опция игнорируется: запрет отверг бы любой объект с другими полями
+  // требует наличия полей, поэтому для него опция игнорируется: запрет отверг бы любой объект с другими
+  // полями
   bool unsetted_additional_properties = true;
-  // на сколько .cpp делится код каждой спеки (>= 1). 1 - всё в <spec>.cpp. Иначе в <spec>.cpp - определения
-  // сервера и клиента, а явные инстанциации операций поровну в <spec>_1.cpp ... <spec>_<N-1>.cpp: код большой
-  // спеки (GitHub, Stripe) в одном .cpp собирается долго и требует много памяти, части собираются параллельно
+  // на сколько .cpp делится код каждой спеки (>= 1). 1 - всё в <spec>.cpp
   size_t sources_per_spec = 1;
 };
 
@@ -200,21 +196,26 @@ struct renderer {
   std::string render_parameters(const Params& params, std::string_view relspec,
                                 const json_pointer& relative) const;
   // одно тело - статические члены владельца и поле body, несколько - обёртки и variant
-  std::string render_bodies(const std::set<ir::body>&, std::string_view spec, const json_pointer& jp) const;
+  // `response` - тела ответа: тело потокового медиа типа - stream_body
+  std::string render_bodies(const std::set<ir::body>&, std::string_view spec, const json_pointer& jp,
+                            bool response) const;
   // обёртка тела при нескольких телах: content_type и единственное поле
   std::string render_open_string_enum(const ir::enum_schema&, const ir::schema&) const;
   // тип значения тела: схема, байты (std::string) для тела без схемы медиа типа без встроенного кодека
-  std::string render_body_type(const ir::body& body, std::string_view spec, const json_pointer& jp) const;
-  rendered_with_name render_body(const ir::body& body, std::string_view spec, const json_pointer& jp) const;
+  std::string render_body_type(const ir::body& body, std::string_view spec, const json_pointer& jp,
+                               bool response) const;
+  rendered_with_name render_body(const ir::body& body, std::string_view spec, const json_pointer& jp,
+                                 bool response) const;
   // struct ответа: статус, хедеры, тела
   rendered_with_name render_response(const ir::response_desc&, std::string_view spec,
                                      const json_pointer& jp) const;
   // явные инстанциации make_request/from_request/send_request и make_response/from_response:
   // extern - в заголовке операции, определения - в .cpp спеки
   std::string render_instantiations(const ir::operation& op, bool is_extern) const;
-  // потоковый медиа тип тела ответа (render_options::stream_content_types), пусто - ответ не поток
-  std::string_view stream_content_type_of(const ir::response_desc&) const;
-  // у операции есть ответ потоком
+  // медиа тип тела ответа - потоковый (render_options::stream_content_types)
+  bool is_stream_body(const ir::body&) const;
+  bool has_stream_bodies(const ir::response_desc&) const;
+  // у операции есть ответ с потоковым телом
   bool has_stream_responses(const ir::operation&) const;
 
   // ===== render_server_client.cpp: сервер и клиенты =====

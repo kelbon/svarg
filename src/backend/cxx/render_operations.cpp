@@ -4,8 +4,11 @@
 
 namespace svarg::cxx {
 
-std::string renderer::render_body_type(const ir::body& body, std::string_view spec,
-                                       const json_pointer& jp) const {
+std::string renderer::render_body_type(const ir::body& body, std::string_view spec, const json_pointer& jp,
+                                       bool response) const {
+  // данные потока не хранятся: сервер отправляет их ctx.stream_response, клиент получает в колбэк
+  if (response && is_stream_body(body))
+    return "::svarg::cxx_support::stream_body";
   // без схемы (@any@) и без встроенного кодека (octet-stream, image/png...) - байты как есть
   if (body.schema.is_fundamental(ir::fundamental_e::any) &&
       body_format_of(body.contentType.str()) == body_format_e::raw)
@@ -13,8 +16,8 @@ std::string renderer::render_body_type(const ir::body& body, std::string_view sp
   return render_schema_ref(body.schema, spec, jp).typeref;
 }
 
-rendered_with_name renderer::render_body(const ir::body& body, std::string_view spec,
-                                         const json_pointer& jp) const {
+rendered_with_name renderer::render_body(const ir::body& body, std::string_view spec, const json_pointer& jp,
+                                         bool response) const {
   // throw_if_unsupported_content_type(body.contentType);
   std::string name = std::format("{}_body", make_cxx_ident(body.contentType, options));
   std::string result;
@@ -24,7 +27,7 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
   assert(is_lowered(body.contentType.str()));
   result += std::format("static constexpr std::string_view content_type = {};\n\n",
                         render_string(body.contentType));
-  result += render_special_field(render_body_type(body, spec, jp));
+  result += render_special_field(render_body_type(body, spec, jp, response));
 
   result += "};\n";
 
@@ -32,14 +35,14 @@ rendered_with_name renderer::render_body(const ir::body& body, std::string_view 
 }
 
 std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::string_view spec,
-                                    const json_pointer& jp) const {
+                                    const json_pointer& jp, bool response) const {
   std::string result;
   if (bodies.empty())
     return result;
   if (bodies.size() > 1) {
     std::vector<std::string> struct_names;
     for (auto& b : bodies) {
-      auto [struct_name, str] = render_body(b, spec, jp);
+      auto [struct_name, str] = render_body(b, spec, jp, response);
       struct_names.push_back(std::move(struct_name));
       result += str;
       result += '\n';
@@ -63,7 +66,7 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
     result += std::format("static constexpr std::string_view body_content_type = {};\n",
                           render_string(body.contentType));
     result += std::format("static constexpr bool body_is_required = {};\n", body.required);
-    std::string type = render_body_type(body, spec, jp);
+    std::string type = render_body_type(body, spec, jp, response);
     if (body.required)
       result += std::format("\n{} body;\n", type);
     else
@@ -81,20 +84,19 @@ std::string renderer::render_bodies(const std::set<ir::body>& bodies, std::strin
 //   body_A, body_B... // если есть боди
 //   body_t body;
 // };
-std::string_view renderer::stream_content_type_of(const ir::response_desc& rsp) const {
-  if (rsp.bodies)
-    for (const ir::body& b : *rsp.bodies)
-      if (std::ranges::contains(options.stream_content_types, b.contentType.str()))
-        return b.contentType.str();
-  return {};
+bool renderer::is_stream_body(const ir::body& b) const {
+  return std::ranges::contains(options.stream_content_types, b.contentType.str());
+}
+
+bool renderer::has_stream_bodies(const ir::response_desc& rsp) const {
+  return rsp.bodies && std::ranges::any_of(*rsp.bodies, [&](const ir::body& b) { return is_stream_body(b); });
 }
 
 bool renderer::has_stream_responses(const ir::operation& op) const {
-  if (op.defaultResponse && !stream_content_type_of(*op.defaultResponse).empty())
+  if (op.defaultResponse && has_stream_bodies(*op.defaultResponse))
     return true;
-  return op.responses && std::ranges::any_of(*op.responses, [&](const ir::response_desc& r) {
-           return !stream_content_type_of(r).empty();
-         });
+  return op.responses &&
+         std::ranges::any_of(*op.responses, [&](const ir::response_desc& r) { return has_stream_bodies(r); });
 }
 
 rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::string_view spec,
@@ -126,16 +128,10 @@ rendered_with_name renderer::render_response(const ir::response_desc& rsp, std::
     result += "};\n";
     result += "headers_t headers;\n";
   }
-  // ответ с потоковым медиа типом - поток целиком, его тела (и непотоковые) не генерируются
-  if (std::string_view stream_ct = stream_content_type_of(rsp); !stream_ct.empty()) {
-    result += std::format(
-        "// тело - поток: сервер отправляет ctx.stream_response(rsp.status, make_response_headers(rsp), "
-        "body), клиент получает send(op, on_header, on_data_part, ...)\n"
-        "static constexpr std::string_view stream_content_type = {};\n",
-        render_string(stream_ct));
-  } else if (rsp.bodies) {
-    result += render_bodies(*rsp.bodies, spec, jp);
-  }
+  // тело потокового медиа типа - stream_body: сервер отправляет его ctx.stream_response(rsp.status,
+  // make_response_headers(rsp), body), клиент получает в колбэк send(op, on_part, deadline)
+  if (rsp.bodies)
+    result += render_bodies(*rsp.bodies, spec, jp, /*response=*/true);
   result += "};\n\n";
   return {std::move(struct_name), std::move(result)};
 }
@@ -211,11 +207,12 @@ std::string renderer::render_instantiations(const ir::operation& op, bool is_ext
       "{1}&, std::string_view);\n",
       ext, opname);
   if (op.servers) {
-    // ответы операции с ответами потоком пользователь разбирает сам
     if (has_stream_responses(op))
       r += std::format(
-          "{0}template {1}::result_t svarg::cxx_support::parse_response<{1}>(::hidi::http_response&);\n", ext,
-          opname);
+          "{0}template dd::task<{1}::result_t> svarg::cxx_support::send_streaming<{1}>("
+          "::svarg::cxx_support::any_client&, ::hidi::http_request, "
+          "::svarg::cxx_support::on_stream_part_fn_ptr, ::hidi::deadline_t);\n",
+          ext, opname);
     else
       r += std::format(
           "{0}template dd::task<{1}::result_t> svarg::cxx_support::send_request<{1}>("
@@ -224,8 +221,9 @@ std::string renderer::render_instantiations(const ir::operation& op, bool is_ext
   }
   auto response = [&](std::string_view struct_name, const ir::response_desc& rsp) {
     std::string t = std::format("{}::{}", opname, struct_name);
-    // ответ потоком сервер отправляет сам (ctx.stream_response)
-    if (stream_content_type_of(rsp).empty())
+    // единственное тело - поток: make_response для него не компилируется, сервер отправляет
+    // ctx.stream_response
+    if (!(rsp.bodies && rsp.bodies->size() == 1 && is_stream_body(*rsp.bodies->begin())))
       r += std::format(
           "{0}template ::hidi::http_response svarg::cxx_support::make_response<{1}>(const {1}&, "
           "const ::svarg::content_type_params&);\n",
@@ -349,7 +347,7 @@ render_result renderer::render_operation(const ir::operation& op, bool is_webhoo
   // bodies
 
   if (op.bodies)
-    result += render_bodies(*op.bodies, op.spec, paths);
+    result += render_bodies(*op.bodies, op.spec, paths, /*response=*/false);
 
   // responses/ defaultResponse
 

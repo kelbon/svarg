@@ -26,14 +26,16 @@ void throw_transport_error(int status) {
 
 dd::task<hidi::http_response> send_buffered(any_client& client, hidi::http_request req,
                                             hidi::deadline_t deadline) {
+  hidi::client_request_context ctx;
   hidi::http_response rsp;
   auto on_header = [&](std::string_view name, std::string_view value) {
+    // трейлеры и промежуточные ответы могут примешаться - можно обработать в мидлваре
     rsp.headers.emplace_back(std::string(name), std::string(value));
   };
   auto on_data_part = [&](std::span<const hidi::byte_t> bytes, bool /*last_part*/) {
     rsp.body.insert(rsp.body.end(), bytes.begin(), bytes.end());
   };
-  rsp.status = co_await client.send_request(&on_header, &on_data_part, std::move(req), deadline);
+  rsp.status = co_await client.send_request(ctx, &on_header, &on_data_part, std::move(req), deadline);
   if (rsp.status < 0)
     throw_transport_error(rsp.status);
   co_return rsp;

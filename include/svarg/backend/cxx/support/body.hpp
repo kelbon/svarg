@@ -74,19 +74,36 @@ struct form_codec {
   }
 };
 
+// тело ответа потокового медиа типа (--stream-content-type): данных в структуре нет. Сервер отправляет их
+// ctx.stream_response(rsp.status, make_response_headers(rsp), body), клиент получает в колбэк send.
+// Какой медиа тип пришёл (или отправляется), видно по типу тела, если тел у ответа несколько
+struct stream_body {
+  bool operator==(const stream_body&) const = default;
+};
+
 // тело медиа типа `MediaTypeFn()`. `params` - параметры хедера content-type, кодек может их дополнить
 // (boundary у multipart)
 template <auto MediaTypeFn, typename T>
 [[nodiscard]] http_body_bytes serialize_body(const T& body, content_type_params& params) {
-  http_body_bytes bytes;
-  codec_of<MediaTypeFn>::serialize(body, MediaTypeFn(), params, bytes);
-  return bytes;
+  if constexpr (std::is_same_v<T, stream_body>) {
+    throw serialize_error(
+        "body of media type `{}` is a stream: send it by ctx.stream_response(rsp.status, "
+        "make_response_headers(rsp), body)",
+        MediaTypeFn());
+  } else {
+    http_body_bytes bytes;
+    codec_of<MediaTypeFn>::serialize(body, MediaTypeFn(), params, bytes);
+    return bytes;
+  }
 }
 
 // `content_type` - значение хедера content-type целиком (с параметрами)
 template <auto MediaTypeFn, typename T>
 [[nodiscard]] error_code parse_body(std::string_view content_type, std::string_view data, T& out) {
-  return codec_of<MediaTypeFn>::parse(content_type, data, out);
+  if constexpr (std::is_same_v<T, stream_body>)
+    return {};  // данные потока отданы в колбэк
+  else
+    return codec_of<MediaTypeFn>::parse(content_type, data, out);
 }
 
 }  // namespace svarg::cxx_support

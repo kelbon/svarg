@@ -265,7 +265,7 @@ int main() {
 
   hidi::h2client h2{hidi::endpoint(addr)};
   // транспорт можно обернуть в свои middleware (ретраи, авторизация...), см. any_client.hpp
-  nrf::client cli{svarg::cxx_support::client_ref(h2)};
+  nrf::client cli{svarg::cxx_support::client_ref(&h2)};
 
   bool done = false;
   auto run = [&]() -> dd::task<void> {

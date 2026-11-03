@@ -60,6 +60,8 @@ set(SVARG_SCRIPT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/svarg_generate.cmake)
 if(svarg_ENABLE_EXAMPLES)
     add_subdirectory(examples/cxx)
     add_subdirectory(examples/cxx_nrf)
+    add_subdirectory(examples/cxx_stream_server)
+    add_subdirectory(examples/cxx_stream_client)
 endif()
 
 # `svarg_generate_cxx` fn

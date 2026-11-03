@@ -1,6 +1,7 @@
 #include <moko3/moko3.hpp>
 
 #include <chrono>
+#include <set>
 
 // сгенерировано из generated_api/api.yaml (см. test/CMakeLists.txt)
 #include "api/server.hpp"
@@ -31,9 +32,9 @@ struct test_server : api::server {
 
   dd::task<hidi::http_response> handle(api::login op, hidi::http_request, hidi::request_context) override {
     api::login::response_200 rsp;
-    rsp.body = std::format("{}/{}/{}/{}", op.body.user, op.body.remember,
-                           op.body.attempts ? std::to_string(*op.body.attempts) : "-",
-                           op.body.meta.value_or("-"));
+    rsp.body =
+        std::format("{}/{}/{}/{}", op.body.user, op.body.remember,
+                    op.body.attempts ? std::to_string(*op.body.attempts) : "-", op.body.meta.value_or("-"));
     co_return make_response(rsp);
   }
 
@@ -83,8 +84,7 @@ struct test_server : api::server {
     auto& q = op.query;
     api::search::response_200 rsp;
     rsp.body = std::format("ids={} tags={} filter={}/{} point={}/{} list={} prefs={}", join(q.ids),
-                           join(q.tags),
-                           q.filter && q.filter->color ? *q.filter->color : "-",
+                           join(q.tags), q.filter && q.filter->color ? *q.filter->color : "-",
                            q.filter && q.filter->min ? *q.filter->min : -1, q.point ? q.point->x : -1,
                            q.point && q.point->y ? *q.point->y : -1, join(op.headers.x_list),
                            join(op.cookies.prefs));
@@ -133,6 +133,18 @@ struct test_server : api::server {
     api::getEvents::response_200 rsp;
     rsp.headers.x_count = 3;
     co_return ctx.stream_response(rsp.status, make_response_headers(rsp), repeat_parts("data: x\n\n", 3));
+  }
+
+  // у одного статуса JSON и поток: медиа тип потока выбирается телом
+  dd::task<hidi::http_response> handle(api::getChat op, hidi::http_request,
+                                       hidi::request_context ctx) override {
+    api::getChat::response_200 rsp;
+    if (!op.query.stream || !*op.query.stream) {
+      rsp.body.emplace<api::getChat::response_200::application_json_body>().get() = "whole";
+      co_return make_response(rsp);
+    }
+    rsp.body.emplace<api::getChat::response_200::text_event_stream_body>();
+    co_return ctx.stream_response(rsp.status, make_response_headers(rsp), repeat_parts("data: y\n\n", 2));
   }
 
   static hidi::streaming_body_t repeat_parts(std::string part, int n) {
@@ -297,7 +309,8 @@ TEST("generated server") {
             l.body.user = "u";
             l.body.meta = "m";
             return l;
-          }()).body.strview() == "user=u&remember=false&meta=%22m%22");
+          }())
+              .body.strview() == "user=u&remember=false&meta=%22m%22");
   http_request form_bad = form_raw;
   form_bad.body.data.assign(form.begin(), form.begin() + 10);  // нет обязательного user
   // части не по порядку свойств, разбираются по content type; бинарные данные с нулевым байтом
@@ -349,8 +362,7 @@ TEST("generated server") {
   search.headers.x_list = {"h1", "h2"};
   search.cookies.prefs = {"p1", "p2"};
   http_request search_req = make_request(search);
-  REQUIRE(search_req.path ==
-          "/search?filter=color,red&ids=1&ids=2&x=5&tags=a,b%2Cc");
+  REQUIRE(search_req.path == "/search?filter=color,red&ids=1&ids=2&x=5&tags=a,b%2Cc");
   api::getCell cell;
   cell.path.cell.row = 1;
   cell.path.cell.col = 2;
@@ -482,8 +494,7 @@ TEST("generated server") {
   REQUIRE(rsps[15].body_strview() == "x/y|txt");
 
   REQUIRE(rsps[16].status == 200);
-  REQUIRE(rsps[16].body_strview() ==
-          "ids=1 2 tags=a b,c filter=red/-1 point=5/-1 list=h1 h2 prefs=p1 p2");
+  REQUIRE(rsps[16].body_strview() == "ids=1 2 tags=a b,c filter=red/-1 point=5/-1 list=h1 h2 prefs=p1 p2");
   REQUIRE(rsps[17].status == 200);
   REQUIRE(rsps[17].body_strview() == "1:2 x.y z,w");
   REQUIRE(rsps[18].status == 400);
@@ -508,10 +519,10 @@ struct counting {
   any_client next;
   int* count;
 
-  dd::task<int> send_request(hidi::on_header_fn_ptr h, hidi::on_data_part_fn_ptr d, http_request req,
-                             hidi::deadline_t dl) {
+  dd::task<int> send_request(hidi::client_request_context& ctx, hidi::on_header_fn_ptr h,
+                             hidi::on_data_part_fn_ptr d, http_request req, hidi::deadline_t dl) {
     ++*count;
-    return next.send_request(h, d, std::move(req), dl);
+    return next.send_request(ctx, h, d, std::move(req), dl);
   }
 };
 
@@ -525,13 +536,14 @@ TEST("generated client") {
   api::uploadFiles::result_t summary;
   api::getBlob::result_t blob, no_blob;
   api::getEvents::result_t events;
-  std::string blob_data, events_data;
+  std::string blob_data, events_data, chat_data;
+  api::getChat::result_t chat_whole, chat_streamed;
   int blob_parts = 0;
   api::putBlob::result_t put_blob;
 
   run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
-    api::client cli{counting{any_client(client_ref(h2)), &count}};
-    api::client_upload_example_com_v2 upload_cli{client_ref(h2)};
+    api::client cli{counting{any_client(client_ref(&h2)), &count}};
+    api::client_upload_example_com_v2 upload_cli{client_ref(&h2)};
 
     api::getItem get;
     get.path.id.get() = 7;
@@ -561,46 +573,37 @@ TEST("generated client") {
     files.body.file = std::string("\r\n--\0", 5);
     summary = co_await cli.send(files, hidi::deadline_t::never());
 
+    // ответы потоком: тело потокового ответа (выбирается по статусу) отдаётся в колбэк по мере прихода,
+    // остальные ответы разбираются как обычно
+    std::set<std::pair<int, std::string>> blob_streams;
+    auto on_blob = [&](int status, std::string_view content_type, std::span<const hidi::byte_t> part, bool) {
+      blob_streams.emplace(status, content_type);
+      blob_data.append((const char*)part.data(), part.size());
+      ++blob_parts;
+    };
     api::getBlob get_blob;
-    // ответы потоком: svarg ничего не разбирает. Тело потокового медиа типа читается по мере прихода,
-    // остальное собирается в http_response и разбирается parse_response. Статус hidi сообщает только в
-    // конце, поэтому во время приёма поток определяется по content-type
-    hidi::http_response rsp;
-    bool streaming = false;
-    auto on_header = [&](std::string_view name, std::string_view value) {
-      if (name == "content-type" &&
-          svarg::match_content_type(api::getBlob::response_200::stream_content_type, value))
-        streaming = true;
-      rsp.headers.emplace_back(std::string(name), std::string(value));
-    };
-    auto on_data = [&](std::span<const hidi::byte_t> part, bool) {
-      if (streaming) {
-        blob_data.append((const char*)part.data(), part.size());
-        ++blob_parts;
-      } else {
-        rsp.body.insert(rsp.body.end(), part.begin(), part.end());
-      }
-    };
     get_blob.path.name = "b";
-    rsp.status = co_await cli.send(get_blob, &on_header, &on_data, hidi::deadline_t::never());
-    blob = parse_response<api::getBlob>(rsp);
-    rsp = {};
-    streaming = false;
+    blob = co_await cli.send(get_blob, &on_blob, hidi::deadline_t::never());
     get_blob.path.name = "missing";
-    rsp.status = co_await cli.send(get_blob, &on_header, &on_data, hidi::deadline_t::never());
-    no_blob = parse_response<api::getBlob>(rsp);  // 404: JSON тело собрано и разобрано
+    no_blob = co_await cli.send(get_blob, &on_blob, hidi::deadline_t::never());  // 404: JSON разобран
+    REQUIRE(blob_streams == std::set<std::pair<int, std::string>>{{200, "application/octet-stream"}});
 
-    // хедеры потокового ответа типизированы: parse_response разбирает их без тела
-    hidi::http_response events_rsp;
-    auto on_events_header = [&](std::string_view name, std::string_view value) {
-      events_rsp.headers.emplace_back(std::string(name), std::string(value));
-    };
-    auto on_events = [&](std::span<const hidi::byte_t> part, bool) {
+    // хедеры потокового ответа типизированы и разобраны
+    auto on_events = [&](int, std::string_view, std::span<const hidi::byte_t> part, bool) {
       events_data.append((const char*)part.data(), part.size());
     };
-    events_rsp.status =
-        co_await cli.send(api::getEvents{}, &on_events_header, &on_events, hidi::deadline_t::never());
-    events = parse_response<api::getEvents>(events_rsp);
+    events = co_await cli.send(api::getEvents{}, &on_events, hidi::deadline_t::never());
+
+    // у одного статуса JSON и поток: тело выбирается по content-type
+    auto on_chat = [&](int status, std::string_view content_type, std::span<const hidi::byte_t> part, bool) {
+      REQUIRE(status == 200);
+      REQUIRE(content_type == "text/event-stream");
+      chat_data.append((const char*)part.data(), part.size());
+    };
+    api::getChat chat;
+    chat_whole = co_await cli.send(chat, &on_chat, hidi::deadline_t::never());
+    chat.query.stream = true;
+    chat_streamed = co_await cli.send(chat, &on_chat, hidi::deadline_t::never());
 
     api::putBlob put;
     put.path.name = "b";
@@ -609,9 +612,9 @@ TEST("generated client") {
 
     // статус не из спецификации (404 на неверный base path): у getItem есть default ответ,
     // у upload нет - исключение
-    api::client wrong_path{client_ref(h2), "/nope"};
+    api::client wrong_path{client_ref(&h2), "/nope"};
     not_found = co_await wrong_path.send(get, hidi::deadline_t::never());
-    api::client_upload_example_com_v2 wrong_upload{client_ref(h2), "/nope"};
+    api::client_upload_example_com_v2 wrong_upload{client_ref(&h2), "/nope"};
     try {
       (void)co_await wrong_upload.send(up, hidi::deadline_t::never());
     } catch (unexpected_response& e) {
@@ -619,7 +622,7 @@ TEST("generated client") {
     }
   });
 
-  REQUIRE(count == 9);
+  REQUIRE(count == 11);
   REQUIRE(blob.get_if_200());
   std::string expected_blob;
   for (int i = 0; i < 1000; ++i)
@@ -629,6 +632,10 @@ TEST("generated client") {
   REQUIRE(no_blob.get_if_404() && no_blob.get_if_404()->body == "no missing");
   REQUIRE(events.headers.x_count == 3);
   REQUIRE(events_data == "data: x\n\ndata: x\n\ndata: x\n\n");
+  using chat_rsp = api::getChat::response_200;
+  REQUIRE(std::get<chat_rsp::application_json_body>(chat_whole.body).get() == "whole");
+  REQUIRE(std::holds_alternative<chat_rsp::text_event_stream_body>(chat_streamed.body));
+  REQUIRE(chat_data == "data: y\n\ndata: y\n\n");
   REQUIRE(put_blob.body == 3);
   REQUIRE(greeting.body == "u&=/true/-/x y");
   REQUIRE(summary.body == std::format("t \"q\"/-1/m/{}", std::string("\r\n--\0", 5)));

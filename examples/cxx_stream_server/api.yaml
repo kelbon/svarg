@@ -1,0 +1,38 @@
+openapi: 3.1.0
+info:
+  title: files
+  version: "1.0"
+paths:
+  /files/{name}:
+    get:
+      operationId: getFile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: содержимое файла потоком
+          headers:
+            x-file-size:
+              required: true
+              schema:
+                type: integer
+          content:
+            application/octet-stream: {}
+        "404":
+          description: нет такого файла
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
