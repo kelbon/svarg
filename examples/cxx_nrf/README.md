@@ -10,7 +10,7 @@
 - **Клиент** — сценарий в `main`: подписаться, зарегистрировать AMF и SMF, отправить heartbeat, найти SMF, снять
   его с регистрации и получить 404.
 
-Сборка — вместе с svarg, `svarg` должен быть в `PATH` на момент конфигурации (`svarg_generate_cxx`):
+Сборка — вместе с svarg:
 
 ```
 cmake -B build -Dsvarg_ENABLE_EXAMPLES=ON ...

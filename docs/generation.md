@@ -23,7 +23,7 @@ YAML и JSON, файл может начинаться с `---`, но докум
 
 ## Файлы
 
-На спеку `api.yaml` — папка `api/`:
+На спеку `api.yaml` — папка `api/` (имя файла без расширения):
 
 - `server.hpp`, `client.hpp` — сервер и клиент, если в спеке есть операции;
 - `operations/<operationId>.hpp` — операции, `schemas/...` — схемы (по одному заголовку на тип), `all_*.hpp` —
@@ -41,8 +41,10 @@ YAML и JSON, файл может начинаться с `---`, но докум
 
 ## CMake
 
+svarg подключается к проекту целиком, например через CPM, и даёт функцию `svarg_generate_cxx`:
+
 ```cmake
-include(${SVARG_SCRIPT_PATH})  # cmake/svarg_generate.cmake
+CPMAddPackage(NAME svarg GITHUB_REPOSITORY kelbon/svarg GIT_TAG ...)
 
 svarg_generate_cxx(
     TARGET               api_generated
@@ -52,13 +54,26 @@ svarg_generate_cxx(
     INCLUDE_DIRS         ...         # необязательно, -I
     STREAM_CONTENT_TYPES ...         # необязательно, --stream-content-type
     SOURCES_PER_SPEC     8           # необязательно, --sources-per-spec
+    SVARG_EXECUTABLE     ...         # необязательно, свой svarg вместо собранного
 )
 target_link_libraries(my_app PRIVATE api_generated)
 ```
 
-Список сгенерированных файлов узнаётся при конфигурации (`svarg --dry-run`), код генерируется при сборке и
-перегенерируется при изменении спеки. После изменения опций или обновления svarg нужно заново запустить
-`cmake`, а если набор файлов изменился, удалить старую папку с кодом.
+В проект пользователя попадает только рантайм (`svarg_cxx_supportlib`). Генератор собирается отдельно, в
+Release, при первой сборке (`ExternalProject` `svarg_generator`): кодогенерация не идёт отладочной сборкой, а при
+кросс-компиляции генератор собирается для машины сборки. Код генерируется при сборке и перегенерируется при
+изменении спек или svarg.
+
+Список `.cpp` известен без запуска svarg: на каждую спеку из `SPECS` — `<имя>/<имя>.cpp` и
+`<имя>/<имя>_1..N-1.cpp` (имя — имя файла спеки без расширения), даже пустые. Заголовки — побочный продукт.
+
+Опции svarg:
+
+| Опция | По умолчанию | Что делает |
+|---|---|---|
+| `svarg_DEV_BUILD` | `OFF` | разработка svarg: генератор собирается в этом же дереве, в конфигурации проекта |
+| `svarg_ENABLE_NETWORK_REFS` | `OFF` | `$ref` по URL (`--allow-network-refs`), генератору нужен hidi |
+| `svarg_GENERATOR_ONLY` | `OFF` | только генератор, без рантайма (так собирается `svarg_generator`) |
 
 ## Ошибки
 

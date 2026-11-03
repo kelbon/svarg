@@ -1,25 +1,25 @@
-# Preconditions (must already exist in the project when this is called):
-#   - target `svarg_cxx_supportlib`
+# Precondition: target `svarg_cxx_supportlib` (svarg added to the project, e.g. CPMAddPackage)
 #
 # Usage:
-#   include(SvargGenerate.cmake)
-#
 #   svarg_generate_cxx(
 #       TARGET           users_api_generated
 #       SPECS_DIR        ${CMAKE_SOURCE_DIR}/openapi
-#       OUT_DIR          ${CMAKE_SOURCE_DIR}/generated/users_api
+#       OUT_DIR          ${CMAKE_BINARY_DIR}/generated/users_api
 #       SPECS            users.yaml admin/*
 #       INCLUDE_DIRS     ${CMAKE_SOURCE_DIR}/openapi/common     # optional, each becomes "-I <dir>"
 #       STREAM_CONTENT_TYPES text/event-stream                   # optional, response media types streamed
 #                                                               # besides application/octet-stream
 #       SOURCES_PER_SPEC 8                                      # optional, default 1: into how many .cpp
 #                                                               # the code of each spec is split
-#       SVARG_EXECUTABLE ${CMAKE_SOURCE_DIR}/tools/bin/svarg    # optional, defaults to "svarg" (PATH)
+#       SVARG_EXECUTABLE ${CMAKE_SOURCE_DIR}/tools/bin/svarg    # optional, by default svarg built by the
+#                                                               # svarg project (Release), or found in PATH
 #   )
 #
 #   target_link_libraries(my_app PRIVATE users_api_generated)
+#
+# Code is generated at build time and regenerated when specs or svarg change
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.21)
 include_guard(GLOBAL)
 
 function(svarg_generate_cxx)
@@ -45,13 +45,30 @@ function(svarg_generate_cxx)
     if(NOT TARGET svarg_cxx_supportlib)
         message(FATAL_ERROR "svarg_generate_cxx: target 'svarg_cxx_supportlib' must be defined before this call")
     endif()
-    if(NOT ARGS_SVARG_EXECUTABLE)
+    # генератор: указанный явно, собранный в этом дереве (svarg_DEV_BUILD), собранный отдельно в Release
+    # (svarg_generator) или установленный. От цели генерация зависит: после пересборки svarg код перегенерируется
+    set(svarg_depends "")
+    if(ARGS_SVARG_EXECUTABLE)
+        set(svarg_exe "${ARGS_SVARG_EXECUTABLE}")
+    elseif(TARGET svarg)
+        set(svarg_exe "$<TARGET_FILE:svarg>")
+        set(svarg_depends svarg)
+    elseif(TARGET svarg_generator)
+        set(svarg_exe "${SVARG_GENERATOR_EXECUTABLE}")
+        set(svarg_depends svarg_generator "${SVARG_GENERATOR_EXECUTABLE}")
+    else()
         find_program(SVARG_PROGRAM NAMES svarg)
-        if(NOT SVARG_PROGRAM AND NOT TARGET svarg)
-            message(WARNING "svarg_generate_cxx(${ARGS_TARGET}): svarg not found in PATH and no 'svarg' target - skipping")
-            return()
+        if(NOT SVARG_PROGRAM)
+            message(FATAL_ERROR "svarg_generate_cxx(${ARGS_TARGET}): svarg not found")
         endif()
-        set(ARGS_SVARG_EXECUTABLE "svarg")
+        set(svarg_exe "${SVARG_PROGRAM}")
+    endif()
+    set(sources_per_spec 1)
+    if(DEFINED ARGS_SOURCES_PER_SPEC)
+        set(sources_per_spec ${ARGS_SOURCES_PER_SPEC})
+    endif()
+    if(sources_per_spec LESS 1)
+        message(FATAL_ERROR "svarg_generate_cxx(${ARGS_TARGET}): SOURCES_PER_SPEC must be at least 1")
     endif()
 
     get_filename_component(specs_dir "${ARGS_SPECS_DIR}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -79,79 +96,62 @@ function(svarg_generate_cxx)
     set(svarg_args "--out" "${out_dir}" "--specs-dir" "${specs_dir}" ${include_args} ${stream_args} ${sources_args}
         ${ARGS_SPECS})
 
-    # --- 1. Auto re-run configure when a spec changes ---------------------
-    # Expand "dir/*" masks too, so files matched only through a mask are tracked.
-    set(dep_files "")
+    # --- 1. Входные спеки -------------------------------------------------
+    # маски "dir/*" раскрываются так же, как в svarg: все файлы в dir рекурсивно
+    set(spec_files "")
     foreach(spec IN LISTS ARGS_SPECS)
         if(spec MATCHES "/\\*$")
             string(REGEX REPLACE "/\\*$" "" sub "${spec}")
-            if(sub STREQUAL "")
-                file(GLOB matched CONFIGURE_DEPENDS "${specs_dir}/*")
-            else()
-                file(GLOB matched CONFIGURE_DEPENDS "${specs_dir}/${sub}/*")
-            endif()
-            list(APPEND dep_files ${matched})
+            file(GLOB_RECURSE matched CONFIGURE_DEPENDS "${specs_dir}/${sub}/*")
+            list(APPEND spec_files ${matched})
         else()
-            list(APPEND dep_files "${specs_dir}/${spec}")
+            get_filename_component(spec_abs "${spec}" ABSOLUTE BASE_DIR "${specs_dir}")
+            list(APPEND spec_files "${spec_abs}")
         endif()
     endforeach()
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${dep_files})
+    list(REMOVE_DUPLICATES spec_files)
 
-    # --- 2. Discover the exact output file list (--dry-run) --------
-    execute_process(
-        COMMAND "${ARGS_SVARG_EXECUTABLE}" --dry-run ${svarg_args}
-        RESULT_VARIABLE rv OUTPUT_VARIABLE ov ERROR_VARIABLE ev)
-    if(NOT rv EQUAL 0)
-        message(FATAL_ERROR
-            "'${ARGS_SVARG_EXECUTABLE} --dry-run ${svarg_args}' failed\n${ov}\n${ev}\n"
-            "Make sure svarg is built and either on PATH or pointed to via SVARG_EXECUTABLE.")
-    endif()
-
-    set(manifest "${out_dir}/generated_files.txt")
-    if(NOT EXISTS "${manifest}")
-        message(FATAL_ERROR "svarg_generate_cxx(${ARGS_TARGET}): --dry-run did not produce ${manifest}")
-    endif()
-
-    file(STRINGS "${manifest}" rel_files)
-    file(REMOVE ${manifest})
-    # rm empty
-    list(FILTER rel_files EXCLUDE REGEX "^$")
-    if(NOT rel_files)
-        message(FATAL_ERROR "svarg_generate_cxx(${ARGS_TARGET}): ${manifest} lists no files")
-    endif()
-
+    # --- 2. Сгенерированные .cpp ------------------------------------------
+    # svarg на каждую входную спеку пишет <имя>/<имя>.cpp и <имя>/<имя>_1..N-1.cpp (имя - имя файла без
+    # расширения), даже если они пустые. Заголовки - побочный продукт, их список CMake не нужен
     set(srcs "")
-    set(hdrs "")
-    set(abs_files "")
-    foreach(rel IN LISTS rel_files)
-        set(abs "${out_dir}/${rel}")
-        list(APPEND abs_files "${abs}")
-        if(abs MATCHES "\\.(cpp|cc|cxx)$")
-            list(APPEND srcs "${abs}")
-        else()
-            list(APPEND hdrs "${abs}")
+    foreach(spec_file IN LISTS spec_files)
+        get_filename_component(name "${spec_file}" NAME_WLE)
+        list(APPEND srcs "${out_dir}/${name}/${name}.cpp")
+        math(EXPR last_part "${sources_per_spec} - 1")
+        if(last_part GREATER 0)
+            foreach(i RANGE 1 ${last_part})
+                list(APPEND srcs "${out_dir}/${name}/${name}_${i}.cpp")
+            endforeach()
         endif()
     endforeach()
 
-    # --- 3. Build-time codegen command ----------
+    # --- 3. Кодогенерация при сборке --------------------------------------
+    # спеки, на которые ссылаются входные, лежат в specs_dir и INCLUDE_DIRS: изменение любой перегенерирует код
+    set(all_spec_files ${spec_files})
+    foreach(dir IN ITEMS "${specs_dir}" ${ARGS_INCLUDE_DIRS})
+        get_filename_component(dir "${dir}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+        file(GLOB_RECURSE found CONFIGURE_DEPENDS "${dir}/*.yaml" "${dir}/*.yml" "${dir}/*.json")
+        foreach(f IN LISTS found)
+            # OUT_DIR может лежать внутри папки спек
+            string(FIND "${f}" "${out_dir}/" in_out_dir)
+            if(NOT in_out_dir EQUAL 0)
+                list(APPEND all_spec_files "${f}")
+            endif()
+        endforeach()
+    endforeach()
+    list(REMOVE_DUPLICATES all_spec_files)
     add_custom_command(
-        OUTPUT ${abs_files}
-        COMMAND "${ARGS_SVARG_EXECUTABLE}" ${svarg_args}
-        DEPENDS ${dep_files}
+        OUTPUT ${srcs}
+        COMMAND "${svarg_exe}" ${svarg_args}
+        DEPENDS ${all_spec_files} ${svarg_depends}
         COMMENT "svarg: generating C++ from OpenAPI specs into ${out_dir}"
         VERBATIM
     )
-    add_custom_target(${ARGS_TARGET}_codegen DEPENDS ${abs_files})
 
-    # --- 4. Wrap the known file list into a target -------------------------
-    if(srcs)
-        add_library(${ARGS_TARGET} STATIC ${srcs} ${hdrs})
-        target_include_directories(${ARGS_TARGET} PUBLIC "${out_dir}")
-        target_link_libraries(${ARGS_TARGET} PUBLIC svarg_cxx_supportlib)
-    else()
-        add_library(${ARGS_TARGET} INTERFACE)
-        target_sources(${ARGS_TARGET} INTERFACE ${hdrs})
-        target_include_directories(${ARGS_TARGET} INTERFACE "${out_dir}")
-        target_link_libraries(${ARGS_TARGET} INTERFACE svarg_cxx_supportlib)
-    endif()
+    # --- 4. Цель -----------------------------------------------------------
+    add_library(${ARGS_TARGET} STATIC ${srcs})
+    target_include_directories(${ARGS_TARGET} PUBLIC "${out_dir}")
+    target_link_libraries(${ARGS_TARGET} PUBLIC svarg_cxx_supportlib)
+    set_target_properties(${ARGS_TARGET} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 endfunction()

@@ -11,7 +11,7 @@ foreach(test_src ${svarg_TESTS})
 
     add_executable(${test_name} ${test_src})
 
-    target_link_libraries(${test_name} PRIVATE svarglib moko3lib)
+    target_link_libraries(${test_name} PRIVATE svarglib svarg_cxx_supportlib moko3lib)
     
     set_target_properties(${test_name} PROPERTIES
 		LINKER_LANGUAGE CXX

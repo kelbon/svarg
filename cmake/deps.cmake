@@ -5,7 +5,14 @@ if (WIN32)
   set(BOOST_CONTEXT_IMPLEMENTATION winfib CACHE STRING "Boost.Context implementation (fcontext, ucontext, winfib)")
 endif()
 
-set(BOOST_INCLUDE_LIBRARIES system asio pfr json iostreams process stacktrace)
+# рантайм: json и pfr сам, system asio stacktrace - hidi. Генератор: json pfr, process iostreams
+set(BOOST_INCLUDE_LIBRARIES pfr json)
+if(svarg_BUILD_RUNTIME OR svarg_ENABLE_NETWORK_REFS)
+  list(APPEND BOOST_INCLUDE_LIBRARIES system asio stacktrace)
+endif()
+if(svarg_BUILD_GENERATOR)
+  list(APPEND BOOST_INCLUDE_LIBRARIES iostreams process)
+endif()
 CPMAddPackage(
   NAME BOOST
   VERSION 1.87.0
@@ -20,21 +27,24 @@ CPMAddPackage(
   GIT_TAG v1.1.1
 )
 
-CPMAddPackage(
-  NAME RAPIDYAML
-  GITHUB_REPOSITORY biojppm/rapidyaml
-  GIT_TAG v0.15.2
-  OPTIONS "RYML_WITH_TAB_TOKENS ON" "RYML_INSTALL OFF" "RYML_STANDALONE ON" "RYML_DEFAULT_CALLBACK_USES_EXCEPTIONS ON"
-)
+if(svarg_BUILD_GENERATOR)
+  CPMAddPackage(
+    NAME RAPIDYAML
+    GITHUB_REPOSITORY biojppm/rapidyaml
+    GIT_TAG v0.15.2
+    OPTIONS "RYML_WITH_TAB_TOKENS ON" "RYML_INSTALL OFF" "RYML_STANDALONE ON" "RYML_DEFAULT_CALLBACK_USES_EXCEPTIONS ON"
+  )
+endif()
 
-# cmake tools
-CPMAddPackage(
-  NAME CCOZY
-  GITHUB_REPOSITORY kelbon/ccozy
-  GIT_TAG v0.8.2
-)
-
-include(${CCOZY_SOURCE_DIR}/ccozy_tools.cmake)
+# cmake tools, только для разработки svarg
+if(PROJECT_IS_TOP_LEVEL AND NOT svarg_GENERATOR_ONLY)
+  CPMAddPackage(
+    NAME CCOZY
+    GITHUB_REPOSITORY kelbon/ccozy
+    GIT_TAG v0.8.2
+  )
+  include(${CCOZY_SOURCE_DIR}/ccozy_tools.cmake)
+endif()
 
 # C++20 coroutines (kelcorolib)
 CPMAddPackage(
@@ -58,18 +68,22 @@ CPMAddPackage(
 )
 
 # CLI interface, clinoklib
-CPMAddPackage(
-  NAME CLINOK
-  GITHUB_REPOSITORY kelbon/clinok
-  GIT_TAG v2.1.0
-)
+if(svarg_BUILD_GENERATOR)
+  CPMAddPackage(
+    NAME CLINOK
+    GITHUB_REPOSITORY kelbon/clinok
+    GIT_TAG v2.1.0
+  )
+endif()
 
-CPMAddPackage(
-  NAME HIDI
-  GIT_REPOSITORY https://github.com/kelbon/hidi
-  GIT_TAG v0.14.0
-  OPTIONS "HIDI_USE_CPM ON"
-)
+if(svarg_BUILD_RUNTIME OR svarg_ENABLE_NETWORK_REFS)
+  CPMAddPackage(
+    NAME HIDI
+    GIT_REPOSITORY https://github.com/kelbon/hidi
+    GIT_TAG v0.14.0
+    OPTIONS "HIDI_USE_CPM ON"
+  )
+endif()
 
 CPMAddPackage(
   NAME OMO

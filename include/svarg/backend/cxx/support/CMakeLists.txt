@@ -4,7 +4,7 @@ add_library(svarg_cxx_supportlib STATIC ${CMAKE_CURRENT_SOURCE_DIR}/stream_parsi
                                          ${CMAKE_CURRENT_SOURCE_DIR}/router.cpp
                                          ${CMAKE_CURRENT_SOURCE_DIR}/any_client.cpp)
 
-target_link_libraries(svarg_cxx_supportlib PUBLIC svarglib)
+target_link_libraries(svarg_cxx_supportlib PUBLIC svarg_utilslib hidilib)
 target_include_directories(svarg_cxx_supportlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 set_target_properties(svarg_cxx_supportlib PROPERTIES
