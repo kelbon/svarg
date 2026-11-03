@@ -80,7 +80,7 @@ if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   CPMAddPackage(
     NAME HIDI
     GIT_REPOSITORY https://github.com/kelbon/hidi
-    GIT_TAG v0.15.0
+    GIT_TAG v0.15.1
     OPTIONS "HIDI_USE_CPM ON"
   )
 endif()
