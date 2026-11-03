@@ -18,7 +18,7 @@ YAML и JSON, файл может начинаться с `---`, но докум
 | `--unsetted-additional-properties` | `true` | незаданный `additionalProperties`, см. [схемы](schemas.md#лишние-свойства-объекта) |
 | `--sources-per-spec N` | `1` | на сколько `.cpp` делится код каждой спеки, см. ниже |
 | `--stream-content-type` | | потоковые медиа типы ответов, см. [клиент](client.md#ответы-потоком) |
-| `--file-prefix` | | текст в начале каждого заголовка, например `#include` своих кодеков, см. [кодеки](codecs.md) |
+| `--file-prefix` | | текст в начале каждого заголовка, например `#include` своих кодеков, см. [кодеки](media_types.md) |
 | `--ignore-requirements` | | не проверять ограничения и требования схем: меньше кода, неполная проверка |
 
 ## Файлы
@@ -44,7 +44,7 @@ YAML и JSON, файл может начинаться с `---`, но докум
 svarg подключается к проекту целиком, например через CPM, и даёт функцию `svarg_generate_cxx`:
 
 ```cmake
-CPMAddPackage(NAME svarg GITHUB_REPOSITORY kelbon/svarg GIT_TAG ...)
+CPMAddPackage("gh:kelbon/svarg@1.0.0")
 
 svarg_generate_cxx(
     TARGET               api_generated
