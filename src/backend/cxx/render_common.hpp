@@ -10,7 +10,7 @@
 #include "svarg/errors.hpp"
 #include "svarg/ir/ir_visitor.hpp"
 
-#include "svarg/backend/cxx/support/utility_for_generated.hpp"
+#include "svarg/backend/cxx/support/names.hpp"
 #include "svarg/utils/parse_url.hpp"
 #include "svarg/utils/media_types.hpp"
 

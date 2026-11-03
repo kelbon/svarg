@@ -20,6 +20,7 @@
 #include "svarg/utils/path_tools.hpp"
 
 #include "svarg/backend/cxx/support/http_base.hpp"
+#include "svarg/backend/cxx/support/names.hpp"
 
 // эти 2 макроса только для генерируемых типов
 #define APPLY_FIELD_INDEXES(T) APPLY_INDEXES(::svarg::cxx_support::fields_count<T>())
@@ -45,84 +46,6 @@ using deoptional_type_t = typename deoptional_type<std::decay_t<T>>::type;
 
 namespace svarg::cxx_support {
 
-enum struct parse_tag_e {
-  // просто комбинаторы, недостаточно тривиальные чтобы сделать их алиасами
-
-  // имя "спецполя" = <special_field_name>
-  // у каждого может быть using svarg_required_schemas = typelist<...>;
-
-  fundamental,  // какой-то фундаментал с ограничениями
-  array,        // одно спецполе array
-  anyof,        // одно спецполе anyof + возможен svarg_discriminator_field + svarg_discriminate(string_view, auto&& vtor)
-  oneof,        // одно спецполе anyof + возможен svarg_discriminator_field + svarg_discriminate(string_view, auto&& vtor)
-  allof,        // одно спецполе - allof с именем <special_field_name>
-  not_a,        // одно спецполе
-
-  // не комбинаторы
-  object,  // сначала требуемые поля, затем опциональные + fields (описания полей) +
-           // svarg_additional_properties_type / svarg_additional_properties
-  enum_,
-  string_enum,
-  open_string_enum,  // std::string value + известные значения values, допустима любая строка
-
-  body,       // string_view content_type + <special_field_name> единственное поле с данными
-  operation,  // вообще парсится из запроса и сериализуется в запрос
-  response,   // status/statusRange/нет статуса для дефолтного + хедера параметрами + боди
-};
-
-constexpr std::string_view e2str(parse_tag_e e) noexcept {
-  switch (e) {
-    case parse_tag_e::fundamental:
-      return "fundamental";
-    case parse_tag_e::array:
-      return "array";
-    case parse_tag_e::anyof:
-      return "anyof";
-    case parse_tag_e::oneof:
-      return "oneof";
-    case parse_tag_e::allof:
-      return "allof";
-    case parse_tag_e::not_a:
-      return "not_a";
-    case parse_tag_e::object:
-      return "object";
-    case parse_tag_e::enum_:
-      return "enum_";
-    case parse_tag_e::string_enum:
-      return "string_enum";
-    case parse_tag_e::open_string_enum:
-      return "open_string_enum";
-    case parse_tag_e::body:
-      return "body";
-    case parse_tag_e::operation:
-      return "operation";
-    case parse_tag_e::response:
-      return "response";
-  }
-  metel::unreachable();
-}
-
-[[nodiscard]] constexpr bool efromstr(std::string_view s, parse_tag_e& out) {
-  std::optional t = ss::string_switch<parse_tag_e>(s)
-                        .case_("fundamental", parse_tag_e::fundamental)
-                        .case_("array", parse_tag_e::array)
-                        .case_("anyof", parse_tag_e::anyof)
-                        .case_("oneof", parse_tag_e::oneof)
-                        .case_("allof", parse_tag_e::allof)
-                        .case_("not_a", parse_tag_e::not_a)
-                        .case_("object", parse_tag_e::object)
-                        .case_("enum_", parse_tag_e::enum_)
-                        .case_("string_enum", parse_tag_e::string_enum)
-                        .case_("open_string_enum", parse_tag_e::open_string_enum)
-                        .case_("body", parse_tag_e::body)
-                        .case_("operation", parse_tag_e::operation)
-                        .case_("response", parse_tag_e::response)
-                        .or_nullopt();
-  if (!t)
-    return false;
-  out = *t;
-  return true;
-}
 
 // TODO генерировать геттеры сеттеры для объектов и вариантов (get if/is/visit)
 // TODO генерировать серверы и клиенты - у сервера адрес по выражению, функция которая определяет какой запрос

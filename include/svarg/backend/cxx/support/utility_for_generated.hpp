@@ -18,8 +18,6 @@ constexpr decltype(auto) visit_field_index(F&& f, size_t i) {
     return;
 }
 
-// имя максимально кривое для наименьшей вероятности пересечения с другими именами
-static constexpr std::string_view special_field_name = "svarg_implfield";
 
 template <typename T>
 [[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
@@ -33,9 +31,6 @@ template <typename T>
 template <typename T>
 using additional_properties_schema_t = typename std::decay_t<T>::svarg_additional_properties_type;
 
-constexpr inline std::string_view additional_properties_schema_alias_name = "svarg_additional_properties_type";
-constexpr inline std::string_view additional_properties_field_name = "svarg_additional_properties";
-constexpr inline std::string_view additional_properties_forbidden_name = "svarg_additional_properties_forbidden";
 
 template <typename T>
 constexpr auto& get_additional_properties(T& x) noexcept {

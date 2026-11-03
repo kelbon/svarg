@@ -6,8 +6,10 @@
 #include "svarg/utils/parse_url.hpp"
 #include "svarg/utils/svarg_assert.hpp"
 
-#include <hidi/h2client.hpp>
-#include <hidi/asio/io_impl.hpp>
+#ifdef SVARG_ENABLE_NETWORK_REFS
+  #include <hidi/h2client.hpp>
+  #include <hidi/asio/io_impl.hpp>
+#endif
 
 namespace svarg {
 
@@ -28,6 +30,8 @@ static std::string fixup_path(fs::path p) {
     return fs::canonical(p).lexically_normal().generic_string();
   }
 }
+
+#ifdef SVARG_ENABLE_NETWORK_REFS
 
 static dd::task<void> do_load_refered_object(hidi::h2client& client, url_ref url, auto success,
                                              auto fail) try {
@@ -72,6 +76,17 @@ std::string do_get_request_to(std::string_view url) {
   SVARG_ASSERT(body);
   return std::move(*body);
 }
+
+#else
+
+// без hidi (CMake опция svarg_ENABLE_NETWORK_REFS выключена): генератору не нужен HTTP клиент ради редкого
+// случая
+std::string do_get_request_to(std::string_view url) {
+  throw parse_error("cannot load url `{}`: svarg is built without network refs (svarg_ENABLE_NETWORK_REFS)",
+                    url);
+}
+
+#endif
 
 // если в ref нет # (разделителя на путь до файла и json поинтер) это означает include json/yaml по URI
 // делает блокирующий GET запрос по URL с/без SSL (url должно начинаться с http:// или https://)

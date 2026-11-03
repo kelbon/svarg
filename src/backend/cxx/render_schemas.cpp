@@ -2,6 +2,8 @@
 
 #include "svarg/utils/svarg_assert.hpp"
 #include "render_common.hpp"
+#include "svarg/utils/number.hpp"
+#include "svarg/from_json_value.hpp"
 
 namespace svarg::cxx {
 
@@ -604,13 +606,13 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
           result += std::format("static const inline std::array<{}, {}> values = {{", type, e.values.size());
           if (e.type.is_fundamental(ir::fundamental_e::boolean)) {
             for (auto&& v : e.values)
-              result += std::format("{},", from_json<cxx_support::boolean>(v.value));
+              result += std::format("{},", from_json<bool>(v.value));
           } else if (e.type.is_fundamental(ir::fundamental_e::integer)) {
             for (auto&& v : e.values)
-              result += std::format("{},", from_json<cxx_support::integer>(v.value));
+              result += std::format("{},", from_json<int64_t>(v.value));
           } else if (e.type.is_fundamental(ir::fundamental_e::number)) {
             for (auto&& v : e.values)
-              result += std::format("{},", from_json<cxx_support::number>(v.value).get_as_double());
+              result += std::format("{},", from_json<::svarg::number>(v.value).get_as_double());
           } else if (e.type.is_fundamental(ir::fundamental_e::null)) {
             for (auto&& v : e.values) {
               if (!v.value.is_null())
