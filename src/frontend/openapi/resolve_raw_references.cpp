@@ -8,7 +8,6 @@
 
 #ifdef SVARG_ENABLE_NETWORK_REFS
   #include <hidi/h2client.hpp>
-  #include <hidi/asio/io_impl.hpp>
 #endif
 
 namespace svarg {
@@ -57,10 +56,10 @@ std::string do_get_request_to(std::string_view url) {
   std::optional<hidi::h2client> client;
   hidi::h2client_options opts{.allow_requests_before_server_settings = true};
   if (u.scheme == "http") {
-    client.emplace(hidi::endpoint(std::string(u.host), u.get_port()), opts);
+    client.emplace(hidi::endpoint(std::string(u.host), u.get_port()), nullptr, opts);
   } else if (u.scheme == "https") {
-    aa::inplaced io{[&] { return hidi::asio_tls_io(hidi::make_ssl_context_for_client({})); }};
-    client.emplace(hidi::endpoint(std::string(u.host), u.get_port()), opts, io);
+    client.emplace(hidi::endpoint(std::string(u.host), u.get_port()), hidi::make_ssl_context_for_client({}),
+                   opts);
   } else
     throw parse_error("invalid $ref, network ref must start with http:// or https://, ref: `{}`", url);
 
