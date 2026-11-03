@@ -140,6 +140,8 @@ static load_raw_ref_return load_raw_refered_object(std::string_view url, fs::pat
   }
   boost::json::value result;
   fs::path path = curfile.parent_path() / url;
+  if (options.read_files)
+    options.read_files->insert(fs::weakly_canonical(path));
   if (cache) {
     result = cache->load(path);
   } else {
@@ -229,6 +231,9 @@ static void include_raw_references(boost::json::value& v, fs::path curfile, size
 
 boost::json::value resolve_raw_references(boost::json::value v, fs::path specfile,
                                           const openapi_options& options, jsons_cache* cache) {
+  // каждый загруженный файл спеки проходит здесь (и после jsons_cache)
+  if (options.read_files && !is_net_ref(specfile.generic_string()))
+    options.read_files->insert(fs::weakly_canonical(specfile));
   include_raw_references(v, std::move(specfile), options.ref_max_depth, options, cache);
   return v;
 }

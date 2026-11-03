@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <set>
 
 #include "svarg/frontend/openapi/openapi_object.hpp"
 #include "svarg/utils/jsons_cache.hpp"
@@ -28,6 +29,9 @@ struct openapi_options {
   // spec dir это тоже include dir и она имеет приоритет
   std::vector<fs::path> include_dirs = {};
   ir::ir_options ir_opts = {};
+  // если задано, сюда добавляются все прочитанные файлы спек (абсолютные пути): входные и те, на которые
+  // ссылаются. Для депфайла сборки (svarg --depfile)
+  std::set<fs::path>* read_files = nullptr;
 };
 
 // резолвит ссылки без #

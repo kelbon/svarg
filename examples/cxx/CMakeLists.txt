@@ -11,8 +11,6 @@ svarg_generate_cxx(
     SPECS_DIR ${CMAKE_CURRENT_SOURCE_DIR}
     OUT_DIR   ${CMAKE_CURRENT_SOURCE_DIR}/generated
     SPECS     api.yaml
-    # by default svarg built by the svarg project, override if needed:
-    # SVARG_EXECUTABLE /path/to/svarg
 )
 add_executable(svarg_simple_cxx_example main.cpp)
 target_link_libraries(svarg_simple_cxx_example PUBLIC svarg_simple_cxx_example_generated)

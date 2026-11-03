@@ -4,7 +4,7 @@ project(svarg)
 # svarg - это генератор (svarg) и рантайм сгенерированного кода (svarg_cxx_supportlib). Проекту пользователя
 # нужен только рантайм и svarg_generate_cxx, генератор собирается отдельно в Release (см. ниже)
 option(svarg_DEV_BUILD "svarg development: the generator is built in this tree with the project configuration" OFF)
-option(svarg_GENERATOR_ONLY "build only the generator, without the runtime" OFF)
+option(svarg_GENERATOR_ONLY "build only the generator, without the cxx support" OFF)
 option(svarg_ENABLE_NETWORK_REFS "the generator can load $ref by URL (requires hidi)" OFF)
 option(svarg_ENABLE_TESTING "enables testing" OFF)
 option(svarg_ENABLE_ASAN "build ASAN (for CI)" OFF)
@@ -19,10 +19,10 @@ if(svarg_ENABLE_TESTING AND NOT svarg_DEV_BUILD)
 endif()
 
 set(svarg_BUILD_GENERATOR OFF)
-set(svarg_BUILD_RUNTIME ON)
+set(svarg_BUILD_CXX_SUPPORT ON)
 if(svarg_GENERATOR_ONLY)
   set(svarg_BUILD_GENERATOR ON)
-  set(svarg_BUILD_RUNTIME OFF)
+  set(svarg_BUILD_CXX_SUPPORT OFF)
 elseif(svarg_DEV_BUILD)
   set(svarg_BUILD_GENERATOR ON)
 endif()
@@ -49,7 +49,7 @@ target_link_libraries(svarg_utilslib PUBLIC
     metellib
 )
 
-if(svarg_BUILD_RUNTIME)
+if(svarg_BUILD_CXX_SUPPORT)
   add_subdirectory(include/svarg/backend/cxx/support)
 endif()
 
@@ -92,7 +92,7 @@ endforeach()
 
 # генератор для svarg_generate_cxx, если он не собирается в этом дереве: отдельная сборка в Release (с
 # компилятором проекта, при кросс-компиляции - хостовым), чтобы кодогенерация не шла отладочной сборкой
-if(svarg_BUILD_RUNTIME AND NOT svarg_BUILD_GENERATOR)
+if(svarg_BUILD_CXX_SUPPORT AND NOT svarg_BUILD_GENERATOR)
   include(ExternalProject)
   set(svarg_generator_dir "${CMAKE_CURRENT_BINARY_DIR}/svarg_generator")
   set(svarg_generator_args -DCMAKE_BUILD_TYPE=Release -Dsvarg_GENERATOR_ONLY=ON)
@@ -137,7 +137,7 @@ set(SVARG_SCRIPT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/svarg_generate.cmake)
 # `svarg_generate_cxx` fn
 include(cmake/svarg_generate.cmake)
 
-if(svarg_ENABLE_EXAMPLES AND svarg_BUILD_RUNTIME)
+if(svarg_ENABLE_EXAMPLES AND svarg_BUILD_CXX_SUPPORT)
     add_subdirectory(examples/cxx)
     add_subdirectory(examples/cxx_nrf)
     add_subdirectory(examples/cxx_stream_server)

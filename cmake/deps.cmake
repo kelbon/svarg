@@ -7,7 +7,7 @@ endif()
 
 # рантайм: json и pfr сам, system asio stacktrace - hidi. Генератор: json pfr, process iostreams
 set(BOOST_INCLUDE_LIBRARIES pfr json)
-if(svarg_BUILD_RUNTIME OR svarg_ENABLE_NETWORK_REFS)
+if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   list(APPEND BOOST_INCLUDE_LIBRARIES system asio stacktrace)
 endif()
 if(svarg_BUILD_GENERATOR)
@@ -76,7 +76,7 @@ if(svarg_BUILD_GENERATOR)
   )
 endif()
 
-if(svarg_BUILD_RUNTIME OR svarg_ENABLE_NETWORK_REFS)
+if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   CPMAddPackage(
     NAME HIDI
     GIT_REPOSITORY https://github.com/kelbon/hidi

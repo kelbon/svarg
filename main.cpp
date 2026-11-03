@@ -87,6 +87,19 @@ static std::set<fs::path> collect_input_files(fs::path specs_dir,
   return inputs;
 }
 
+// путь в синтаксисе Makefile (депфайл): пробел, # и $ экранируются
+[[nodiscard]] static std::string depfile_escape(const fs::path& p) {
+  std::string res;
+  for (char c : p.generic_string()) {
+    if (c == ' ' || c == '#')
+      res += '\\';
+    else if (c == '$')
+      res += '$';
+    res += c;
+  }
+  return res;
+}
+
 int main(int argc, char* argv[]) try {
   svarg_cli::options cliopts = svarg_cli::parse_or_exit(argc, argv);
 
@@ -121,6 +134,10 @@ int main(int argc, char* argv[]) try {
   // options.ir_opts.marked_used;
   options.resolve_url_refs = cliopts.allow_network_refs;
   options.ref_max_depth = cliopts.references_max_recursion_depth;
+
+  std::set<fs::path> read_files;
+  if (!cliopts.depfile.empty())
+    options.read_files = &read_files;
 
   ir::ir_object ir = openapi2ir(cliopts.specs_dir, specs2generate, options);
   if (cliopts.ignore_requirements && ir.schemas) {
@@ -168,6 +185,21 @@ int main(int argc, char* argv[]) try {
         std::println("cannot format file `{}", p.generic_string());
     };
     clang_format_dir(cliopts.out, onfile);
+  }
+  if (!cliopts.depfile.empty()) {
+    // цели - сгенерированные .cpp (их знает сборка), зависимости - все прочитанные спеки
+    std::string targets;
+    for (const fs::path& p : generated) {
+      if (p.extension() != ".cpp")
+        continue;
+      if (!targets.empty())
+        targets += ' ';
+      targets += depfile_escape(fs::absolute(p).lexically_normal());
+    }
+    std::string deps;
+    for (const fs::path& p : read_files)
+      deps += std::format(" \\\n  {}", depfile_escape(p));
+    write_into(cliopts.depfile, std::format("{}:{}\n", targets, deps));
   }
   std::println("output written to {} directory", fs::absolute(cliopts.out).generic_string());
   return 0;
