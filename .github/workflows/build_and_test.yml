@@ -71,6 +71,26 @@ jobs:
         run: |
           python -m pytest ./jinja_backend/tests/test_serde.py -v
 
+      # пример NRF как отдельный проект: svarg подключается, как у пользователя (CPM, генератор отдельно в
+      # Release, svarg_generate_cxx), а сценарий сервера и клиента на реальной спеке 3GPP должен пройти
+      - name: Configure example (as user project)
+        run: |
+          cmake -S examples/cxx_nrf                       \
+            -DCMAKE_BUILD_TYPE=${{matrix.build_type}}     \
+            -DCMAKE_CXX_COMPILER=${{matrix.compiler}}     \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5            \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache           \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache         \
+            -B build_nrf -G "Ninja"
+      - name: Build example (as user project)
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+        run: |
+          cmake --build build_nrf
+      - name: Run example (as user project)
+        run: |
+          ./build_nrf/svarg_nrf_example
+
       - name: Configure CMake (ASAN)
         run:  |
           cmake . -Dsvarg_ENABLE_TESTING=ON \

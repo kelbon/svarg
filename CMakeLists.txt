@@ -100,6 +100,12 @@ if(svarg_BUILD_CXX_SUPPORT AND NOT svarg_BUILD_GENERATOR)
     list(APPEND svarg_generator_args -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                                      -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
   endif()
+  # настройки сборки, которые нужны и генератору: кеш компиляции, политика для старых зависимостей
+  foreach(var CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER CMAKE_POLICY_VERSION_MINIMUM)
+    if(DEFINED ${var})
+      list(APPEND svarg_generator_args -D${var}=${${var}})
+    endif()
+  endforeach()
   if(CPM_SOURCE_CACHE)
     list(APPEND svarg_generator_args -DCPM_SOURCE_CACHE=${CPM_SOURCE_CACHE})
   endif()

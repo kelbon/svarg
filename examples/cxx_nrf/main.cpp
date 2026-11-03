@@ -174,6 +174,10 @@ struct nrf_server : nrf::server {
       nrf::postOnNFStatusEvent n;
       n.body.emplace().event = event;
       n.body->nfInstanceUri = std::format("{}/nf-instances/{}", api_root, nf.nfInstanceId.get());
+      // при регистрации спека требует профиль (allOf с anyOf/oneOf по значению event): без него уведомление
+      // не пройдёт проверку схемы при сериализации
+      if (event == NotificationEventType::NF_REGISTERED)
+        n.body->completeNfProfile = nf;
       hidi::http_request req = svarg::cxx_support::make_request(n);
       std::println("  -> {}: {}", sub.nfStatusNotificationUri, req.body.strview());
     }
@@ -194,6 +198,14 @@ static NFProfile make_profile(std::string_view id, std::string_view type, std::s
   return p;
 }
 
+// ответ, который сценарий ожидает; иначе сценарий не прошёл (пример запускается в CI)
+template <typename T>
+static T& expect(T* rsp, std::string_view what) {
+  if (!rsp)
+    throw std::runtime_error(std::format("unexpected response: {}", what));
+  return *rsp;
+}
+
 static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
   auto never = hidi::deadline_t::never();
   std::string amf = "4947a69a-f61b-4bc1-b9da-47c9c5d14b64";
@@ -204,8 +216,7 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
   sub.body.nfStatusNotificationUri = "http://amf-watcher/notify";
   sub.body.subscrCond.get().emplace<NfTypeCond>(NfTypeCond{.nfType = NFType::AMF});
   nrf::CreateSubscription::result_t subscribed = co_await cli.send(sub, never);
-  if (auto* created = subscribed.get_if_201())
-    std::println("subscribed: {}", created->headers.location);
+  std::println("subscribed: {}", expect(subscribed.get_if_201(), "CreateSubscription 201").headers.location);
 
   // регистрация двух NF
   for (auto [id, type, name] :
@@ -214,9 +225,9 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
     reg.path.nfInstanceID.get() = id;
     reg.body = make_profile(id, type, name);
     nrf::RegisterNFInstance::result_t r = co_await cli.send(reg, never);
-    if (auto* created = r.get_if_201())
-      std::println("registered {}: {}, heartbeat {}s", name, created->headers.location,
-                   created->body.heartBeatTimer->get());
+    auto& created = expect(r.get_if_201(), "RegisterNFInstance 201");
+    std::println("registered {}: {}, heartbeat {}s", name, created.headers.location,
+                 created.body.heartBeatTimer->get());
   }
 
   // heartbeat: JSON Patch со сменой статуса
@@ -225,36 +236,38 @@ static dd::task<void> scenario(nrf::client& cli, hidi::h2client& h2) {
   hb.body.get().push_back(PatchItem{
       .path = "/nfStatus", .op = PatchOperation::replace, .value = boost::json::string("SUSPENDED")});
   nrf::UpdateNFInstance::result_t updated = co_await cli.send(hb, never);
-  std::println("heartbeat: {}", updated.get_if_204() ? "204" : "?");
+  expect(updated.get_if_204(), "UpdateNFInstance 204");
+  std::println("heartbeat: 204");
 
   nrf::GetNFInstance get;
   get.path.nfInstanceID.get() = amf;
   nrf::GetNFInstance::result_t amf_profile = co_await cli.send(get, never);
-  if (auto* ok = amf_profile.get_if_200())
-    std::println("amf status: {}", ok->body.nfStatus.value);
+  std::println("amf status: {}", expect(amf_profile.get_if_200(), "GetNFInstance 200").body.nfStatus.value);
 
   // поиск по типу: ссылки HAL
   nrf::GetNFInstances list;
   list.query.nf_type = NFType::SMF;
   nrf::GetNFInstances::result_t found = co_await cli.send(list, never);
-  if (auto* ok = found.get_if_200()) {
-    auto& items = get_additional_properties(*ok->body._links).at("items").get();
-    for (const Link& link : items.get_if<LinksValueSchema_::oneOf::_0>()->get())
-      std::println("found SMF: {}", *link.href);
-  }
+  auto& links = *expect(found.get_if_200(), "GetNFInstances 200").body._links;
+  auto& items = get_additional_properties(links).at("items").get();
+  for (const Link& link : expect(items.get_if<LinksValueSchema_::oneOf::_0>(), "HAL items").get())
+    std::println("found SMF: {}", *link.href);
 
   // снятие с регистрации и ошибка в application/problem+json
   nrf::DeregisterNFInstance dereg;
   dereg.path.nfInstanceID.get() = smf;
-  (void)co_await cli.send(dereg, never);
+  nrf::DeregisterNFInstance::result_t deregistered = co_await cli.send(dereg, never);
+  expect(deregistered.get_if_204(), "DeregisterNFInstance 204");
   get.path.nfInstanceID.get() = smf;
   nrf::GetNFInstance::result_t gone = co_await cli.send(get, never);
-  if (auto* not_found = gone.get_if_404())
-    std::println("smf: {} {}", not_found->body.status.value(), *not_found->body.cause);
+  auto& not_found = expect(gone.get_if_404(), "GetNFInstance 404");
+  std::println("smf: {} {}", not_found.body.status.value(), *not_found.body.cause);
 
   // свой маршрут - обычный запрос hidi
   hidi::http_response health = co_await h2.send_request(hidi::http_request{.path = "/health"}, never);
   std::println("health: {} {}", health.status, health.body_strview());
+  if (health.status != 200)
+    throw std::runtime_error("unexpected response: /health");
 }
 
 int main() {
@@ -268,11 +281,13 @@ int main() {
   nrf::client cli{svarg::cxx_support::client_ref(&h2)};
 
   bool done = false;
+  int rc = 0;
   auto run = [&]() -> dd::task<void> {
     try {
       co_await scenario(cli, h2);
     } catch (std::exception& e) {
       std::println("error: {}", e.what());
+      rc = 1;
     }
     done = true;
   };
@@ -282,5 +297,5 @@ int main() {
     server.ioctx().poll();
     h2.ioctx().poll();
   }
-  return 0;
+  return rc;
 }
