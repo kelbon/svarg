@@ -8,32 +8,35 @@ svarg преобразует поданные на входе языки опи�
 
 ```mermaid
 graph LR
-    subgraph "Фронтенды"
-        A[GRPC frontend]
-        B[OpenAPI frontend]
-        C[Something frontend]
+    subgraph Frontends
+        GRPC[GRPC frontend]
+        OPEN[OpenAPI frontend]
+        SOME[Something frontend]
     end
 
-    subgraph IR[Единая точка входа (IR)]
-        style IR fill:#f9f,stroke:#333,stroke-width:2px
+    IR((IR))
+
+    subgraph Backends
+        JAVA[Java backend]
+        CPP[C++ backend]
+        C[C backend]
     end
 
-    subgraph "Бэкенды"
-        D[Java backend]
-        E[C++ backend]
-        F[C backend]
-    end
+    GRPC --> IR
+    OPEN --> IR
+    SOME --> IR
 
-    A --> IR
-    B --> IR
-    C --> IR
+    IR --> JAVA
+    IR --> CPP
+    IR --> C
 
-    IR --> D
-    IR --> E
-    IR --> F
-
-    linkStyle 0,1,2 stroke:#2a9d8f,stroke-width:2px;
-    linkStyle 3,4,5 stroke:#e76f51,stroke-width:2px;
+    style IR fill:#f9f,stroke:#333,stroke-width:2px
+    style GRPC fill:#e6f3ff,stroke:#2a9d8f,stroke-width:2px
+    style OPEN fill:#e6f3ff,stroke:#2a9d8f,stroke-width:2px
+    style SOME fill:#e6f3ff,stroke:#2a9d8f,stroke-width:2px
+    style JAVA fill:#fff0f0,stroke:#e76f51,stroke-width:2px
+    style CPP fill:#fff0f0,stroke:#e76f51,stroke-width:2px
+    style C fill:#fff0f0,stroke:#e76f51,stroke-width:2px
 ```
 
 ## svarg IR
