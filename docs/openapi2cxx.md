@@ -24,21 +24,35 @@ target_link_libraries(my_app PRIVATE api_generated)
 
 ## Поддержка OpenAPI
 
-- ✔ любые $ref и количество файлов спек, $ref с дополнительными полями
-- ✔ anyOf, oneOf, allOf, not. Поддержано поведение allOf как "наследования" или объединения схем
-- ✔ OAuth2 и другие виды авторизации (генерируются в С++ как параметры требующие заполнения)
-- ✔ рекурсивные схемы
-- ✔ format - в том числе любые пользовательские. [Подробнее](schemas.md#форматы)
-- ✔ свои [медиа типы](cxx_media_types.md) (content-type)
-- ✔ ограничения minLength/maxLength, pattern (ECMAScript), minimum/maximum/exclusive*, multipleOf, minItems/maxItems, uniqueItems, minProperties/maxProperties. Опция --ignore-requirements отключает проверки
-- ✔ сложные схемы с только required и другие  способы выразить требование схемой
-- ✔ type: ["string", "null"]
-- ✔ discriminator и mapping
-- ✔ callbacks и webhooks - генерируются как схемы, отправляются пользователем
-- ✔ nullable при отправке ставит null пустому значению
-- ✔ additionalProperties: false, true или схема
-- ✔ схема указанная как true/false также поддерживается
-- ✔ OpenAPI файлы в JSON формате
+ ✔ любые `$ref` и количество файлов спек, `$ref` с дополнительными полями
+
+ ✔ `anyOf`, `oneOf`, `allOf`, `not`. Поддержано поведение `allOf` как "наследования" или объединения схем
+
+ ✔ OAuth2 и другие виды авторизации (генерируются в С++ как параметры требующие заполнения)
+
+ ✔ рекурсивные схемы
+
+ ✔ format - в том числе [любые пользовательские](cxx_format.md)
+
+ ✔ свои [медиа типы](cxx_media_types.md) (content-type)
+
+ ✔ ограничения `minLength`/`maxLength`, `pattern` (ECMAScript), `minimum`/`maximum`/`exclusive*`, `multipleOf`, `minItems`/`maxItems`, uniqueItems`, `minProperties`/`maxProperties`. Опция `--ignore-requirements` отключает проверки
+
+ ✔ сложные схемы с только required и другие  способы выразить требование схемой
+
+ ✔ `type: ["string", "null"]`
+
+ ✔ `discriminator` и `mapping`
+
+ ✔ `callbacks` и `webhooks` - генерируются как схемы, отправляются пользователем
+
+ ✔ `nullable` при отправке ставит `null` пустому значению
+
+ ✔ `additionalProperties`: `false`, `true` или схема
+
+ ✔ схема указанная как `true`/`false` также поддерживается
+ 
+ ✔ OpenAPI файлы в JSON формате
 
 ## Расширения
 
@@ -64,11 +78,11 @@ target_link_libraries(my_app PRIVATE api_generated)
 - ✔ HTTP/2
 - ✔ SSL/TLS
 - ✔ потоковая отправка сервером, потоковое получение данных клиентом
-- ✔ для больших спек .cpp умеет делиться на любое нужное количество частей (SOURCES_PER_SPEC) для ускорения компиляции
+- ✔ для больших спек .cpp умеет делиться на любое нужное количество частей (`SOURCES_PER_SPEC`) для ускорения компиляции
 
 #### если вы получаете ошибки сборки
 
-(скорее всего на windows) о неустановленном nasm или невыставленной переменной CMAKE_ASM_*:
+(скорее всего на windows) о неустановленном nasm или невыставленной переменной `CMAKE_ASM_*`:
 
 Убедитесь что у вас установлен nasm - он нужен для openSSL
 

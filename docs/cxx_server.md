@@ -32,19 +32,7 @@ struct my_server : api::server {
 
 Все операции из спек уже зарегистрированы на сервере, но можно добавить свои. Добавлять и удалять маршруты можно в любой момент (однопоточно!)
 
-```cpp
-router r;
-r.add_route(hidi::http_method_e::GET, "/health", 0);         // путь без шаблонов
-r.add_route(hidi::http_method_e::GET, "/items/{id}", 1);     // параметры на весь сегмент
-r.add_before(hidi::http_method_e::GET, "/files/{name}.{ext}", 2);  // любой шаблон, линейно
-std::optional<size_t> id = r.find(req.method, path);         // путь без query, не декодированный
-r.remove_route(hidi::http_method_e::GET, "/items/{x}");      // форма та же, что /items/{id}
-r.remove_before(hidi::http_method_e::GET, "/files/{name}.{ext}");
-```
-
 Note: для кривых шаблонов путей вроде {name}-{mda} из-за возможных неоднозначностей поиск идёт ДО всех остальных путей и в порядке их добавления (для тех что в спеке порядок в котором они идут в спеке)
-
-## Свои маршруты
 
 `routes()` сервера - его роутер. Операции спеки в нём занимают id от 0 до `server::user_route_begin`, свои
 маршруты добавляются с id от `user_route_begin` и приходят в `on_user_route`:
