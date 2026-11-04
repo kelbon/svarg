@@ -92,7 +92,7 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
       out.insert(ref);  // если ref уже там был, то автоматически обрабатывается
   };
   // схемы-требования упоминаются в svarg_required_schemas, ограничения рендерятся внутрь и файла не имеют
-  if (t.required) {
+  if (checks_requirements(t)) {
     for (const ir::schema_ref& r : *t.required)
       if (r.is_fundamental() || !schemaof(r).type.is_constraints())
         collect(r);
@@ -202,10 +202,72 @@ std::string renderer::render_discriminator(const ir::discriminator_desc& d, std:
   return result;
 }
 
-std::string renderer::render_special_field_type(const ir::schema_type& type, std::string_view relspec,
+// ключ render_options::formats схемы фундаментального типа с форматом: "<тип>+<формат>"
+static std::optional<std::string> format_key(const ir::schema& s) {
+  const ir::fundamental_e* f = s.type.if_fundamental();
+  if (!f || !s.meta)
+    return std::nullopt;
+  auto it = s.meta->find(x_format_hint);
+  if (it == s.meta->end() || !it->second.value.is_string())
+    return std::nullopt;
+  return std::format("{}+{}", e2str(*f), std::string_view(it->second.value.as_string()));
+}
+
+const std::string* renderer::format_type(const ir::schema& s) const {
+  std::optional key = format_key(s);
+  if (!key)
+    return nullptr;
+  auto it = options.formats.find(*key);
+  return it == options.formats.end() ? nullptr : &it->second;
+}
+
+bool renderer::checks_requirements(const ir::schema& s) const {
+  if (!s.has_requirements())
+    return false;
+  const std::string* type = format_type(s);
+  if (!type)
+    return true;
+  // встроенные форматы чисел - числа, их ограничения проверяются
+  static const auto defaults = default_formats();
+  auto it = defaults.find(*format_key(s));
+  return it != defaults.end() && it->second == *type;
+}
+
+void renderer::warn_about_formats() const {
+  if (!ir.schemas)
+    return;
+  for (const ir::schema& s : *ir.schemas) {
+    if (!s.meta)
+      continue;
+    auto it = s.meta->find(x_format_hint);
+    if (it == s.meta->end() || !it->second.value.is_string())
+      continue;
+    std::string_view format = it->second.value.as_string();
+    using enum ir::fundamental_e;
+    const ir::fundamental_e* f = s.type.if_fundamental();
+    if (s.type.is_enum())
+      continue;
+    if (!f || (*f != string && *f != integer && *f != number)) {
+      emit_warn("in {}#{}: format `{}` ignored, it applies only to string, integer and number", s.spec,
+                s.jsonptr.escaped(), format);
+      continue;
+    }
+    if (const std::string* type = format_type(s); type && s.has_requirements() && !checks_requirements(s)) {
+      emit_warn("in {}#{}: requirements of schema with format `{}` are not checked, `{}` checks the value",
+                s.spec, s.jsonptr.escaped(), format, *type);
+    }
+  }
+}
+
+std::string renderer::render_special_field_type(const ir::schema& s, std::string_view relspec,
                                                 const json_pointer& relative) const {
+  const ir::schema_type& type = s.type;
   matcher vtor{
-      [&](const ir::fundamental_e& e) -> std::string { return render_fundamental_type(e).typeref; },
+      [&](const ir::fundamental_e& e) -> std::string {
+        if (const std::string* t = format_type(s))
+          return *t;
+        return render_fundamental_type(e).typeref;
+      },
       [&](const ir::array_schema& a) {
         return std::format("{}<{}>", array_str, render_schema_ref(a.element, relspec, relative).typeref);
       },
@@ -246,8 +308,8 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   // именованные даже простые алиасы оставляем, например чтобы oneof<A, B, C,...> не дублировать во многих
   // местах. Если пользователь в спеке дал ему имя - значит так и хотел
   // anyOf/oneOf с дискриминатором - всегда структура: дискриминатор рендерится в неё (render_discriminator)
-  if (!t.name && !t.has_requirements() && !discriminator_of(t.type)) {
-    std::string res = render_special_field_type(t.type, relspec, relative);
+  if (!t.name && !checks_requirements(t) && !discriminator_of(t.type)) {
+    std::string res = render_special_field_type(t, relspec, relative);
     if (!res.empty())
       return {.typeref = std::move(res), .is_alias = true};
   }
@@ -503,7 +565,7 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
 // `typeref` - тип поля, если s полутривиальный объект
 std::string renderer::render_struct_content(const ir::schema& s, std::string typeref) const {
   auto render_requirements = [&]() -> std::string {
-    if (!s.has_requirements())
+    if (!checks_requirements(s))
       return "";
     // ограничения проверяются по разобранному значению и рендерятся прямо во владельца,
     // остальные требования - списком типов, по которым значение разбирается повторно
@@ -525,7 +587,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
     return res;
   };
   // пытаемся алиас, для объектов и енамов возвращает пустую строку
-  std::string r = render_special_field_type(s.type, s.spec, s.jsonptr);
+  std::string r = render_special_field_type(s, s.spec, s.jsonptr);
   if (!r.empty()) {
     // тип мог бы быть алиасом, но у него есть имя или требования, поэтому это структура с одним полем
     using enum cxx_support::parse_tag_e;

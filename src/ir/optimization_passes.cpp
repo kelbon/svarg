@@ -655,10 +655,35 @@ pass_result pass_allof_extract_requirements(ir_object ir, const ir_options&) {
         replace_with_never(s, "has conflicting types");
         continue;
       }
+      // формат частей (x-format-hint) сохраняется, если он один. Разные форматы не используются
+      std::set<std::string> formats;
+      auto collect_format = [&](const schema& part) {
+        if (!part.meta)
+          return;
+        if (auto it = part.meta->find(x_format_hint); it != part.meta->end() && it->second.value.is_string())
+          formats.insert(std::string(it->second.value.as_string()));
+      };
+      collect_format(s);
+      for (const schema_ref& r : allof->schemas)
+        if (!r.is_fundamental())
+          collect_format(get(r));
+      // allof больше не используется: заменяется фундаментальным типом
       s.type.data = types.empty() ? fundamental_e::any : types.front();
       if (!requirements.empty()) {
         s.add_requirements(requirements);
         remove_duplicates(*s.required);
+      }
+      if (formats.size() == 1) {
+        if (!s.meta)
+          s.meta.emplace();
+        (*s.meta)[std::string(x_format_hint)] = Any(boost::json::value(*formats.begin()));
+      } else if (formats.size() > 1) {
+        emit_warn("warning: allOf {}#{} has different formats, format ignored", s.spec, s.jsonptr.escaped());
+        if (s.meta) {
+          s.meta->erase(std::string(x_format_hint));
+          if (s.meta->empty())
+            s.meta.reset();
+        }
       }
       ++count;
     } else if (std::ranges::all_of(allof->schemas, is_object_schema)) {

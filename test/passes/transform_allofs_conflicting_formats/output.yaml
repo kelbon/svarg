@@ -1,0 +1,30 @@
+"schemas":
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Since"
+    "name": "Since"
+    "type":
+      "fundamental": "string"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Since/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Day"
+    "name": "Day"
+    "type":
+      "fundamental": "string"
+    "meta":
+      "x-format-hint": "date"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Since/allOf/1"
+    "type":
+      "fundamental": "string"
+    "meta":
+      "x-format-hint": "uuid"
+    "required":
+      - "spec": "testir"
+        "jsonptr": "/components/schemas/Since/allOf/1/constraints"
+  - "spec": "testir"
+    "jsonptr": "/components/schemas/Since/allOf/1/constraints"
+    "type":
+      "constraints":
+        "maxLength": 10

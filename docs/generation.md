@@ -19,6 +19,7 @@ YAML и JSON, файл может начинаться с `---`, но докум
 | `--sources-per-spec N` | `1` | на сколько `.cpp` делится код каждой спеки, см. ниже |
 | `--stream-content-type` | | потоковые медиа типы ответов, см. [клиент](client.md#ответы-потоком) |
 | `--file-prefix` | | текст в начале каждого заголовка, например `#include` своих кодеков, см. [кодеки](media_types.md) |
+| `--add-format` | | C++ тип формата: `string+date=my::date`, см. [форматы](schemas.md#форматы) |
 | `--ignore-requirements` | | не проверять ограничения и требования схем: меньше кода, неполная проверка |
 
 ## Файлы
@@ -53,6 +54,7 @@ svarg_generate_cxx(
     SPECS                api.yaml
     INCLUDE_DIRS         ...         # необязательно, -I
     STREAM_CONTENT_TYPES ...         # необязательно, --stream-content-type
+    FORMATS              ...         # необязательно, --add-format
     SOURCES_PER_SPEC     8           # необязательно, --sources-per-spec
 )
 target_link_libraries(my_app PRIVATE api_generated)

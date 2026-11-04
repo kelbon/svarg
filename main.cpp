@@ -102,6 +102,10 @@ static std::set<fs::path> collect_input_files(fs::path specs_dir,
 
 int main(int argc, char* argv[]) try {
   svarg_cli::options cliopts = svarg_cli::parse_or_exit(argc, argv);
+  // до разбора спек: неверная опция - сразу ошибка
+  std::vector<std::pair<std::string, std::string>> formats;
+  for (const std::string& f : cliopts.add_formats.args)
+    formats.push_back(cxx::parse_format_option(f));
 
   std::set<fs::path> inputs = collect_input_files(cliopts.specs_dir, cliopts.additional_args);
   for (const auto& p : inputs) {
@@ -163,6 +167,8 @@ int main(int argc, char* argv[]) try {
     if (!std::ranges::contains(renoptions.stream_content_types, mt))
       renoptions.stream_content_types.push_back(std::move(mt));
   }
+  for (auto& [key, type] : formats)
+    renoptions.formats.insert_or_assign(std::move(key), std::move(type));
   cxx::renderer r(ir, renoptions);
   // .cpp спек из командной строки пишутся всегда (имя спеки - имя файла без расширения, как во фронтенде)
   std::vector<std::string> sources_for;

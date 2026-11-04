@@ -62,6 +62,21 @@ struct to_json_value<bool> {
   }
 };
 
+// int32_t и другие целые, float (format схемы)
+template <std::integral T>
+struct to_json_value<T> {
+  boost::json::value operator()(T v) const {
+    return v;
+  }
+};
+
+template <std::floating_point T>
+struct to_json_value<T> {
+  boost::json::value operator()(T v) const {
+    return double(v);
+  }
+};
+
 template <>
 struct to_json_value<uint64_t> {
   boost::json::value operator()(uint64_t v) const {

@@ -182,6 +182,16 @@ TEST("pass transform allofs keeps constraints") {
                   &ir::pass_transform_allofs));
 }
 
+TEST("pass transform allofs keeps format") {
+  REQUIRE(test_ir("transform_allofs_keeps_format/input.yaml", "transform_allofs_keeps_format/output.yaml",
+                  ir_options{}, &ir::pass_transform_allofs));
+}
+
+TEST("pass transform allofs drops conflicting formats") {
+  REQUIRE(test_ir("transform_allofs_conflicting_formats/input.yaml",
+                  "transform_allofs_conflicting_formats/output.yaml", ir_options{}, &ir::pass_transform_allofs));
+}
+
 // type: string + allOf: [{pattern: ...}, {pattern: ...}]: требование типа any заменяется своими требованиями
 TEST("rm useless requirements flattens any requirement") {
   ir_options opts;

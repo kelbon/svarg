@@ -147,6 +147,14 @@ struct test_server : api::server {
     co_return ctx.stream_response(rsp.status, make_response_headers(rsp), repeat_parts("data: y\n\n", 2));
   }
 
+  // день из параметра пути (формат date) обратно в JSON
+  dd::task<hidi::http_response> handle(api::getDay op, hidi::http_request, hidi::request_context) override {
+    api::getDay::response_200 rsp;
+    rsp.body.day = op.path.day;
+    rsp.body.count.get() = 1;
+    co_return make_response(rsp);
+  }
+
   static hidi::streaming_body_t repeat_parts(std::string part, int n) {
     for (int i = 0; i < n; ++i)
       co_yield std::span<const hidi::byte_t>((const hidi::byte_t*)part.data(), part.size());
@@ -230,6 +238,39 @@ TEST("json media type by specialization") {
   REQUIRE(http.body_strview() == R"({"a":"x"})");
   api::postKv::response_201 back;
   REQUIRE(!from_response(http, back).failed() && back.body.a == "x");
+}
+
+TEST("formats") {
+  using api::components::schemas::Formats;
+  using test_codecs::date;
+  const boost::json::value json = boost::json::parse(R"({"day": "2026-11-04", "count": 5, "ratio": 0.5,
+      "days": ["2000-01-02"], "email": "a@b", "since": "1999-12-31"})");
+  Formats f;
+  REQUIRE(!svarg::try_from_json(json, f).failed());
+  static_assert(std::is_same_v<std::remove_cvref_t<decltype(f.count.get())>, std::int32_t>);
+  static_assert(std::is_same_v<std::remove_cvref_t<decltype(*f.ratio)>, float>);
+  static_assert(std::is_same_v<std::remove_cvref_t<decltype(*f.email)>, std::string>);
+  REQUIRE(f.day.get() == date{2026, 11, 4});
+  REQUIRE(f.count.get() == 5 && *f.ratio == 0.5f && *f.email == "a@b");
+  // minLength элементов days не проверяется
+  REQUIRE(f.days->size() == 1 && (*f.days)[0] == date{2000, 1, 2});
+  REQUIRE(*f.since == date{1999, 12, 31});
+  REQUIRE(svarg::to_json(f) == json);
+  // ограничение встроенного формата проверяется, значение вне int32 - ошибка
+  REQUIRE(svarg::try_from_json(boost::json::parse(R"({"day": "2026-11-04", "count": -1})"), f).failed());
+  REQUIRE(svarg::try_from_json(boost::json::parse(R"({"day": "2026-11-04", "count": 3000000000})"), f).failed());
+  REQUIRE(svarg::try_from_json(boost::json::parse(R"({"day": "04.11.2026", "count": 1})"), f).failed());
+
+  // параметр пути - текст типа формата
+  api::getDay op;
+  op.path.day.get() = date{2026, 1, 2};
+  http_request req = make_request(op);
+  REQUIRE(req.path == "/days/2026-01-02");
+  test_server server(hidi::server_ssl_context_ptr(nullptr));
+  std::vector rsps = exchange(server, {with_base_path(std::move(req), "/v1")});
+  api::getDay::response_200 rsp;
+  REQUIRE(!from_response(rsps[0], rsp).failed());
+  REQUIRE(rsp.body.day.get() == date{2026, 1, 2} && rsp.body.count.get() == 1);
 }
 
 TEST("required nullable field") {

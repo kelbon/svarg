@@ -9,6 +9,7 @@
 #       INCLUDE_DIRS     ${CMAKE_SOURCE_DIR}/openapi/common     # optional, each becomes "-I <dir>"
 #       STREAM_CONTENT_TYPES text/event-stream                   # optional, response media types streamed
 #                                                               # besides application/octet-stream
+#       FORMATS          string+date=my::date                   # optional, C++ types of schema formats
 #       SOURCES_PER_SPEC 8                                      # optional, default 1: into how many .cpp
 #                                                               # the code of each spec is split
 #   )
@@ -23,7 +24,7 @@ include_guard(GLOBAL)
 
 function(svarg_generate_cxx)
     set(oneValueArgs TARGET SPECS_DIR OUT_DIR SOURCES_PER_SPEC)
-    set(multiValueArgs SPECS INCLUDE_DIRS STREAM_CONTENT_TYPES)
+    set(multiValueArgs SPECS INCLUDE_DIRS STREAM_CONTENT_TYPES FORMATS)
     cmake_parse_arguments(ARGS "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT ARGS_TARGET)
@@ -79,13 +80,19 @@ function(svarg_generate_cxx)
         list(APPEND stream_args --stream-content-type "${ct}")
     endforeach()
 
+    set(format_args "")
+    foreach(f IN LISTS ARGS_FORMATS)
+        list(APPEND format_args --add-format "${f}")
+    endforeach()
+
     set(sources_args "")
     if(DEFINED ARGS_SOURCES_PER_SPEC)
         list(APPEND sources_args --sources-per-spec "${ARGS_SOURCES_PER_SPEC}")
     endif()
 
     # Arguments shared between the discovery (--dry-run) and the real run.
-    set(svarg_args "--out" "${out_dir}" "--specs-dir" "${specs_dir}" ${include_args} ${stream_args} ${sources_args}
+    set(svarg_args "--out" "${out_dir}" "--specs-dir" "${specs_dir}" ${include_args} ${stream_args} ${format_args}
+        ${sources_args}
         ${ARGS_SPECS})
 
     # --- 1. Входные спеки -------------------------------------------------

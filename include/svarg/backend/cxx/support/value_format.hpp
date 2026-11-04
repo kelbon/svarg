@@ -24,7 +24,8 @@ constexpr bool is_plain_value = [] {
   if constexpr (noexport::is_nullable_wrapper<U>)
     return is_plain_value<svarg::noexport::deoptional_type_t<U>>;
   else
-    return std::is_same_v<U, std::string> || std::is_arithmetic_v<U> || std::is_same_v<U, number> ||
+    return has_text_value<U> || std::is_same_v<U, std::string> || std::is_arithmetic_v<U> ||
+           std::is_same_v<U, number> ||
            std::is_same_v<U, null> || a_string_enum<U> || an_open_string_enum<U> || an_enum<U> ||
            an_fundamental<U>;
 }();

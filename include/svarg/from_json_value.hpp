@@ -64,14 +64,16 @@ struct from_json_value<bool> {
 template <std::integral T>
 struct from_json_value<T> {
   static error_code operator()(const boost::json::value& j, T& v) {
-    if (j.is_int64()) {
-      safe_write(j.get_int64(), v);
+    auto write = [&](auto x) -> error_code {
+      if (!noexport::in_range<T>(x))
+        return svarg::parse_error(" {} is out of range of {}", x, type_name<T>());
+      v = T(x);
       return {};
-    }
-    if (j.is_uint64()) {
-      safe_write(j.get_uint64(), v);
-      return {};
-    }
+    };
+    if (j.is_int64())
+      return write(j.get_int64());
+    if (j.is_uint64())
+      return write(j.get_uint64());
     return svarg::parse_error(" expected int64 | uint64, got {}", e2str(j.kind()));
   }
 };

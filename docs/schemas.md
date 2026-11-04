@@ -67,6 +67,43 @@ svarg считает `null` отсутствием значения: прише�
 - `anyOf: [enum строк, string]` — открытое перечисление: строка `value`, известные значения константами,
   `is_known()`.
 
+## Форматы
+
+`format` схемы `string`, `integer` или `number` задаёт C++ тип опцией генератора
+`--add-format <тип>+<формат>=<C++ тип>`:
+
+```
+svarg --add-format string+date=my::date --add-format string+date-time=my::time --file-prefix '#include "my_types.hpp"' ...
+```
+
+Встроенные: `integer+int32` → `std::int32_t`, `integer+int64` → `std::int64_t`, `number+float` → `float`,
+`number+double` → `double`. Формат без C++ типа (`email`, `uri`...) тип не меняет.
+
+Для своего типа нужны специализации (заголовок с ними подключается через `--file-prefix`):
+
+```cpp
+// текст: параметры, поля form, text/plain, части multipart
+template <>
+struct svarg::cxx_support::text_value<my::date> {
+  static std::string serialize(const my::date&);
+  static svarg::error_code parse(std::string_view, my::date&);
+};
+// JSON
+template <>
+struct svarg::to_json_value<my::date> {
+  boost::json::value operator()(const my::date&) const;
+};
+template <>
+struct svarg::from_json_value<my::date> {
+  svarg::error_code operator()(const boost::json::value&, my::date&) const;
+};
+```
+
+Ограничения и другие требования схемы со своим типом формата не проверяются (предупреждение при генерации):
+значение проверяет сам тип. У встроенных форматов чисел ограничения проверяются, значение вне `int32` —
+ошибка разбора. Формат у других типов (`object`, несколько типов) игнорируется с предупреждением. В `allOf`
+формат части сохраняется, если он один; разные форматы не используются (предупреждение).
+
 ## Имена
 
 Служебные члены сгенерированных структур начинаются с `svarg_` (`svarg_fields`, `svarg_parse_tag`...):

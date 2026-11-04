@@ -59,7 +59,44 @@ struct upper_codec {
   }
 };
 
+// тип формата date: svarg --add-format string+date=test_codecs::date
+struct date {
+  int y = 0, m = 0, d = 0;
+
+  bool operator==(const date&) const = default;
+};
+
 }  // namespace test_codecs
+
+// текст (параметры) и JSON для типа формата
+template <>
+struct svarg::cxx_support::text_value<test_codecs::date> {
+  static std::string serialize(const test_codecs::date& v) {
+    return std::format("{:04}-{:02}-{:02}", v.y, v.m, v.d);
+  }
+  static svarg::error_code parse(std::string_view s, test_codecs::date& v) {
+    if (s.size() != 10 || s[4] != '-' || s[7] != '-' || !svarg::try_from_chars(s.substr(0, 4), v.y) ||
+        !svarg::try_from_chars(s.substr(5, 2), v.m) || !svarg::try_from_chars(s.substr(8, 2), v.d))
+      return svarg::parse_error("bad date `{}`", s);
+    return {};
+  }
+};
+
+template <>
+struct svarg::to_json_value<test_codecs::date> {
+  boost::json::value operator()(const test_codecs::date& v) const {
+    return boost::json::string(svarg::cxx_support::text_value<test_codecs::date>::serialize(v));
+  }
+};
+
+template <>
+struct svarg::from_json_value<test_codecs::date> {
+  svarg::error_code operator()(const boost::json::value& j, test_codecs::date& v) const {
+    if (!j.is_string())
+      return svarg::parse_error("date must be a string");
+    return svarg::cxx_support::text_value<test_codecs::date>::parse(j.get_string(), v);
+  }
+};
 
 template <>
 struct svarg::cxx_support::media_codec<"application/x-kv"> : test_codecs::kv_codec {};

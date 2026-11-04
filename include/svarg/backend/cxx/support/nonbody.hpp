@@ -23,6 +23,21 @@
 
 namespace svarg::cxx_support {
 
+// Своё текстовое представление типа (параметры path/query/header/cookie, поля form, text/plain, части
+// multipart) - специализация text_value. В JSON тип переводится специализациями svarg::to_json_value и
+// svarg::from_json_value:
+//
+//   template <>
+//   struct svarg::cxx_support::text_value<my::date> {
+//     static std::string serialize(const my::date&);
+//     static svarg::error_code parse(std::string_view, my::date&);
+//   };
+template <typename T>
+struct text_value;  // не определён: встроенное представление
+
+template <typename T>
+constexpr bool has_text_value = requires { sizeof(text_value<T>); };
+
 namespace noexport {
 
 template <typename T>
@@ -43,7 +58,9 @@ template <typename T>
 template <typename T>
 [[nodiscard]] error_code parse_nonbody_from(std::string_view str, T& out) {
   using U = std::remove_cv_t<T>;
-  if constexpr (std::is_same_v<U, std::string>) {
+  if constexpr (has_text_value<U>) {
+    return text_value<U>::parse(str, out);
+  } else if constexpr (std::is_same_v<U, std::string>) {
     out = str;
     return {};
   } else if constexpr (std::is_same_v<U, bool>) {
@@ -114,7 +131,9 @@ template <typename T>
 // обратное к parse_nonbody_from. Опциональное значение должно присутствовать
 template <typename T>
 [[nodiscard]] std::string serialize_nonbody_into(const T& value) {
-  if constexpr (std::is_same_v<T, std::string>) {
+  if constexpr (has_text_value<T>) {
+    return text_value<T>::serialize(value);
+  } else if constexpr (std::is_same_v<T, std::string>) {
     return value;
   } else if constexpr (std::is_same_v<T, bool>) {
     return value ? "true" : "false";

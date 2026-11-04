@@ -5,6 +5,19 @@
 
 namespace svarg::cxx {
 
+std::pair<std::string, std::string> parse_format_option(std::string_view arg) {
+  size_t plus = arg.find('+');
+  size_t eq = arg.find('=');
+  if (plus == arg.npos || eq == arg.npos || plus > eq || plus + 1 == eq || eq + 1 == arg.size()) {
+    throw std::invalid_argument(
+        std::format("format `{}`: expected <type>+<format>=<C++ type>, e.g. string+date=my::date", arg));
+  }
+  std::string_view type = arg.substr(0, plus);
+  if (type != "string" && type != "integer" && type != "number")
+    throw std::invalid_argument(std::format("format `{}`: type must be string, integer or number", arg));
+  return {std::string(arg.substr(0, eq)), std::string(arg.substr(eq + 1))};
+}
+
 // начало каждого сгенерированного заголовка: рантайм и file_prefix пользователя (его кодеки и т.п.)
 std::string renderer::render_file_begin() const {
   std::string r = "#pragma once\n\n#include \"common_types.hpp\"\n";

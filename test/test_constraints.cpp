@@ -274,5 +274,45 @@ TEST("nonbody optional") {
   REQUIRE(serialize_nonbody_into(v) == "4");
 }
 
+namespace test_types {
+
+// свой тип со своим текстовым представлением
+struct date {
+  int y = 0, m = 0, d = 0;
+
+  bool operator==(const date&) const = default;
+};
+
+}  // namespace test_types
+
+template <>
+struct svarg::cxx_support::text_value<test_types::date> {
+  static std::string serialize(const test_types::date& v) {
+    return std::format("{:04}-{:02}-{:02}", v.y, v.m, v.d);
+  }
+  static svarg::error_code parse(std::string_view s, test_types::date& v) {
+    if (s.size() != 10 || s[4] != '-' || s[7] != '-' || !svarg::try_from_chars(s.substr(0, 4), v.y) ||
+        !svarg::try_from_chars(s.substr(5, 2), v.m) || !svarg::try_from_chars(s.substr(8, 2), v.d))
+      return svarg::parse_error("bad date `{}`", s);
+    return {};
+  }
+};
+
+TEST("nonbody user type") {
+  using test_types::date;
+  static_assert(is_plain_value<date> && is_plain_value<std::optional<date>>);
+  date v;
+  REQUIRE(!parse_nonbody_from("2026-11-04", v).failed());
+  REQUIRE(v == date{2026, 11, 4});
+  REQUIRE(serialize_nonbody_into(v) == "2026-11-04");
+  REQUIRE(parse_nonbody_from("04.11.2026", v).failed());
+
+  std::optional<date> o;
+  REQUIRE(!parse_nonbody_from("2000-01-02", o).failed());
+  REQUIRE(o == date{2000, 1, 2});
+  // text/plain и параметры с `content:` тоже через text_value
+  REQUIRE(encode_value<"text/plain">(*o) == "2000-01-02");
+}
+
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;

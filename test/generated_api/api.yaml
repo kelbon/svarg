@@ -426,8 +426,58 @@ paths:
             text/event-stream:
               schema:
                 type: string
+  /days/{day}:
+    get:
+      operationId: getDay
+      parameters:
+        - name: day
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Day"
+      responses:
+        "200":
+          description: форматы (--add-format string+date=test_codecs::date)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Formats"
 components:
   schemas:
+    # date - тип пользователя (test_codecs.hpp), int32 и float - встроенные
+    Day:
+      type: string
+      format: date
+    Formats:
+      type: object
+      required: [day, count]
+      properties:
+        day:
+          $ref: "#/components/schemas/Day"
+        count:
+          type: integer
+          format: int32
+          minimum: 0
+        ratio:
+          type: number
+          format: float
+        days:
+          type: array
+          items:
+            type: string
+            format: date
+            # не проверяется: значение проверяет тип формата (предупреждение при генерации)
+            minLength: 100
+        # формат без C++ типа - строка
+        email:
+          type: string
+          format: email
+        # формат части allOf сохраняется (ограничение второй части не проверяется)
+        since:
+          allOf:
+            - $ref: "#/components/schemas/Day"
+            - type: string
+              maxLength: 10
     Item:
       type: object
       required: [name]

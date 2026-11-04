@@ -54,4 +54,11 @@ OPTION(clinok::multiarg<std::string>, stream_content_types, "response media type
        "parts in a callback", default_value(clinok::multiarg<std::string>{}))
 RENAME(stream_content_types, "stream-content-type")
 
+OPTION(clinok::multiarg<std::string>, add_formats, "C++ type of schemas with format: <type>+<format>=<C++ type>, "
+       "e.g. string+date=my::date. type is string, integer or number. svarg::cxx_support::text_value, "
+       "svarg::to_json_value and svarg::from_json_value must be specialized for the C++ type (see --file-prefix). "
+       "Built in: integer+int32, integer+int64, number+float, number+double",
+       default_value(clinok::multiarg<std::string>{}))
+RENAME(add_formats, "add-format")
+
 ALIAS(h, help)

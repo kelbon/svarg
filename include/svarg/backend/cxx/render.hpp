@@ -2,10 +2,25 @@
 
 #include "svarg/ir/ir_object.hpp"
 
+#include <map>
 #include <print>
 #include <kelcoro/generator.hpp>
 
 namespace svarg::cxx {
+
+// встроенные C++ типы форматов чисел, ключ - "<тип>+<формат>" (см. render_options::formats)
+inline std::map<std::string, std::string, std::less<>> default_formats() {
+  return {
+      {"integer+int32", "::std::int32_t"},
+      {"integer+int64", "::std::int64_t"},
+      {"number+float", "float"},
+      {"number+double", "double"},
+  };
+}
+
+// "string+date=my::date" -> {"string+date", "my::date"}, исключение при неверном синтаксисе
+// (svarg --add-format)
+std::pair<std::string, std::string> parse_format_option(std::string_view);
 
 struct render_options {
   // если `false`, то алгоритм преобразования строк в cxx идентификаторы
@@ -29,6 +44,10 @@ struct render_options {
   bool unsetted_additional_properties = true;
   // на сколько .cpp делится код каждой спеки (>= 1). 1 - всё в <spec>.cpp
   size_t sources_per_spec = 1;
+  // C++ тип схемы с `format`: "<тип>+<формат>" (string+date) -> C++ тип. Формат без C++ типа не меняет
+  // тип схемы. Требования (ограничения и т.д.) схемы с форматом не проверяются, кроме встроенных
+  // форматов чисел: пользовательский тип проверяет значение сам
+  std::map<std::string, std::string, std::less<>> formats = default_formats();
 };
 
 // то, что попадает в field_info поля помимо имени и обязательности
@@ -71,6 +90,7 @@ struct renderer {
       for (const ir::schema& s : *ir.schemas)
         schema_locations.emplace(s.spec, std::string(s.jsonptr.escaped()));
     collect_body_encodings();
+    warn_about_formats();
   }
 
   // генерирует всё в `output_dir`. Возвращает список сгенерированных путей без дубликатов, сортированный по
@@ -101,6 +121,13 @@ struct renderer {
       throw render_error("schema {}#{} do not refer to any schema in IR", ref.spec, ref.jsonptr->escaped());
     return *it;
   }
+
+  // C++ тип формата схемы (render_options::formats) или nullptr
+  const std::string* format_type(const ir::schema&) const;
+  // требования схемы проверяются: есть и не отключены форматом
+  bool checks_requirements(const ir::schema&) const;
+  // форматы, которые не применяются, и требования, которые из-за формата не проверяются
+  void warn_about_formats() const;
 
   template <typename... Args>
   void emit_warn(std::format_string<Args...> fmt, Args&&... args) const {
@@ -141,8 +168,9 @@ struct renderer {
   schema_ref_result render_schema_ref(const ir::schema_ref&, std::string_view relspec,
                                       const json_pointer& relative) const;
   schema_ref_result render_fundamental_type(const ir::fundamental_e) const;
-  // тип единственного поля для комбинаторов, массивов, not; для объектов и енамов - пустая строка
-  std::string render_special_field_type(const ir::schema_type&, std::string_view relspec,
+  // тип единственного поля схемы: фундаментальный (с учётом формата), комбинаторы, массивы, not; для объектов
+  // и енамов - пустая строка
+  std::string render_special_field_type(const ir::schema&, std::string_view relspec,
                                         const json_pointer& relative) const;
   // список типов через запятую (аргументы oneof<...> и т.п.)
   std::string render_schemas_array(const arrayof<ir::schema_ref>& arr, std::string_view relspec,
