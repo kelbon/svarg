@@ -28,12 +28,12 @@ struct form_codec {
     application_x_www_form_urlencoded form;
     FOR_EACH_FIELD_INDEX_OF(T) {
       if (is_field_present<I>(obj))
-        form.arg<&field_media_type<T, I>>(get_field_name<I, T>(), get_field<I>(obj));
+        form.arg<field_media_type_v<T, I>>(get_field_name<I, T>(), get_field<I>(obj));
     };
     if constexpr (has_additional_properties<T>) {
       using V = additional_properties_schema_t<T>;
       for (auto&& [name, value] : get_additional_properties(obj))
-        form.arg<&default_media_type<V>>(name, value);
+        form.arg<default_media_type_v<V>>(name, value);
     }
     append(out, form.take());
   }
@@ -48,14 +48,14 @@ struct form_codec {
             if (std::optional<size_t> i = get_field_index<T>(name)) {
               unparsed.set(*i, false);
               return visit_field_index<fields_count<T>()>(
-                  [&]<size_t I>() { return decode_value<&field_media_type<T, I>>(value, get_field<I>(out)); },
+                  [&]<size_t I>() { return decode_value<field_media_type_v<T, I>>(value, get_field<I>(out)); },
                   *i);
             }
           }
           if constexpr (has_additional_properties<T>) {
             using V = additional_properties_schema_t<T>;
             V property;
-            if (error_code e = decode_value<&default_media_type<V>>(value, property))
+            if (error_code e = decode_value<default_media_type_v<V>>(value, property))
               return e;
             get_additional_properties(out).try_emplace(std::string(name), std::move(property));
             return {};
@@ -81,29 +81,29 @@ struct stream_body {
   bool operator==(const stream_body&) const = default;
 };
 
-// тело медиа типа `MediaTypeFn()`. `params` - параметры хедера content-type, кодек может их дополнить
+// тело медиа типа `MediaType`. `params` - параметры хедера content-type, кодек может их дополнить
 // (boundary у multipart)
-template <auto MediaTypeFn, typename T>
+template <constexpr_string MediaType, typename T>
 [[nodiscard]] http_body_bytes serialize_body(const T& body, content_type_params& params) {
   if constexpr (std::is_same_v<T, stream_body>) {
     throw serialize_error(
         "body of media type `{}` is a stream: send it by ctx.stream_response(rsp.status, "
         "make_response_headers(rsp), body)",
-        MediaTypeFn());
+        MediaType.str());
   } else {
     http_body_bytes bytes;
-    codec_of<MediaTypeFn>::serialize(body, MediaTypeFn(), params, bytes);
+    codec_for<MediaType>::serialize(body, MediaType.str(), params, bytes);
     return bytes;
   }
 }
 
 // `content_type` - значение хедера content-type целиком (с параметрами)
-template <auto MediaTypeFn, typename T>
+template <constexpr_string MediaType, typename T>
 [[nodiscard]] error_code parse_body(std::string_view content_type, std::string_view data, T& out) {
   if constexpr (std::is_same_v<T, stream_body>)
     return {};  // данные потока отданы в колбэк
   else
-    return codec_of<MediaTypeFn>::parse(content_type, data, out);
+    return codec_for<MediaType>::parse(content_type, data, out);
 }
 
 }  // namespace svarg::cxx_support

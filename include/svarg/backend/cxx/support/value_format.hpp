@@ -69,6 +69,16 @@ constexpr std::string_view field_media_type() {
   }
 }
 
+// то же как constexpr_string, для codec_for
+template <typename T>
+constexpr auto default_media_type_v = constexpr_string<default_media_type<T>().size()>(default_media_type<T>());
+
+template <typename T, size_t I>
+constexpr auto field_media_type_v = constexpr_string<field_media_type<T, I>().size()>(field_media_type<T, I>());
+
+template <typename T, size_t I>
+constexpr auto field_encoding_v = constexpr_string<get_field_encoding<I, T>().size()>(get_field_encoding<I, T>());
+
 namespace noexport {
 
 // пишет прямо в `out`, без промежуточной строки
@@ -133,7 +143,7 @@ struct raw_codec {
 template <size_t FieldIndex, typename T>
 std::string serialize_nonbody_field(const T& f, std::index_sequence<FieldIndex> = {}) {
   if constexpr (!get_field_encoding<FieldIndex, T>().empty())
-    return encode_value<&get_field_encoding<FieldIndex, T>>(get_field<FieldIndex>(f));
+    return encode_value<field_encoding_v<T, FieldIndex>>(get_field<FieldIndex>(f));
   else
     return serialize_nonbody_into(get_field<FieldIndex>(f));
 }
@@ -142,7 +152,7 @@ std::string serialize_nonbody_field(const T& f, std::index_sequence<FieldIndex> 
 template <size_t FieldIndex, typename T>
 [[nodiscard]] error_code parse_nonbody_field(std::string_view value, T& f) {
   if constexpr (!get_field_encoding<FieldIndex, T>().empty())
-    return decode_value<&get_field_encoding<FieldIndex, T>>(value, get_field<FieldIndex>(f));
+    return decode_value<field_encoding_v<T, FieldIndex>>(value, get_field<FieldIndex>(f));
   else
     return parse_nonbody_from(value, get_field<FieldIndex>(f));
 }

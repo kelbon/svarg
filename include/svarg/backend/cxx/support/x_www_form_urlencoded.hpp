@@ -24,11 +24,11 @@ struct application_x_www_form_urlencoded {
     return std::move(body);
   }
 
-  // значение кодируется кодеком своего медиа типа (`constexpr std::string_view MediaTypeFn()`), например
-  // поле с encoding.contentType application/json - в JSON
-  template <auto MediaTypeFn, typename T>
+  // значение кодируется кодеком своего медиа типа, например поле с encoding.contentType application/json -
+  // в JSON
+  template <constexpr_string MediaType, typename T>
   void arg(std::string_view k, const T& value) {
-    nonbody_arg(k, encode_value<MediaTypeFn>(value));
+    nonbody_arg(k, encode_value<MediaType>(value));
   }
 
   // ключ и значение уже закодированы (параметры query со style)

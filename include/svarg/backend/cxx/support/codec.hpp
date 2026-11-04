@@ -89,31 +89,25 @@ consteval auto select_codec() {
   }
 }
 
-// медиа тип как параметр шаблона: функция `constexpr std::string_view f()`, её значение -> constexpr_string
-template <auto MediaTypeFn>
-constexpr constexpr_string<MediaTypeFn().size()> media_cs{MediaTypeFn()};
-
 }  // namespace noexport
 
+// медиа типы в сгенерированном коде - constexpr std::string_view, а параметром шаблона он быть не может,
+// поэтому медиа тип передаётся как constexpr_string: constexpr_string<sv.size()>(sv)
 template <constexpr_string MediaType>
 using codec_for = typename decltype(noexport::select_codec<MediaType>())::type;
 
-// кодек медиа типа, который возвращает `constexpr std::string_view MediaTypeFn()`
-template <auto MediaTypeFn>
-using codec_of = codec_for<noexport::media_cs<MediaTypeFn>>;
-
 // значение (параметр с `content:`, поле form) в строку
-template <auto MediaTypeFn, typename T>
+template <constexpr_string MediaType, typename T>
 [[nodiscard]] std::string encode_value(const T& value) {
   content_type_params unused;
   http_body_bytes bytes;
-  codec_of<MediaTypeFn>::serialize(value, MediaTypeFn(), unused, bytes);
+  codec_for<MediaType>::serialize(value, MediaType.str(), unused, bytes);
   return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 }
 
-template <auto MediaTypeFn, typename T>
+template <constexpr_string MediaType, typename T>
 [[nodiscard]] error_code decode_value(std::string_view data, T& out) {
-  return codec_of<MediaTypeFn>::parse(MediaTypeFn(), data, out);
+  return codec_for<MediaType>::parse(MediaType.str(), data, out);
 }
 
 }  // namespace svarg::cxx_support

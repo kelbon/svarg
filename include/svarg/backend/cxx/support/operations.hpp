@@ -146,18 +146,15 @@ void serialize_headers_of(T&& v, http_headers_t& out) {
 
 namespace noexport {
 
+// медиа тип единственного тела операции/ответа T и тела-обёртки B (если тел несколько) для codec_for
 template <typename T>
-constexpr std::string_view single_body_media_type() {
-  return T::body_content_type;
-}
+constexpr auto single_body_media_type_v = constexpr_string<T::body_content_type.size()>(T::body_content_type);
 
 template <typename B>
-constexpr std::string_view body_wrapper_media_type() {
-  return get_content_type<B>();
-}
+constexpr auto body_wrapper_media_type_v = constexpr_string<get_content_type<B>().size()>(get_content_type<B>());
 
-// вызывает vtor.template operator()<MediaTypeFn>(значение тела), если тело присутствует. MediaTypeFn -
-// `constexpr std::string_view()`, медиа тип тела (см. codec_of)
+// вызывает vtor.template operator()<MediaType>(значение тела), если тело присутствует. MediaType -
+// constexpr_string, медиа тип тела
 template <typename T, typename Vtor>
 void visit_body(const T& x, Vtor&& vtor) {
   if (!is_body_present(x)) {
@@ -167,14 +164,14 @@ void visit_body(const T& x, Vtor&& vtor) {
   }
   if constexpr (has_single_body<T>()) {
     if constexpr (is_body_required<T>())
-      vtor.template operator()<&single_body_media_type<T>>(x.body);
+      vtor.template operator()<single_body_media_type_v<T>>(x.body);
     else
-      vtor.template operator()<&single_body_media_type<T>>(*x.body);
+      vtor.template operator()<single_body_media_type_v<T>>(*x.body);
   } else {
     std::visit(metel::matcher{
                    [](std::monostate) { metel::unreachable(); },
                    [&]<typename B>(const B& b) {
-                     vtor.template operator()<&body_wrapper_media_type<B>>(get_special_field(b));
+                     vtor.template operator()<body_wrapper_media_type_v<B>>(get_special_field(b));
                    },
                },
                x.body);
@@ -184,11 +181,11 @@ void visit_body(const T& x, Vtor&& vtor) {
 // вызывает `out(content_type_header_value, bytes)`, если тело присутствует
 template <typename T>
 void serialize_body_of(const T& x, const content_type_params& ctparams, auto&& out) {
-  visit_body(x, [&]<auto MediaTypeFn>(const auto& value) {
+  visit_body(x, [&]<constexpr_string MediaType>(const auto& value) {
     // кодек может дополнить параметры хедера (boundary у multipart)
     content_type_params params = ctparams;
-    http_body_bytes bytes = serialize_body<MediaTypeFn>(value, params);
-    out(media_type_to_hdr_value(MediaTypeFn(), params), std::move(bytes));
+    http_body_bytes bytes = serialize_body<MediaType>(value, params);
+    out(media_type_to_hdr_value(MediaType.str(), params), std::move(bytes));
   });
 }
 
@@ -209,16 +206,16 @@ template <typename T>
     if (!match_content_type(T::body_content_type, content_type))
       return not_matched();
     if constexpr (is_body_required<T>())
-      return parse_body<&single_body_media_type<T>>(content_type, data, x.body);
+      return parse_body<single_body_media_type_v<T>>(content_type, data, x.body);
     else
-      return parse_body<&single_body_media_type<T>>(content_type, data, x.body.emplace());
+      return parse_body<single_body_media_type_v<T>>(content_type, data, x.body.emplace());
   } else {
     return T::select_body_type(content_type, [&]<typename B>() -> error_code {
       if constexpr (std::is_void_v<B>)
         return not_matched();
       else
-        return parse_body<&body_wrapper_media_type<B>>(content_type, data,
-                                                       get_special_field(x.body.template emplace<B>()));
+        return parse_body<body_wrapper_media_type_v<B>>(content_type, data,
+                                                        get_special_field(x.body.template emplace<B>()));
     });
   }
 }
@@ -443,12 +440,12 @@ template <a_response R>
   http_headers_t headers;
   serialize_headers_of(rsp, headers);
   if constexpr (has_body<R>) {
-    noexport::visit_body(rsp, [&]<auto MediaTypeFn>(const auto& value) {
+    noexport::visit_body(rsp, [&]<constexpr_string MediaType>(const auto& value) {
       if constexpr (!std::is_same_v<std::remove_cvref_t<decltype(value)>, stream_body>)
         throw serialize_error("body of media type `{}` is not a stream: send it by make_response(rsp)",
-                              MediaTypeFn());
+                              MediaType.str());
       else
-        headers.emplace_back(std::string(content_type_hdr), std::string(MediaTypeFn()));
+        headers.emplace_back(std::string(content_type_hdr), std::string(MediaType.str()));
     });
   }
   return headers;

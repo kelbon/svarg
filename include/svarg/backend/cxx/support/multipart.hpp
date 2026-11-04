@@ -109,7 +109,7 @@ void serialize_part(const T& obj, std::string_view boundary, bool form_data, htt
   out += "\r\n";
   append(body, out);
   content_type_params unused;
-  codec_of<&field_media_type<T, I>>::serialize(value, media_type, unused, body);
+  codec_for<field_media_type_v<T, I>>::serialize(value, media_type, unused, body);
   append(body, "\r\n");
 }
 
@@ -126,9 +126,9 @@ template <an_object T, size_t I>
   if constexpr (is_part<std::remove_cvref_t<decltype(f)>>) {
     if (error_code ec = parse_part_headers(headers, f.headers))
       return ec;
-    return codec_of<&field_media_type<T, I>>::parse(media_type, data, f.value);
+    return codec_for<field_media_type_v<T, I>>::parse(media_type, data, f.value);
   } else {
-    return codec_of<&field_media_type<T, I>>::parse(media_type, data, f);
+    return codec_for<field_media_type_v<T, I>>::parse(media_type, data, f);
   }
 }
 
