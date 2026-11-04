@@ -61,7 +61,7 @@ class SchemaRef(Serializable):
     name: Optional[str] = None
 
     def refers_to_fundamental(self) -> Optional[FundamentalE]:
-        """Если ref ссылается на фундаментальный тип (@string@ и т.д.) — вернуть его."""
+        """Если ref ссылается на фундаментальный тип (@string@ и т.д.) - вернуть его."""
         return _SPEC_TO_FUNDAMENTAL.get(self.spec)
 
 
@@ -70,7 +70,7 @@ class SchemaRef(Serializable):
 # object_field_info / object_schema / array_schema / not_schema /
 # discriminator_desc
 #
-# Варианты schema_type.data; в C++ это отдельные struct, здесь — обычные
+# Варианты schema_type.data; в C++ это отдельные struct, здесь - обычные
 # Serializable dataclass-ы без единой строчки ручного кода.
 # ---------------------------------------------------------------------------
 

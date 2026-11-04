@@ -1,9 +1,8 @@
 # svarg
 
-Генератор C++ из OpenAPI: типы схем, сервер и клиент поверх [hidi](https://github.com/kelbon/hidi) (HTTP/2).
-Запросы и ответы разбираются и проверяются по спеке, обработчику приходит уже готовая операция.
+Компилятор спецификаций. В комплекте идёт OpenAPI -> C++, но инструмент этим не ограничен. [подробнее здесь](docs/what_is_svarg.md)
 
-## Пример
+## Пример OpenAPI -> C++
 
 `openapi/items.yaml`:
 
@@ -24,13 +23,13 @@ paths:
             type: integer
       responses:
         "200":
-          description: найден
+          description: found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Item"
         "404":
-          description: нет такого
+          description: no such item
 components:
   schemas:
     Item:
@@ -51,9 +50,12 @@ project(items CXX)
 set(CMAKE_CXX_STANDARD 23)
 
 include(cmake/CPM.cmake)
-CPMAddPackage("gh:kelbon/svarg@1.0.0")
 
-# код генерируется при сборке
+# зависимости подключаются через [CPM](https://github.com/cpm-cmake/cpm.cmake)
+# сгенерированные клиент и сервер используют [hidi](https://github.com/kelbon/hidi)
+CPMAddPackage("gh:kelbon/svarg@1.0.0") # не забудьте указать версию
+
+# код генерируется при сборке, ничего в PATH подключать не нужно
 svarg_generate_cxx(
     TARGET    items_api
     SPECS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/openapi
@@ -89,7 +91,7 @@ struct items_server : items::server {
 };
 
 int main() {
-  items_server server(hidi::server_ssl_context_ptr(nullptr));  // без TLS
+  items_server server(hidi::server_ssl_context_ptr(nullptr));  // для включения TLS достаточно передать контекст
   server.listen(hidi::server_endpoint{.addr = {boost::asio::ip::address_v4::loopback(), 8080}});
   server.run();
 }
@@ -121,12 +123,14 @@ int main() {
 }
 ```
 
-Больше примеров — в [examples](examples): поток в ответе, реальная спека 3GPP (NRF).
+Более серьёзные примеры в [examples](examples)
 
-## Документация
+## Документация для OpenAPI -> C++
 
-- [Генерация](docs/generation.md) — svarg из командной строки, CMake, сгенерированные файлы, большие спеки
-- [Схемы и типы](docs/schemas.md) — что получается из схем: null, лишние свойства, anyOf/oneOf, перечисления
-- [Сервер](docs/server.md) — обработчики, свои маршруты, выбор маршрута
-- [Клиент](docs/client.md) — `send`, middleware, ответы потоком
-- [Медиа типы](docs/media_types.md) — свой медиа тип, JSON под другим именем, потоковые медиа типы
+- [Если у вас возникли проблемы при сборке](docs/openapi2cxx.md#если-вы-получаете-ошибки-сборки)
+- [OpenAPI -> C++](docs/openapi2cxx.md) - подробно о том что поддержано
+- [format](docs/cxx_format.md) - добавление своих format при генерации в С++
+- [Медиа типы](docs/cxx_media_types.md) - добавление своих медиа типов при генерации в С++
+- [Сервер](docs/cxx_server.md) - обработчики, routing
+- [Клиент](docs/cxx_client.md) - отправка запросов, middleware
+- [Концепция svarg](docs/what_is_svarg.md) - описание самого инструмента, создание своего бекенда и фронтенда

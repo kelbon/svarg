@@ -19,7 +19,7 @@ static constexpr bool is_digit(char c) noexcept {
 }
 
 // Символы, допустимые в середине/конце идентификатора.
-// 'Z' исключён — он используется как escape-префикс.
+// 'Z' исключён - он используется как escape-префикс.
 static constexpr bool is_ident_continue_no_z(char c) {
   switch (c) {
     case 'a' ... 'z':
@@ -46,7 +46,7 @@ static constexpr bool is_ident_continue(char c) {
 }
 
 // Таблица коротких escape-кодов для популярных спецсимволов.
-// Z9 зарезервирован для самого 'Z', поэтому коды Z0-Z8 — под спецсимволы.
+// Z9 зарезервирован для самого 'Z', поэтому коды Z0-Z8 - под спецсимволы.
 static constexpr std::string_view escape_char(char c) {
   switch (c) {
     case '-':
@@ -78,7 +78,7 @@ static constexpr char hex_digit(unsigned x) {
   return "0123456789abcdef"[x & 0xF];
 }
 
-// Fallback для ASCII символов вне таблицы: Zxhh, где hh — hex-код байта.
+// Fallback для ASCII символов вне таблицы: Zxhh, где hh - hex-код байта.
 static std::string escape_char_fallback(char c) {
   auto b = static_cast<unsigned char>(c);
   return {'Z', 'x', hex_digit(b >> 4), hex_digit(b)};

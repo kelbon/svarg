@@ -202,13 +202,13 @@ TEST("match content type") {
   REQUIRE(!match_content_type("image/png", "image/jpeg"));
   REQUIRE(!match_content_type("text/plain", "application/json"));
 
-  // Wildcard */* — совпадает со всем
+  // Wildcard */* - совпадает со всем
   REQUIRE(match_content_type("*/*", "text/plain"));
   REQUIRE(match_content_type("*/*", "application/json"));
   REQUIRE(match_content_type("*/*", "image/png"));
   REQUIRE(match_content_type("*/*", "multipart/form-data"));
 
-  // Wildcard text/* — совпадает с подтипами text
+  // Wildcard text/* - совпадает с подтипами text
   REQUIRE(match_content_type("text/*", "text/plain"));
   REQUIRE(match_content_type("text/*", "text/html"));
   REQUIRE(!match_content_type("text/*", "application/json"));
@@ -261,13 +261,13 @@ TEST("match content type constexpr") {
   REQUIRE(!match_content_type<"image/png">("image/jpeg"));
   REQUIRE(!match_content_type<"text/plain">("application/json"));
 
-  // Wildcard */* — совпадает со всем
+  // Wildcard */* - совпадает со всем
   REQUIRE(match_content_type<"*/*">("text/plain"));
   REQUIRE(match_content_type<"*/*">("application/json"));
   REQUIRE(match_content_type<"*/*">("image/png"));
   REQUIRE(match_content_type<"*/*">("multipart/form-data"));
 
-  // Wildcard text/* — совпадает с подтипами text
+  // Wildcard text/* - совпадает с подтипами text
   REQUIRE(match_content_type<"text/*">("text/plain"));
   REQUIRE(match_content_type<"text/*">("text/html"));
   REQUIRE(!match_content_type<"text/*">("application/json"));
@@ -323,11 +323,11 @@ TEST("starts_with_ci") {
   REQUIRE(starts_with_ci("application/json", "application/"));
   REQUIRE(starts_with_ci("ABC", "ab"));
 
-  // Пустой префикс — всегда true
+  // Пустой префикс - всегда true
   REQUIRE(starts_with_ci("text/plain", ""));
   REQUIRE(starts_with_ci("", ""));
 
-  // Префикс длиннее строки — false
+  // Префикс длиннее строки - false
   REQUIRE(!starts_with_ci("text", "text/plain"));
   REQUIRE(!starts_with_ci("", "x"));
 
@@ -335,7 +335,7 @@ TEST("starts_with_ci") {
   REQUIRE(!starts_with_ci("text/plain", "text/html"));
   REQUIRE(!starts_with_ci("application/json", "text/"));
 
-  // Граничный символ — отличие в последнем байте префикса
+  // Граничный символ - отличие в последнем байте префикса
   REQUIRE(starts_with_ci("abcd", "abc"));
   REQUIRE(!starts_with_ci("abcd", "abce"));
 }
@@ -353,7 +353,7 @@ TEST("starts_with_ci_prefix_lowered") {
   REQUIRE(!starts_with_ci_prefix_lowered("text", "text/plain"));
   REQUIRE(!starts_with_ci_prefix_lowered("", "x"));
 
-  // Не-буквы в prefix — работают корректно
+  // Не-буквы в prefix - работают корректно
   REQUIRE(starts_with_ci_prefix_lowered("text/plain", "text/"));
   REQUIRE(starts_with_ci_prefix_lowered("TEXT/PLAIN", "text/"));
 }

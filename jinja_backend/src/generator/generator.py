@@ -226,7 +226,7 @@ def _write_one(result: _RenderResult, touched: set[Path]) -> None:
     """
     Записывает или дописывает один _RenderResult на диск.
 
-    touched        — множество путей этого запуска для cleanup; пополняется здесь.
+    touched        - множество путей этого запуска для cleanup; пополняется здесь.
 
     """
     assert not result.is_skip
@@ -260,11 +260,11 @@ class Generator:
     Основной объект кодогенератора.
 
     Параметры:
-        templates_dir  — корень папки шаблонов (содержит operation/, schema/, ...)
-        output_dir     — куда писать результаты
-        extra_context  — дополнительные переменные для всех шаблонов
+        templates_dir  - корень папки шаблонов (содержит operation/, schema/, ...)
+        output_dir     - куда писать результаты
+        extra_context  - дополнительные переменные для всех шаблонов
                          (например, {"namespace": "my_api"})
-        debug          — если True, при ошибке файлы НЕ удаляются;
+        debug          - если True, при ошибке файлы НЕ удаляются;
                          удобно для анализа частично сгенерированного вывода
     """
 
@@ -288,7 +288,7 @@ class Generator:
 
         Рендеринг и запись чередуются: каждый шаблон рендерится и сразу
         записывается на диск. Это гарантирует, что touched актуален в момент
-        любой ошибки — как рендера, так и записи.
+        любой ошибки - как рендера, так и записи.
 
         При ошибке (если debug=False) все затронутые файлы удаляются.
         """
@@ -329,7 +329,7 @@ class Generator:
         """
         Рендерит webhooks.
 
-        Если templates_dir/webhook/ есть и не пуста — использует её
+        Если templates_dir/webhook/ есть и не пуста - использует её
         (context_key="webhook").
 
         Иначе fallback на templates_dir/operation/ (context_key="operation");
@@ -353,7 +353,7 @@ class Generator:
         operation_templates = self._template_files_for("operation")
         if not operation_templates:
             logger.debug(
-                "no templates for webhooks (neither webhook/ nor operation/) — "
+                "no templates for webhooks (neither webhook/ nor operation/) - "
                 "skipping %d webhook(s)", len(webhooks),
             )
             return
@@ -377,7 +377,7 @@ class Generator:
         if not template_files:
             if entities:
                 logger.debug(
-                    "no templates in '%s/%s/' — skipping %d entity(ies)",
+                    "no templates in '%s/%s/' - skipping %d entity(ies)",
                     self.templates_dir, kind, len(entities),
                 )
             return

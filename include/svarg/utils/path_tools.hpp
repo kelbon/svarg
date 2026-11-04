@@ -137,7 +137,7 @@ constexpr void visit_templated_path_parts(std::string_view path, V&& visitor) {
       return visitor.error("two parameters in a row without a separator");
 
     if (sep.empty())
-      visitor.param(name);  // конец строки — терминатор не нужен
+      visitor.param(name);  // конец строки - терминатор не нужен
     else {
       visitor.param(name, sep);
       path.remove_prefix(sep.size());
@@ -436,7 +436,7 @@ O query_decode(std::string_view s, O out) {
       ++out;
       i += 2;
     } else {
-      // некорректный '%' (не хватает hex-цифр) — пропускаем как есть, игнорируем ошибку
+      // некорректный '%' (не хватает hex-цифр) - пропускаем как есть, игнорируем ошибку
       *out = c;
       ++out;
     }

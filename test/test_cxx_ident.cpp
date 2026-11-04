@@ -7,7 +7,7 @@
   REQUIRE(svarg::cxx::to_cxx_ident_simple(IN) == EXPECTED_SIMPLE)
 
 TEST("cxx_ident") {
-  // Простые идентификаторы — проходят без изменений
+  // Простые идентификаторы - проходят без изменений
   CXX_IDENT_CASE("hello", "hello", "hello");
   CXX_IDENT_CASE("hello_world", "hello_world", "hello_world");
   CXX_IDENT_CASE("myVariable", "myVariable", "myVariable");
@@ -39,7 +39,7 @@ TEST("cxx_ident") {
   CXX_IDENT_CASE("ZZ", "Z9Z9", "ZZ");
   CXX_IDENT_CASE("ZipZ", "Z9ipZ9", "ZipZ");
 
-  // Ключевые слова C++ — суффикс '_'
+  // Ключевые слова C++ - суффикс '_'
   CXX_IDENT_CASE("class", "class_", "class_");
   CXX_IDENT_CASE("int", "int_", "int_");
   CXX_IDENT_CASE("namespace", "namespace_", "namespace_");
@@ -56,20 +56,20 @@ TEST("cxx_ident") {
   CXX_IDENT_CASE("nullptr", "nullptr_", "nullptr_");
   CXX_IDENT_CASE("requires", "requires_", "requires_");
 
-  // Строки, похожие на ключевые слова но не являющиеся ими — без суффикса
+  // Строки, похожие на ключевые слова но не являющиеся ими - без суффикса
   CXX_IDENT_CASE("return/value", "returnZ2value", "return_value");
   CXX_IDENT_CASE("class-name", "classZ0name", "class_name");
   CXX_IDENT_CASE("class_", "class_", "class_");
   CXX_IDENT_CASE("int_", "int_", "int_");
   CXX_IDENT_CASE("integer", "integer", "integer");
 
-  // Предефайненные макросы — суффикс '_'
+  // Предефайненные макросы - суффикс '_'
   CXX_IDENT_CASE("__FILE__", "__FILE___", "__FILE___");
   CXX_IDENT_CASE("__LINE__", "__LINE___", "__LINE___");
   CXX_IDENT_CASE("__cplusplus", "__cplusplus_", "__cplusplus_");
   CXX_IDENT_CASE("__func__", "__func___", "__func___");
 
-  // Спецсимволы вне таблицы — fallback Zxhh
+  // Спецсимволы вне таблицы - fallback Zxhh
   CXX_IDENT_CASE("$var", "Zx24var", "_var");
   CXX_IDENT_CASE("a=b", "aZx3db", "a_b");
   CXX_IDENT_CASE("a;b", "aZx3bb", "a_b");
@@ -119,7 +119,7 @@ TEST("cxx_ident") {
   CXX_IDENT_CASE("-/-", "Z0Z2Z0", "___");
   CXX_IDENT_CASE("...", "Z1Z1Z1", "___");
 
-  // Коллизии — в simple намеренно допускаются, в to_cxx_ident нет
+  // Коллизии - в simple намеренно допускаются, в to_cxx_ident нет
   CXX_IDENT_CASE("a-b", "aZ0b", "a_b");
   CXX_IDENT_CASE("a_b", "a_b", "a_b");  // коллизия в simple
   CXX_IDENT_CASE("aZ0b", "aZ90b", "aZ0b");

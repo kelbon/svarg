@@ -7,7 +7,7 @@ response_desc, operation) и верхнеуровневого ir_object,
 
 Только ResponseStatus (variant<default_response_t, int64_t, status_range_e>)
 требует ручной to_dict/from_dict, т.к. сериализуется ОДНОЙ строкой, а не
-{"discriminator": value} как SchemaType — остальные классы наследуются от
+{"discriminator": value} как SchemaType - остальные классы наследуются от
 Serializable без единой дополнительной строчки.
 """
 
@@ -20,7 +20,7 @@ from .schema_types import Schema, SchemaRef
 from .serde import Serializable, field_with_key, kw_only_dataclass
 
 
-# meta_t = string_map<Any> в C++, в python — обычный dict
+# meta_t = string_map<Any> в C++, в python - обычный dict
 MetaT = dict[str, Any]
 
 
@@ -28,7 +28,7 @@ MetaT = dict[str, Any]
 # parameter_location
 #
 # Не показан в C++-сэмпле явно, но судя по "location": "query" в примере и
-# использованию parameter_location::path как default — это OpenAPI-набор
+# использованию parameter_location::path как default - это OpenAPI-набор
 # локаций параметра. При необходимости поправить значения.
 # ---------------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ class ResponseStatus(Serializable):
 
     Единственное (вместе с SchemaType) место с ручной to_dict/from_dict:
     сериализуется ОДНОЙ строкой (как response_status::to_string()/from_string()
-    в C++), а не словарём с дискриминатором — поэтому generic Serializable-
+    в C++), а не словарём с дискриминатором - поэтому generic Serializable-
     движок (который всегда возвращает dict) сюда не подходит.
     """
 

@@ -217,7 +217,8 @@ ir::object_schema lowering_context::make_object_type(const schema_object& schema
       } else if (field_schema.default_) {
         fi.required = false;
         if (listed_required)
-          emit_warn(file, jp, "property `{}` marked as required, but has default. `required` ignored", prop_name);
+          emit_warn(file, jp, "property `{}` marked as required, but has default. `required` ignored",
+                    prop_name);
       } else if (schema.required) {
         if (field_schema.is_write_only() || field_schema.is_read_only()) {
           // readOnly/writeOnly означает, что по сути есть два типа - для запроса и ответа и required зависит
@@ -494,7 +495,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
     rtypes.erase(std::unique(rtypes.begin(), rtypes.end()), rtypes.end());
 
     if (rtypes.size() == 1) {
-      // Единственный тип — прямо в fundamental или object_type
+      // Единственный тип - прямо в fundamental или object_type
       const auto& t = rtypes[0];
 
       if (t == "object") {
@@ -502,7 +503,7 @@ schema_or_ref lowering_context::schema_lowering(const schema_object& schema, con
       } else if (t == "array") {
         res.type.data = make_array_type(schema, file, jp);
       } else {
-        // Всё остальное — фундаментальный тип
+        // Всё остальное - фундаментальный тип
         ir::fundamental_e fe;
         if (!efromstr(t, fe))
           throw bad_enum_value<ir::fundamental_e>(t);

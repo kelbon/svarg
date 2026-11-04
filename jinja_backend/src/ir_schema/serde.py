@@ -103,12 +103,12 @@ def _deserialize_value(value: Any, tp: Any) -> Any:
 
 class Serializable:
     """
-    Маркерный mixin: даёт to_dict/from_dict "по умолчанию" — обходом полей
+    Маркерный mixin: даёт to_dict/from_dict "по умолчанию" - обходом полей
     dataclass через type hints. Аналог дефолтной (не-variant) специализации
     serialize<T>/parse<T> в C++.
 
     Классам с variant-полями (SchemaType, ResponseStatus) нужно
-    переопределить to_dict/from_dict целиком — это единственное место,
+    переопределить to_dict/from_dict целиком - это единственное место,
     где требуется ручной код, по аналогии с явной специализацией шаблона.
     """
 

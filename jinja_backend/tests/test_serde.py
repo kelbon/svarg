@@ -4,14 +4,14 @@
 Тесты сериализации ir_schema.
 
 Структура:
-- TestRoundTrip — для каждого класса проверяем from_dict(to_dict(x)) == x
+- TestRoundTrip - для каждого класса проверяем from_dict(to_dict(x)) == x
   и (где есть готовый пример) to_dict(from_dict(d)) == d, параметризованно.
-- TestOmitsNoneOptionalFields / TestKeepsFalsyExplicitValues — поведение
+- TestOmitsNoneOptionalFields / TestKeepsFalsyExplicitValues - поведение
   optional-полей: None опускается, явные False/0/"" сериализуются.
-- TestVariantDiscriminators — SchemaType и ResponseStatus: ручная
+- TestVariantDiscriminators - SchemaType и ResponseStatus: ручная
   variant-логика, не покрытая generic-движком.
-- TestIrObjectMerge — семантика merge() поверх None/непустых списков.
-- test_example_ir_roundtrip — сквозная проверка на реальном примере IR.
+- TestIrObjectMerge - семантика merge() поверх None/непустых списков.
+- test_example_ir_roundtrip - сквозная проверка на реальном примере IR.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def assert_roundtrips(obj):
 
 # ---------------------------------------------------------------------------
 # Round-trip: один объект на класс, без variant-полей и без "тонкой" семантики
-# (та проверяется отдельно ниже) — здесь просто "ничего не потерялось".
+# (та проверяется отдельно ниже) - здесь просто "ничего не потерялось".
 # ---------------------------------------------------------------------------
 
 
@@ -149,7 +149,7 @@ def test_roundtrip(obj):
 
 # ---------------------------------------------------------------------------
 # Optional-поля: None опускается из сериализованного dict, а не пишется как
-# null/None — это явное требование к формату (см. example_ir.yaml: jsonptr
+# null/None - это явное требование к формату (см. example_ir.yaml: jsonptr
 # отсутствует у ссылок на фундаментальные типы, а не равен null).
 # ---------------------------------------------------------------------------
 
@@ -187,7 +187,7 @@ class TestOmitsNoneOptionalFields:
 
 
 # ---------------------------------------------------------------------------
-# Falsy, но явно заданные значения (False, 0, "") — это НЕ то же самое, что
+# Falsy, но явно заданные значения (False, 0, "") - это НЕ то же самое, что
 # None, и должны сериализоваться как есть, а не выпадать по `if value:`.
 # ---------------------------------------------------------------------------
 
@@ -200,13 +200,13 @@ class TestKeepsFalsyExplicitValues:
         assert d["required"] is False
 
     def test_object_field_info_required_false_is_serialized(self):
-        # required не Optional в C++ (bool required = false;) — пишем всегда
+        # required не Optional в C++ (bool required = false;) - пишем всегда
         d = ObjectFieldInfo(type=SchemaRef(spec="@string@"), name="x", required=False).to_dict()
         assert d["required"] is False
 
 
 # ---------------------------------------------------------------------------
-# Variant-логика: SchemaType.data и ResponseStatus.status — единственные два
+# Variant-логика: SchemaType.data и ResponseStatus.status - единственные два
 # места с ручной to_dict/from_dict (см. serde.py docstring).
 # ---------------------------------------------------------------------------
 
@@ -259,7 +259,7 @@ class TestResponseStatus:
         ],
     )
     def test_serializes_as_plain_string_not_dict(self, status, expected):
-        # ВАЖНО: в отличие от SchemaType, здесь нет дискриминатора-ключа —
+        # ВАЖНО: в отличие от SchemaType, здесь нет дискриминатора-ключа -
         # значение variant'а это сама строка.
         assert status.to_dict() == expected
 

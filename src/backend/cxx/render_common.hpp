@@ -127,7 +127,7 @@ inline std::string escape_plain(std::string_view s) {
       default:
         // управляющие символы и прочее странное пишется числовым кодом
         if (c < 0x20 || c == 0x7F) {
-          // ровно 3 восьмеричных разряда — escape не "съест" следующий символ
+          // ровно 3 восьмеричных разряда - escape не "съест" следующий символ
           out += std::format("\\{:03o}", c);
         } else {
           out += static_cast<char>(c);

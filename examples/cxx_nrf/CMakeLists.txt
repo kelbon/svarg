@@ -17,6 +17,7 @@ svarg_generate_cxx(
     SPECS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_specs
     OUT_DIR   ${CMAKE_CURRENT_BINARY_DIR}/generated
     SPECS     TS29510_Nnrf_NFManagement.yaml
+    SOURCES_PER_SPEC     4
 )
 add_executable(svarg_nrf_example main.cpp)
 target_link_libraries(svarg_nrf_example PRIVATE svarg_nrf_api)

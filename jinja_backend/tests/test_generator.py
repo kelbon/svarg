@@ -166,7 +166,7 @@ class TestAppendSemantics:
     def test_same_output_path_concatenates(
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
-        # Две схемы пишут в один файл — контент должен быть конкатенирован
+        # Две схемы пишут в один файл - контент должен быть конкатенирован
         write_template(templates_dir, "schema", "all.j2", """\
             {{ set_output_path("all_types.hpp") }}
             struct {{ schema.name }};
@@ -183,7 +183,7 @@ class TestAppendSemantics:
     def test_overwrites_existing_file_before_first_write(
         self, generator: Generator, templates_dir: Path, output_dir: Path
     ) -> None:
-        # Если файл уже существовал до запуска — он должен быть перезаписан,
+        # Если файл уже существовал до запуска - он должен быть перезаписан,
         # а не дополнен старым содержимым
         existing = output_dir / "types.hpp"
         existing.write_text("// OLD CONTENT\n", encoding="utf-8")
@@ -323,7 +323,7 @@ class TestWebhookFallback:
             {{ ir_kind }}
         """)
         gen = Generator(templates_dir=templates_dir, output_dir=output_dir)
-        # И операция, и webhook — ir_kind должен различаться
+        # И операция, и webhook - ir_kind должен различаться
         ir = MockIr(
             operations=[MockOperation(id="regularOp")],
             webhooks=[MockOperation(id="hookOp")],
@@ -351,7 +351,7 @@ class TestCleanupOnError:
             // ok
         """)
         write_template(templates_dir, "schema", "b_bad.j2", """\
-            // нет output_path — упадёт с MissingOutputPathError
+            // нет output_path - упадёт с MissingOutputPathError
         """)
         ir = MockIr(schemas=[MockSchema("Foo")])
         gen = Generator(templates_dir=templates_dir, output_dir=output_dir)

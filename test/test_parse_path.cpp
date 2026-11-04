@@ -130,7 +130,7 @@ TEST("errors: missing separator between two params") {
                                            "error two parameters in a row without a separator",
                                        }));
 
-  // ошибка обязана прервать разбор — хвост после {y} не попадает в лог
+  // ошибка обязана прервать разбор - хвост после {y} не попадает в лог
   REQUIRE(test_path_template("/a/{x}{y}/tail", {
                                                    "substr /a/",
                                                    "error two parameters in a row without a separator",
