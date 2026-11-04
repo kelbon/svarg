@@ -28,7 +28,7 @@ RENAME(allow_network_refs, "allow-network-refs")
 
 INTEGER(references_max_recursion_depth, "max recursion depth for $ref's", default_value(50))
 
-BOOLEAN(unsetted_additional_properties, "if additional properties in object is not set, this means = true or fales? 'false' ignored for objects without properties", default_value(true))
+BOOLEAN(unsetted_additional_properties, "if additional properties in object is not set, this means = true or false? 'false' ignored for objects without properties", default_value(true))
 RENAME(unsetted_additional_properties, "unsetted-additional-properties")
 
 INTEGER(sources_per_spec, "into how many .cpp files the code of each spec is split (at least 1): <spec>.cpp with server and client and <spec>_1.cpp... with operations", default_value(1))

@@ -36,6 +36,12 @@ target_link_libraries(my_app PRIVATE api_generated)
 
  ✔ свои [медиа типы](cxx_media_types.md) (content-type)
 
+ ✔ `path`, `header`, `cookie`, `query` параметры
+
+ ✔ `explode`
+
+ ✔ default ответы
+
  ✔ ограничения `minLength`/`maxLength`, `pattern` (ECMAScript), `minimum`/`maximum`/`exclusive*`, `multipleOf`, `minItems`/`maxItems`, `uniqueItems`, `minProperties`/`maxProperties`. Опция `--ignore-requirements` отключает проверки
 
  ✔ сложные схемы с только required и другие  способы выразить требование схемой
@@ -75,10 +81,13 @@ target_link_libraries(my_app PRIVATE api_generated)
 
 Сгенерированные клиенты и серверы используют [hidi](https://github.com/kelbon/hidi)
 
-- ✔ HTTP/2
-- ✔ SSL/TLS
-- ✔ потоковая отправка сервером, потоковое получение данных клиентом
-- ✔ для больших спек .cpp умеет делиться на любое нужное количество частей (`SOURCES_PER_SPEC`) для ускорения компиляции
+✔ HTTP/2
+
+✔ SSL/TLS
+
+✔ потоковая отправка сервером, потоковое получение данных клиентом
+
+✔ для больших спек .cpp умеет делиться на любое нужное количество частей (`SOURCES_PER_SPEC`) для ускорения компиляции
 
 #### если вы получаете ошибки сборки
 
@@ -117,10 +126,10 @@ svarg -s <папка со спеками> -o <папка для кода> [оп�
 | Опция | По умолчанию | Что делает |
 |---|---|---|
 | `--optimize` (`-O2`) | `true` | упрощает схемы перед генерацией (меньше типов) |
-| `--simple-identifiers` | `true` | режим C++ имён |
-| `--unsetted-additional-properties` | `true` | незаданный `additionalProperties` |
+| `--simple-identifiers` | `true` | false добавляет гарантию, что имена сгенерированных типов не пересекутся между собой |
+| `--unsetted-additional-properties` | `true` | если `additionalProperties` не выставлен это true или false? |
 | `--sources-per-spec N` | `1` | на сколько `.cpp` делится код каждой спеки, см. ниже |
 | `--stream-content-type` | | потоковые медиа типы ответов |
 | `--file-prefix` | | текст в начале каждого заголовка, например `#include` для своих специализаций парсинга |
-| `--add-format` | | C++ тип формата: `string+date=my::date`, см. [форматы](schemas.md#форматы) |
+| `--add-format` | | C++ тип формата: `string+date=my::date`, см. [форматы](cxx_format.md) |
 | `--ignore-requirements` | | не проверять ограничения и требования схем: меньше кода, неполная проверка |
