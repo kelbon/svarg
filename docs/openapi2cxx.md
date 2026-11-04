@@ -36,7 +36,7 @@ target_link_libraries(my_app PRIVATE api_generated)
 
  ✔ свои [медиа типы](cxx_media_types.md) (content-type)
 
- ✔ ограничения `minLength`/`maxLength`, `pattern` (ECMAScript), `minimum`/`maximum`/`exclusive*`, `multipleOf`, `minItems`/`maxItems`, uniqueItems`, `minProperties`/`maxProperties`. Опция `--ignore-requirements` отключает проверки
+ ✔ ограничения `minLength`/`maxLength`, `pattern` (ECMAScript), `minimum`/`maximum`/`exclusive*`, `multipleOf`, `minItems`/`maxItems`, `uniqueItems`, `minProperties`/`maxProperties`. Опция `--ignore-requirements` отключает проверки
 
  ✔ сложные схемы с только required и другие  способы выразить требование схемой
 
@@ -51,7 +51,7 @@ target_link_libraries(my_app PRIVATE api_generated)
  ✔ `additionalProperties`: `false`, `true` или схема
 
  ✔ схема указанная как `true`/`false` также поддерживается
- 
+
  ✔ OpenAPI файлы в JSON формате
 
 ## Расширения
