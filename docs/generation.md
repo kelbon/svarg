@@ -55,6 +55,7 @@ svarg_generate_cxx(
     INCLUDE_DIRS         ...         # необязательно, -I
     STREAM_CONTENT_TYPES ...         # необязательно, --stream-content-type
     FORMATS              ...         # необязательно, --add-format
+    FILE_PREFIX          ...         # необязательно, --file-prefix: свои кодеки и типы форматов
     SOURCES_PER_SPEC     8           # необязательно, --sources-per-spec
 )
 target_link_libraries(my_app PRIVATE api_generated)
