@@ -6,38 +6,13 @@ svarg преобразует поданные на входе языки опи�
 
 Это классическая идея компиляторов применённая к языкам спецификаций
 
-```mermaid
-graph LR
-    subgraph Frontends
-        GRPC[GRPC frontend]
-        OPEN[OpenAPI frontend]
-        SOME[Something frontend]
-    end
+GRPC    -> IR
+OpenAPI -> IR
+...     -> IR
 
-    IR((IR))
-
-    subgraph Backends
-        JAVA[Java backend]
-        CPP[C++ backend]
-        C[C backend]
-    end
-
-    GRPC --> IR
-    OPEN --> IR
-    SOME --> IR
-
-    IR --> JAVA
-    IR --> CPP
-    IR --> C
-
-    style IR fill:#f9f,stroke:#333,stroke-width:2px
-    style GRPC fill:#e6f3ff,stroke:#2a9d8f,stroke-width:2px
-    style OPEN fill:#e6f3ff,stroke:#2a9d8f,stroke-width:2px
-    style SOME fill:#e6f3ff,stroke:#2a9d8f,stroke-width:2px
-    style JAVA fill:#fff0f0,stroke:#e76f51,stroke-width:2px
-    style CPP fill:#fff0f0,stroke:#e76f51,stroke-width:2px
-    style C fill:#fff0f0,stroke:#e76f51,stroke-width:2px
-```
+IR -> C++
+IR -> Java
+IR -> ...
 
 ## svarg IR
 
