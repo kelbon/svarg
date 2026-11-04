@@ -14,14 +14,19 @@
 
 ## Мой медиа тип — это JSON
 
-Медиа тип JSON без суффикса `+json` (например `application/vnd.github.object`) считается сырым. Подключите к нему
-`json_codec`:
+Медиа тип JSON без суффикса `+json` (например `application/vnd.github.object`) считается сырым. Укажите, что он
+кодируется как `application/json`:
 
 ```cpp
 // my_codecs.hpp
 template <>
-struct svarg::cxx_support::media_codec<"application/vnd.github.object"> : svarg::cxx_support::json_codec {};
+struct svarg::cxx_support::media_type_base<"application/vnd.github.object"> {
+  static constexpr std::string_view value = "application/json";
+};
 ```
+
+Так же задаётся суффикс: `media_type_base<"+kv">` — любой `...+kv`. Встроенные: `+json` → `application/json`,
+`+xml` → `application/xml`, поэтому свой кодек для `application/json` применяется и ко всем `...+json`.
 
 Специализация должна быть видна во всех сгенерированных файлах, поэтому заголовок подключается опцией
 генератора `--file-prefix '#include "my_codecs.hpp"'`.
@@ -42,12 +47,11 @@ struct my_xml_codec {
 };
 
 template <>
-struct svarg::cxx_support::media_codec<"application/xml"> : my_xml_codec {};
-template <>
-struct svarg::cxx_support::media_codec<"+xml"> : my_xml_codec {};  // любой ...+xml
+struct svarg::cxx_support::media_codec<"application/xml"> : my_xml_codec {};  // и любой ...+xml
 ```
 
-Кодек выбирается так: `media_codec<медиа тип>`, затем `media_codec<суффикс>`, затем встроенный. Подключение — как
+Кодек выбирается так: `media_codec<медиа тип>`, затем кодек базового медиа типа (`media_type_base` медиа
+типа, затем его суффикса), затем встроенный. Медиа типы — в нижнем регистре. Подключение — как
 выше, через `--file-prefix`. Для обхода полей объекта в кодеке есть `FOR_EACH_FIELD_INDEX_OF(T)`,
 `get_field_name<I, T>()`, `get_field<I>(obj)`, пример — `test/generated_api/test_codecs.hpp`.
 

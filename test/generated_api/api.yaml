@@ -350,9 +350,9 @@ paths:
             application/x-upper:
               schema:
                 type: string
-        # JSON без суффикса +json (как application/vnd.github.object): json_codec подключён специализацией
+        # JSON без суффикса +json (как application/vnd.github.object): media_type_base -> application/json
         "201":
-          description: JSON по специализации media_codec
+          description: JSON по специализации media_type_base
           content:
             application/vnd.test.object:
               schema:

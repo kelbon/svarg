@@ -374,7 +374,7 @@ TEST("generated server") {
   http_request search_raw;
   search_raw.method = hidi::http_method_e::GET;
   search_raw.path = "/v1/search?ids=7&y=3";  // у point обязателен x
-  // свои кодеки: тело по суффиксу +kv, ответ по точному медиа типу
+  // свои кодеки: тело по суффиксу +kv (media_type_base), ответ по точному медиа типу
   api::postKv kv;
   kv.body.a = "hi";
   kv.body.n = 3;

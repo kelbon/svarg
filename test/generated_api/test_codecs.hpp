@@ -61,14 +61,21 @@ struct upper_codec {
 
 }  // namespace test_codecs
 
-// по суффиксу: любой медиа тип ...+kv
 template <>
-struct svarg::cxx_support::media_codec<"+kv"> : test_codecs::kv_codec {};
+struct svarg::cxx_support::media_codec<"application/x-kv"> : test_codecs::kv_codec {};
+
+// по суффиксу: любой медиа тип ...+kv кодируется как application/x-kv
+template <>
+struct svarg::cxx_support::media_type_base<"+kv"> {
+  static constexpr std::string_view value = "application/x-kv";
+};
 
 // по точному медиа типу
 template <>
 struct svarg::cxx_support::media_codec<"application/x-upper"> : test_codecs::upper_codec {};
 
-// JSON без суффикса +json: встроенный json_codec для своего медиа типа
+// JSON без суффикса +json
 template <>
-struct svarg::cxx_support::media_codec<"application/vnd.test.object"> : svarg::cxx_support::json_codec {};
+struct svarg::cxx_support::media_type_base<"application/vnd.test.object"> {
+  static constexpr std::string_view value = "application/json";
+};

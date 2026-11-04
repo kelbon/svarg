@@ -31,14 +31,24 @@
 //   multipart_codec - multipart/*, объект
 //   raw_codec       - остальное: строка, число, bool или енам как есть
 //
-// Свой кодек - специализация media_codec для медиа типа или суффикса структурного синтаксиса ("+xml"):
+// Свой кодек - специализация media_codec для медиа типа:
 //
 //   template <>
 //   struct svarg::cxx_support::media_codec<"application/xml"> : my_xml_codec {};
 //
-// Порядок выбора: media_codec<медиа тип>, media_codec<суффикс>, встроенный. Специализация должна быть видна
-// во всех сгенерированных файлах (иначе разные единицы трансляции выберут разные кодеки), поэтому заголовок
-// с ней подключается в начало каждого файла опцией генератора: svarg --file-prefix '#include "my_codecs.hpp"'
+// Медиа тип, который кодируется как другой, - специализация media_type_base для медиа типа или суффикса
+// структурного синтаксиса ("+xml"):
+//
+//   template <>
+//   struct svarg::cxx_support::media_type_base<"+xml"> {
+//     static constexpr std::string_view value = "application/xml";
+//   };
+//
+// Встроенные: +json -> application/json, +xml -> application/xml.
+// Порядок выбора: media_codec<медиа тип>, кодек базового медиа типа (media_type_base<медиа тип>, затем
+// media_type_base<суффикс>), встроенный. Медиа типы в нижнем регистре. Специализации должны быть видны во
+// всех сгенерированных файлах (иначе разные единицы трансляции выберут разные кодеки), поэтому заголовок с
+// ними подключается в начало каждого файла опцией генератора: svarg --file-prefix '#include "my_codecs.hpp"'
 
 namespace svarg::cxx_support {
 
@@ -46,6 +56,19 @@ using hidi::http_body_bytes;
 
 template <constexpr_string MediaType>
 struct media_codec;  // не определён: своего кодека нет
+
+template <constexpr_string MediaType>
+struct media_type_base;  // не определён: медиа тип кодируется сам по себе
+
+template <>
+struct media_type_base<"+json"> {
+  static constexpr std::string_view value = "application/json";
+};
+
+template <>
+struct media_type_base<"+xml"> {
+  static constexpr std::string_view value = "application/xml";
+};
 
 struct json_codec;
 struct raw_codec;
@@ -61,6 +84,9 @@ namespace noexport {
 template <constexpr_string M>
 constexpr bool has_media_codec = requires { sizeof(media_codec<M>); };
 
+template <constexpr_string M>
+constexpr bool has_media_type_base = requires { media_type_base<M>::value; };
+
 // "application/vnd.x+xml" -> "+xml"
 consteval std::string_view media_suffix(std::string_view media_type) {
   size_t plus = media_type.rfind('+');
@@ -69,13 +95,26 @@ consteval std::string_view media_suffix(std::string_view media_type) {
   return media_type.substr(plus);
 }
 
+// базовый медиа тип `M` или пусто
+template <constexpr_string M>
+consteval std::string_view base_media_type() {
+  constexpr std::string_view suffix = media_suffix(M.str());
+  if constexpr (has_media_type_base<M>)
+    return media_type_base<M>::value;
+  else if constexpr (!suffix.empty() && has_media_type_base<constexpr_string<suffix.size()>(suffix)>)
+    return media_type_base<constexpr_string<suffix.size()>(suffix)>::value;
+  else
+    return {};
+}
+
 template <constexpr_string M>
 consteval auto select_codec() {
-  constexpr std::string_view suffix = media_suffix(M.str());
+  constexpr std::string_view base = base_media_type<M>();
   if constexpr (has_media_codec<M>) {
     return std::type_identity<media_codec<M>>{};
-  } else if constexpr (!suffix.empty() && has_media_codec<constexpr_string<suffix.size()>(suffix)>) {
-    return std::type_identity<media_codec<constexpr_string<suffix.size()>(suffix)>>{};
+  } else if constexpr (!base.empty()) {
+    static_assert(base != M.str(), "media_type_base maps media type to itself");
+    return select_codec<constexpr_string<base.size()>(base)>();
   } else {
     constexpr body_format_e f = body_format_of(M.str());
     if constexpr (f == body_format_e::json)
