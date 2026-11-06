@@ -10,7 +10,7 @@
 #include "svarg/utils/strcmp.hpp"
 #include "svarg/utils/json_compare.hpp"
 
-namespace std::filesystem {}
+#include <filesystem>
 
 namespace svarg {
 
