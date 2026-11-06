@@ -54,6 +54,11 @@ class OperationParameter(Serializable):
     encoding: Optional[str] = None
     default_value: Optional[Any] = None
     meta: Optional[MetaT] = None
+    # параметр авторизации (из security)
+    auth_related: Optional[bool] = None
+
+    def is_auth_related(self) -> bool:
+        return bool(self.auth_related)
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +71,7 @@ class Header(Serializable):
     name: str
     required: Optional[bool] = None
     schema: Optional[SchemaRef] = None
+    encoding: Optional[str] = None
     default_value: Optional[Any] = None
 
 
@@ -80,6 +86,8 @@ class Body(Serializable):
     schema: SchemaRef
     members_encoding: Optional[dict[str, str]] = field_with_key(key="membersEncoding", default=None)
     members_headers: Optional[dict[str, list[Header]]] = field_with_key(key="membersHeaders", default=None)
+    # НЕ optional в C++ -> сериализуется всегда
+    required: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +171,26 @@ class ResponseDesc(Serializable):
 
 
 # ---------------------------------------------------------------------------
+# server_object
+# ---------------------------------------------------------------------------
+
+
+@kw_only_dataclass
+class ServerVariable(Serializable):
+    default: str
+    enum: Optional[list[str]] = None
+    description: Optional[str] = None
+
+
+@kw_only_dataclass
+class Server(Serializable):
+    # URL или шаблон URL, в шаблон подставляются variables
+    url: str
+    description: Optional[str] = None
+    variables: Optional[dict[str, ServerVariable]] = None
+
+
+# ---------------------------------------------------------------------------
 # operation
 # ---------------------------------------------------------------------------
 
@@ -170,14 +198,18 @@ class ResponseDesc(Serializable):
 @kw_only_dataclass
 class Operation(Serializable):
     spec: str
-    path: str
     method: str
+    # у вебхуков пути нет
+    path: Optional[str] = None
     id: Optional[str] = None
+    servers: Optional[list[Server]] = None
     parameters: Optional[list[OperationParameter]] = None
     bodies: Optional[list[Body]] = None
     responses: Optional[list[ResponseDesc]] = None
     default_response: Optional[ResponseDesc] = field_with_key(key="defaultResponse", default=None)
     meta: Optional[MetaT] = None
+    # порядок выбора, если пути операций неоднозначны (меньше - раньше)
+    priority: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------

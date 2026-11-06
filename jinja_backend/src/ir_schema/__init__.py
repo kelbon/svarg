@@ -2,6 +2,7 @@ from .schema_types import (
     AllofSchema,
     AnyofSchema,
     ArraySchema,
+    ConstraintsSchema,
     DiscriminatorDesc,
     EnumSchema,
     FundamentalE,
@@ -24,6 +25,8 @@ from .operations import (
     ParameterLocation,
     ResponseDesc,
     ResponseStatus,
+    Server,
+    ServerVariable,
     StatusRangeE,
 )
 from .serde import Serializable, field_with_key, kw_only_dataclass
@@ -33,6 +36,7 @@ __all__ = [
     "AnyofSchema",
     "ArraySchema",
     "Body",
+    "ConstraintsSchema",
     "DiscriminatorDesc",
     "EnumSchema",
     "FundamentalE",
@@ -52,6 +56,8 @@ __all__ = [
     "SchemaRef",
     "SchemaType",
     "Serializable",
+    "Server",
+    "ServerVariable",
     "StatusRangeE",
     "field_with_key",
     "kw_only_dataclass",

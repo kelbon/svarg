@@ -3,7 +3,7 @@ CLI-интерфейс генератора.
 
 Использование:
 
-    python -m codegen.cli \\
+    python -m generator.cli \\
         --ir          path/to/ir.yaml \\
         --templates   path/to/templates/ \\
         --output      path/to/output/ \\
@@ -24,8 +24,9 @@ from pathlib import Path
 
 import yaml
 
+from ir_schema import IrObject
+
 from .generator import Generator, GeneratorError
-from .ir_schema import IrObject
 
 def _parse_var(s: str) -> tuple[str, str]:
     """Разбирает 'key=value' в кортеж."""
@@ -140,6 +141,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Done: {len(results)} file(s) written to '{output_dir}'")
     return 0
 
-# запускать из корня jinja_backend: python -m src.cli --ir ./tests/example_ir.yaml --templates ./my_templates --output ./myout
+# без установки, из jinja_backend: PYTHONPATH=src python -m generator.cli --ir ... --templates ... --output ...
 if __name__ == "__main__":
     sys.exit(main())

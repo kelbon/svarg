@@ -69,7 +69,7 @@ jobs:
 
       - name: Python tests
         run: |
-          python -m pytest ./jinja_backend/tests/test_serde.py -v
+          python -m pytest ./jinja_backend/tests -v
 
       # пример NRF как отдельный проект: svarg подключается, как у пользователя (CPM, генератор отдельно в
       # Release, svarg_generate_cxx), а сценарий сервера и клиента на реальной спеке 3GPP должен пройти

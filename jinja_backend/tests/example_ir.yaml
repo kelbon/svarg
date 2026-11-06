@@ -329,6 +329,7 @@
           "name": "UserPatch"
           "spec": "api-a.yaml"
           "jsonptr": "/components/schemas/UserPatch"
+        "required": false
     "responses":
       - "status": "200"
         "headers":
@@ -342,12 +343,14 @@
               "name": "User"
               "spec": "api-a.yaml"
               "jsonptr": "/components/schemas/User"
+            "required": false
       - "status": "404"
         "bodies":
           - "contentType": "application/json"
             "schema":
               "spec": "api-a.yaml"
               "jsonptr": "/components/responses/NotFound/content/application~1json/schema"
+            "required": false
   - "id": "createOrder"
     "spec": "api-a.yaml"
     "path": "/orders"
@@ -357,6 +360,7 @@
         "schema":
           "spec": "api-a.yaml"
           "jsonptr": "/components/requestBodies/OrderCreate/content/application~1json/schema"
+        "required": false
     "responses":
       - "status": "201"
         "bodies":
@@ -365,6 +369,7 @@
               "name": "Order"
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Order"
+            "required": false
       - "status": "400"
         "bodies":
           - "contentType": "application/json"
@@ -372,6 +377,7 @@
               "name": "Error"
               "spec": "api-b.yaml"
               "jsonptr": "/components/schemas/Error"
+            "required": false
 "webhooks":
   - "id": "postorderStatus"
     "spec": "api-a.yaml"
@@ -382,5 +388,6 @@
         "schema":
           "spec": "api-a.yaml"
           "jsonptr": "/paths/~1orders/post/callbacks/orderStatus/{$request.body#~1callbackUrl}/post/requestBody/content/application~1json/schema"
+        "required": false
     "responses":
       - "status": "200"

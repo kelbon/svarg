@@ -12,6 +12,7 @@
   variant-логика, не покрытая generic-движком.
 - TestIrObjectMerge - семантика merge() поверх None/непустых списков.
 - test_example_ir_roundtrip - сквозная проверка на реальном примере IR.
+- test_svarg_ir_roundtrip - IR, который выдаёт svarg (фикстуры его тестов): модель не отстала от C++.
 """
 
 from __future__ import annotations
@@ -342,3 +343,14 @@ def test_example_ir_roundtrip():
     restored_dict = IrObject.from_dict(original).to_dict()
 
     assert restored_dict == original
+
+
+# ожидаемый вывод svarg-ir из его тестов: если IR в C++ поменялся, а модель здесь нет - упадёт
+SVARG_IR_FIXTURES = sorted((Path(__file__).parents[2] / "test" / "test_api").glob("*_expected.yaml"))
+
+
+@pytest.mark.parametrize("path", SVARG_IR_FIXTURES, ids=lambda p: p.name)
+def test_svarg_ir_roundtrip(path):
+    original = yaml.safe_load(path.read_text())
+
+    assert IrObject.from_dict(original).to_dict() == original

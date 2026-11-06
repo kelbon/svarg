@@ -132,8 +132,28 @@ class NotSchema(Serializable):
     type: "SchemaRef"
 
 
+@kw_only_dataclass
+class ConstraintsSchema(Serializable):
+    """Ограничения значения. Встречается только как требование (Schema.required).
+    Числа (minimum...) - int или float, как в IR"""
+
+    min_length: Optional[int] = field_with_key(key="minLength", default=None)
+    max_length: Optional[int] = field_with_key(key="maxLength", default=None)
+    pattern: Optional[str] = None
+    minimum: Optional[float] = None
+    maximum: Optional[float] = None
+    exclusive_minimum: Optional[float] = field_with_key(key="exclusiveMinimum", default=None)
+    exclusive_maximum: Optional[float] = field_with_key(key="exclusiveMaximum", default=None)
+    multiple_of: Optional[float] = field_with_key(key="multipleOf", default=None)
+    min_items: Optional[int] = field_with_key(key="minItems", default=None)
+    max_items: Optional[int] = field_with_key(key="maxItems", default=None)
+    unique_items: Optional[bool] = field_with_key(key="uniqueItems", default=None)
+    min_properties: Optional[int] = field_with_key(key="minProperties", default=None)
+    max_properties: Optional[int] = field_with_key(key="maxProperties", default=None)
+
+
 # variant<fundamental_e, enum_schema, oneof_schema, anyof_schema, allof_schema,
-#         object_schema, array_schema, not_schema>
+#         object_schema, array_schema, not_schema, constraints_schema>
 SchemaTypeData = Union[
     FundamentalE,
     EnumSchema,
@@ -143,6 +163,7 @@ SchemaTypeData = Union[
     ObjectSchema,
     ArraySchema,
     NotSchema,
+    ConstraintsSchema,
 ]
 
 # discriminator -> python-тип значения (для FundamentalE значение - сам Enum,
@@ -156,6 +177,7 @@ _SCHEMA_TYPE_DISCRIMINATORS: dict[str, type] = {
     "object": ObjectSchema,
     "array": ArraySchema,
     "not": NotSchema,
+    "constraints": ConstraintsSchema,
 }
 _TYPE_TO_DISCRIMINATOR = {v: k for k, v in _SCHEMA_TYPE_DISCRIMINATORS.items()}
 
@@ -206,6 +228,8 @@ class Schema(Serializable):
     # схемы которые не влияют на представление, только на валидацию
     # (совпадение имени с object_field_info.required чисто случайное)
     required: Optional[list[SchemaRef]] = None
+    # специфичное для языка спецификаций, например x-format-hint (format из OpenAPI)
+    meta: Optional[dict[str, Any]] = None
 
     def scope(self) -> str:
         return f"{self.spec}#{self.jsonptr}"
