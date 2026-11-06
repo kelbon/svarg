@@ -18,9 +18,9 @@ struct operation_hooks {
   // вызывается до обработки запроса, может вернуть пустую task (тогда будет обычная обработка запроса)
   // если task не пуста, то она вызывается ВМЕСТО обработки запроса
   // обработка по умолчанию эквивалента return handle(std::move(op), std::move(request), std::move(ctx))
-  //
-  // template<typename Server>
-  // static dd::task<hidi::http_response> do_handle_request(Op&, hidi::http_request&, Server& server,
+  // NOTE: аргументы по ссылкам валидны лишь до конца синхронного вызова. Если планируется хотя бы один
+  // co_await - сделайте move template<typename Server> static dd::task<hidi::http_response>
+  // do_handle_request(Op&, hidi::http_request&, Server& server,
   //                                                     hidi::request_context& ctx);
 };
 

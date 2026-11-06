@@ -312,12 +312,15 @@ TEST("optional authorization") {
 // хуки - в test_codecs.hpp
 TEST("operation hooks") {
   test_server server(hidi::server_ssl_context_ptr(nullptr));
-  api::getSecure::result_t by_hook;
+  api::getSecure::result_t by_hook, by_async_hook;
   bool rejected = false;
   run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
     api::client cli{client_ref(&h2)};
     test_codecs::current_token = "good";
     by_hook = co_await cli.send(api::getSecure{}, hidi::deadline_t::never());
+    // do_handle_request асинхронно меняет токен и вызывает обработчик
+    test_codecs::current_token = "exchange";
+    by_async_hook = co_await cli.send(api::getSecure{}, hidi::deadline_t::never());
     // do_handle_request отвечает 403 вместо обработчика
     test_codecs::current_token = "bad";
     try {
@@ -327,7 +330,7 @@ TEST("operation hooks") {
     }
   });
   test_codecs::current_token.reset();
-  REQUIRE(by_hook.get_if_200() && rejected);
+  REQUIRE(by_hook.get_if_200() && by_async_hook.get_if_200() && rejected);
 }
 
 TEST("webhook") {

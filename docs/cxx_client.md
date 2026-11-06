@@ -73,6 +73,7 @@ struct svarg::cxx_support::operation_hooks<Op> {
         req.headers.emplace_back("authorization", "Bearer " + current_token());
   }
   // сервер: после разбора запроса. Возвращённый ответ отправляется вместо вызова обработчика
+  // NOTE: аргументы по ссылкам валидны до первого co_await. Поэтому при создании корутины сделайте move аргументов
   static dd::task<hidi::http_response> do_handle_request(Op& op, hidi::http_request& req, auto& /*server*/, hidi::request_context&) {
     if constexpr (requires { op.headers.authorization; })
       if (!op.headers.authorization || !check_token(*op.headers.authorization))

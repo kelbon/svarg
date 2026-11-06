@@ -129,10 +129,19 @@ struct svarg::cxx_support::operation_hooks<Op> {
     if (!op.headers.authorization && test_codecs::current_token)
       req.headers.emplace_back("authorization", "Bearer " + *test_codecs::current_token);
   }
-  static dd::task<hidi::http_response> do_handle_request(Op& op, hidi::http_request&, auto& server,
-                                                         hidi::request_context&) {
+  static dd::task<hidi::http_response> do_handle_request(Op& op, hidi::http_request& req, auto& server,
+                                                         hidi::request_context& ctx) {
     if (op.headers.authorization == "Bearer bad")
       return ready_response(hidi::http_response{.status = 403});
+    if (op.headers.authorization == "Bearer exchange")
+      return exchange_then_handle(std::move(op), std::move(req), server, std::move(ctx));
     return {};
+  }
+  // асинхронно: аргументы перемещены в корутину, затем обработка по умолчанию
+  static dd::task<hidi::http_response> exchange_then_handle(Op op, hidi::http_request req, auto& server,
+                                                            hidi::request_context ctx) {
+    (void)co_await ready_response({});  // как будто сходили в базу
+    op.headers.authorization = "Bearer good";
+    co_return co_await server.handle(std::move(op), std::move(req), std::move(ctx));
   }
 };
