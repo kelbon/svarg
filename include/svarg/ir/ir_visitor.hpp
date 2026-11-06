@@ -63,9 +63,13 @@ struct ir_visitor_base {
   }
   void operator()(this auto&& self, const status_range_e&) {
   }
-  void operator()(this auto&& self, const int64_t&) {
+  void operator()(this auto&& self, const long&) {
   }
-  void operator()(this auto&& self, const uint64_t&) {
+  void operator()(this auto&& self, const long long&) {
+  }
+  void operator()(this auto&& self, const unsigned long long&) {
+  }
+  void operator()(this auto&& self, const unsigned long&) {
   }
   void operator()(this auto&& self, const number&) {
   }
