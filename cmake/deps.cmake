@@ -105,7 +105,7 @@ if (svarg_ENABLE_TESTING)
   CPMAddPackage(
     NAME MOKO3
     GITHUB_REPOSITORY kelbon/moko3
-    GIT_TAG v0.10.2
+    GIT_TAG main
   )
 endif()
 
