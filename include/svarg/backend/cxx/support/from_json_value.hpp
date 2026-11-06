@@ -201,7 +201,8 @@ error_code aggregate_from_json(A& v, const boost::json::value& j) {
         cxx_support::visit_field_index<fields_count<A>()>(
             [&]<size_t I>() {
               if constexpr (cxx_support::get_field_info<I, A>().required)
-                unparsed.set(I, false);
+                if (!value.is_null())  // null - отсутствие значения
+                  unparsed.set(I, false);
               ec = try_from_json(value, cxx_support::get_field<I>(v));
             },
             *i);

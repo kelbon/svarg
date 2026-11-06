@@ -373,9 +373,10 @@ static std::string json_outcome(svarg::error_code& ec, const T& v) {
       json_codec::serialize(v, "application/json", params, out);
       return "ok: " + std::string((const char*)out.data(), out.size());
     } catch (std::exception& e) {
-      // разобранное значение не сериализуется: null в необязательном поле без null в схеме DOM принимает как
-      // отсутствие поля, а требование проверялось по исходному JSON
-      return std::format("ok, not serializable: {}", e.what());
+      // разобранное значение всегда сериализуется
+      std::println("parsed value is not serializable: {}", e.what());
+      REQUIRE(false);
+      return {};
     }
   }
 }
@@ -569,6 +570,9 @@ TEST("json") {
   // ошибка разбора
   check_json<Ordered>(R"({"a": "long", "b": "x"})");
   check_json<Reqs>(R"({"x": "y", "b": -1})");
+  // null - отсутствие значения, в том числе для требования required: [a]
+  check_json<Reqs>(R"({"a": null})", json_check_e::exhaustive);
+  REQUIRE(decode_json_dom<Reqs>(R"({"a": null})").ends_with("error"));
   // обе части allOf не подходят: первая - parse_error (не целое), вторая - validate_error (maxItems); ошибка
   // - первой по порядку
   check_json<Both>(R"([1, 2, 3, "x"])", json_check_e::exhaustive);

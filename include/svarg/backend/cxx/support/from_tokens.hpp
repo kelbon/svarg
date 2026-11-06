@@ -436,7 +436,8 @@ struct from_tokens<T> {
           tokens_consumer field = visit_field_index<fields_count<T>()>(
               [&]<size_t I>() {
                 if constexpr (get_field_info<I, T>().required)
-                  unparsed.set(I, false);
+                  if (tok.kind() != sax_token::null)  // null - отсутствие значения
+                    unparsed.set(I, false);
                 auto& f = get_field<I>(v);
                 f = std::remove_cvref_t<decltype(f)>{};  // повторный ключ не дописывает в старое значение
                 return from_tokens_subobject(f, tok, r);
