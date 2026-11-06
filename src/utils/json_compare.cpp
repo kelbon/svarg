@@ -1,5 +1,7 @@
 #include "svarg/utils/json_compare.hpp"
 #include <compare>
+#include <vector>
+#include <string_view>
 
 namespace svarg {
 
