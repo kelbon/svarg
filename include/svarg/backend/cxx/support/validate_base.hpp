@@ -72,18 +72,6 @@ constexpr bool requirement_needs_tokens_reuse() {
   return true;
 }
 
-// проверяет только для одного уровня требований
-template <typename... Requirements>
-constexpr bool requirements_needs_tokens_reuse(metel::typelist<Requirements...>) {
-  return (requirement_needs_tokens_reuse<Requirements>() || ...);
-}
-
-// true для схем, которым нужно сохранять при парсинге токены для дальнейшего переиспользования
-// Note: не учитывает oneof/anyof, только требования
-template <typename Schema>
-constexpr bool needs_tokens_reuse_for_validation =
-    noexport::requirements_needs_tokens_reuse(required_schemas_t<Schema>{});
-
 template <typename Schema, typename T>
 [[nodiscard]] error_code validate_parsed_object(const T& s) {
   static_assert(!requirement_needs_tokens_reuse<Schema>());

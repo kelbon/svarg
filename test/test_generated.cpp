@@ -395,7 +395,8 @@ static void check_json_stream(std::string_view json) {
 }
 
 // все мутации документа: каждое значение заменяется значениями других видов, у каждого объекта удаляется
-// каждый ключ и добавляется каждый из `extra_keys` (неизвестный и упомянутые в требованиях схем: not required)
+// каждый ключ и добавляется каждый из `extra_keys` (неизвестный и упомянутые в требованиях схем: not
+// required)
 static std::vector<std::string> json_mutations(const boost::json::value& doc) {
   static const boost::json::value replacements[] = {
       nullptr,
@@ -486,10 +487,12 @@ TEST("json stream parsing") {
   check_json_stream<Item>(R"({"name": "a", "reqs": {"x": "y"}})");
   check_json_stream<Item>(R"({"name": "a", "reqs": {"x": "y", "a": "s", "b": "not int"}})");
   check_json_stream<Item>(R"({"name": "a", "filter": {"kind": "k", "other": 1}})");
-  check_json_stream<Item>(R"({"name": "a", "tree": {"children": [{"children": [], "x": 1}]}, "reqs": {"x": "y"}})");
+  check_json_stream<Item>(
+      R"({"name": "a", "tree": {"children": [{"children": [], "x": 1}]}, "reqs": {"x": "y"}})");
   check_json_stream<Reqs>(R"({"x": "y"})");
   check_json_stream<Reqs>(R"({"x": "y", "b": -1})");
-  // требование (validate_error на a) нарушено раньше, чем разбор значения (parse_error на b): ошибка - разбора
+  // требование (validate_error на a) нарушено раньше, чем разбор значения (parse_error на b): ошибка -
+  // разбора
   check_json_stream<Ordered>(R"({"a": "long", "b": "x"})");
   check_json_stream<Ordered>(R"({"a": "long", "b": 1})");
   check_json_stream<Reqs>(R"({"b": 1})");

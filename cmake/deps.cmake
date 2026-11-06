@@ -53,7 +53,7 @@ endif()
 CPMAddPackage(
   NAME KELCORO
   GITHUB_REPOSITORY kelbon/kelcoro
-  GIT_TAG v1.4.9
+  GIT_TAG v1.4.10
 )
 
 # move_only_function, function ref etc (anyanylib)
