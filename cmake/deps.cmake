@@ -53,14 +53,14 @@ endif()
 CPMAddPackage(
   NAME KELCORO
   GITHUB_REPOSITORY kelbon/kelcoro
-  GIT_TAG v1.4.7
+  GIT_TAG v1.4.8
 )
 
 # move_only_function, function ref etc (anyanylib)
 CPMAddPackage(
   NAME ANYANY
   GITHUB_REPOSITORY kelbon/AnyAny
-  GIT_TAG v1.3.0
+  GIT_TAG v1.3.1
 )
 
 # on_scope_exit / on_scope_failure (zallib)
@@ -83,7 +83,7 @@ if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   CPMAddPackage(
     NAME HIDI
     GIT_REPOSITORY https://github.com/kelbon/hidi
-    GIT_TAG v0.15.1
+    GIT_TAG v0.15.2
     OPTIONS "HIDI_USE_CPM ON"
   )
 endif()
@@ -105,7 +105,7 @@ if (svarg_ENABLE_TESTING)
   CPMAddPackage(
     NAME MOKO3
     GITHUB_REPOSITORY kelbon/moko3
-    GIT_TAG v0.10.2
+    GIT_TAG v0.10.3
   )
 endif()
 
