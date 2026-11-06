@@ -1,12 +1,24 @@
 ## Форматы
 
-`format` применим только к `string`, `integer` или `number` и передаётся в `FORMATS` (`svarg_generate_cxx`) в таком формате:
+`format` применим к `string`, `integer`, `number` или `object` и передаётся в `FORMATS` (`svarg_generate_cxx`) в таком формате:
 
 `<тип>+<формат>=<C++ тип>`
 
 Например:
 
 `string+date=my::date`
+
+`object+abc=my::abc` - схема объекта рендерится в `my::abc` как есть. Остальные свойства в этом случае игнорируются
+
+Пример:
+
+```yaml
+  # FORMATS object+point=my::point
+  Point:
+    type: object
+    format: point
+  # в С++ коде будет `using Point = my::point`
+```
 
 По умолчанию поддерживается: `int32`, `int64`, `float`,`double`.
 

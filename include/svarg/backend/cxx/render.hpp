@@ -44,9 +44,9 @@ struct render_options {
   bool unsetted_additional_properties = true;
   // на сколько .cpp делится код каждой спеки (>= 1). 1 - всё в <spec>.cpp
   size_t sources_per_spec = 1;
-  // C++ тип схемы с `format`: "<тип>+<формат>" (string+date) -> C++ тип. Формат без C++ типа не меняет
-  // тип схемы. Требования (ограничения и т.д.) схемы с форматом не проверяются, кроме встроенных
-  // форматов чисел: пользовательский тип проверяет значение сам
+  // C++ тип схемы с `format`: "<тип>+<формат>" (string+date) -> C++ тип
+  // Требования (ограничения и т.д.) схемы с форматом не проверяются, кроме встроенных форматов чисел
+  // пользовательский тип проверяет значение сам
   std::map<std::string, std::string, std::less<>> formats = default_formats();
 };
 
@@ -126,6 +126,8 @@ struct renderer {
 
   // C++ тип формата схемы (render_options::formats) или nullptr
   const std::string* format_type(const ir::schema&) const;
+  // C++ тип формата объекта или nullptr
+  const std::string* object_format_type(const ir::schema&) const;
   // требования схемы проверяются: есть и не отключены форматом
   bool checks_requirements(const ir::schema&) const;
   // форматы, которые не применяются, и требования, которые из-за формата не проверяются

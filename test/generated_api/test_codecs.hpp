@@ -70,6 +70,17 @@ struct date {
   bool operator==(const date&) const = default;
 };
 
+namespace my {
+
+// тип формата объекта: svarg --add-format object+point=test_codecs::point
+struct point {
+  int64_t x = 0, y = 0;
+
+  bool operator==(const point&) const = default;
+};
+
+}  // namespace my
+
 }  // namespace test_codecs
 
 // текст (параметры) и JSON для типа формата
@@ -99,6 +110,26 @@ struct svarg::from_json_value<test_codecs::date> {
     if (!j.is_string())
       return svarg::parse_error("date must be a string");
     return svarg::cxx_support::text_value<test_codecs::date>::parse(j.get_string(), v);
+  }
+};
+
+template <>
+struct svarg::to_json_value<test_codecs::my::point> {
+  boost::json::value operator()(const test_codecs::my::point& v) const {
+    return boost::json::object{{"x", v.x}, {"y", v.y}};
+  }
+};
+
+template <>
+struct svarg::from_json_value<test_codecs::my::point> {
+  svarg::error_code operator()(const boost::json::value& j, test_codecs::my::point& v) const {
+    const boost::json::object* o = j.if_object();
+    const boost::json::value* x = o ? o->if_contains("x") : nullptr;
+    const boost::json::value* y = o ? o->if_contains("y") : nullptr;
+    if (!x || !y || !x->is_int64() || !y->is_int64() || o->size() != 2)
+      return svarg::parse_error("point must be {x, y}");
+    v = {x->get_int64(), y->get_int64()};
+    return {};
   }
 };
 

@@ -11,9 +11,10 @@ TEST("add-format option") {
   REQUIRE(parse_format_option("string+date-time=std::chrono::sys_seconds") ==
           result_t("string+date-time", "std::chrono::sys_seconds"));
   REQUIRE(parse_format_option("integer+int32=int") == result_t("integer+int32", "int"));
+  REQUIRE(parse_format_option("object+point=my::point") == result_t("object+point", "my::point"));
   // неверный синтаксис и тип, к которому формат неприменим, - ошибка
   for (std::string_view bad :
-       {"string", "string+date", "date=x", "string+=x", "string+date=", "string=x+y", "object+x=y"}) {
+       {"string", "string+date", "date=x", "string+=x", "string+date=", "string=x+y", "array+x=y"}) {
     bool thrown = false;
     try {
       (void)parse_format_option(bad);

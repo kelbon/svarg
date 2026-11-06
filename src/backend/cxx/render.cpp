@@ -13,8 +13,9 @@ std::pair<std::string, std::string> parse_format_option(std::string_view arg) {
         std::format("format `{}`: expected <type>+<format>=<C++ type>, e.g. string+date=my::date", arg));
   }
   std::string_view type = arg.substr(0, plus);
-  if (type != "string" && type != "integer" && type != "number")
-    throw std::invalid_argument(std::format("format `{}`: type must be string, integer or number", arg));
+  if (type != "string" && type != "integer" && type != "number" && type != "object")
+    throw std::invalid_argument(
+        std::format("format `{}`: type must be string, integer, number or object", arg));
   return {std::string(arg.substr(0, eq)), std::string(arg.substr(eq + 1))};
 }
 
@@ -109,7 +110,8 @@ std::vector<fs::path> renderer::render_all_operations(fs::path output_dir, const
   return render_all(std::move(output_dir), foo());
 }
 
-std::vector<fs::path> renderer::render2cxx(fs::path output_dir, const std::vector<std::string>& sources_for) const {
+std::vector<fs::path> renderer::render2cxx(fs::path output_dir,
+                                           const std::vector<std::string>& sources_for) const {
   if (ir.schemas && !ir.schemas->empty())
     render_all_schemas(output_dir);
   if (ir.operations && !ir.operations->empty())

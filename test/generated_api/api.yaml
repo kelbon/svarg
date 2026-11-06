@@ -501,7 +501,7 @@ paths:
             $ref: "#/components/schemas/Day"
       responses:
         "200":
-          description: форматы (--add-format string+date=test_codecs::date)
+          description: форматы
           content:
             application/json:
               schema:
@@ -567,6 +567,22 @@ components:
             - $ref: "#/components/schemas/Day"
             - type: string
               maxLength: 10
+        # расширение object+format
+        point:
+          $ref: "#/components/schemas/Point"
+        points:
+          type: array
+          items:
+            type: object
+            format: my::point
+    Point:
+      type: object
+      format: my::point
+    # для проверки что Point подключается к нему
+    PointUser:
+      properties:
+        p:
+          $ref: "#/components/schemas/Point"
     Item:
       type: object
       required: [name]

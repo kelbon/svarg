@@ -29,7 +29,8 @@ static std::string render_bound(const number& n) {
 // поля в порядке объявления cxx_support::constraints_t (designated initializers)
 static std::string render_constraints(const std::vector<const ir::constraints_schema*>& cs) {
   std::string result = std::format(
-      "static constexpr std::array<::svarg::cxx_support::constraints_t, {}> svarg_constraints = {{{{\n", cs.size());
+      "static constexpr std::array<::svarg::cxx_support::constraints_t, {}> svarg_constraints = {{{{\n",
+      cs.size());
   for (const ir::constraints_schema* c : cs) {
     std::string fields;
     auto add = [&](std::string_view name, std::string value) {
@@ -89,7 +90,7 @@ void renderer::collect_mentioned_first_layer(const ir::schema_ref& s, ir::schema
 
   auto collect = [&](const ir::schema_ref& ref) {
     if (ref != s && !ref.is_fundamental())  // рекурсия
-      out.insert(ref);  // если ref уже там был, то автоматически обрабатывается
+      out.insert(ref);                      // если ref уже там был, то автоматически обрабатывается
   };
   // схемы-требования упоминаются в svarg_required_schemas, ограничения рендерятся внутрь и файла не имеют
   if (checks_requirements(t)) {
@@ -177,8 +178,9 @@ static const ir::discriminator_desc* discriminator_of(const ir::schema_type& t) 
 std::string renderer::render_discriminator(const ir::discriminator_desc& d, std::string_view relspec,
                                            const json_pointer& relative) const {
   // svarg_discriminator_field
-  std::string result = std::format("\nstatic constexpr inline std::string_view svarg_discriminator_field = {};\n\n",
-                                   render_string(d.propertyName));
+  std::string result =
+      std::format("\nstatic constexpr inline std::string_view svarg_discriminator_field = {};\n\n",
+                  render_string(d.propertyName));
   // vtor вызывается с типом варианта, void - значение не найдено: vtor.template operator()<X>()
   result += "// `vtor` must accept type, e.g. []<typename X>() { ... }, X = void if value is unknown\n";
   // svarg_discriminate
@@ -202,15 +204,20 @@ std::string renderer::render_discriminator(const ir::discriminator_desc& d, std:
   return result;
 }
 
-// ключ render_options::formats схемы фундаментального типа с форматом: "<тип>+<формат>"
+// ключ render_options::formats схемы фундаментального типа или объекта с форматом: "<тип>+<формат>"
 static std::optional<std::string> format_key(const ir::schema& s) {
   const ir::fundamental_e* f = s.type.if_fundamental();
-  if (!f || !s.meta)
+  if ((!f && !s.type.is_object()) || !s.meta)
     return std::nullopt;
   auto it = s.meta->find(x_format_hint);
   if (it == s.meta->end() || !it->second.value.is_string())
     return std::nullopt;
-  return std::format("{}+{}", e2str(*f), std::string_view(it->second.value.as_string()));
+  return std::format("{}+{}", f ? e2str(*f) : "object", std::string_view(it->second.value.as_string()));
+}
+
+// объект с форматом, у которого есть C++ тип: этот тип и есть схема, свойства не используются
+const std::string* renderer::object_format_type(const ir::schema& s) const {
+  return s.type.is_object() ? format_type(s) : nullptr;
 }
 
 const std::string* renderer::format_type(const ir::schema& s) const {
@@ -247,9 +254,9 @@ void renderer::warn_about_formats() const {
     const ir::fundamental_e* f = s.type.if_fundamental();
     if (s.type.is_enum())
       continue;
-    if (!f || (*f != string && *f != integer && *f != number)) {
-      emit_warn("in {}#{}: format `{}` ignored, it applies only to string, integer and number", s.spec,
-                s.jsonptr.escaped(), format);
+    if ((!f || (*f != string && *f != integer && *f != number)) && !s.type.is_object()) {
+      emit_warn("in {}#{}: format `{}` ignored, it applies only to string, integer, number and object",
+                s.spec, s.jsonptr.escaped(), format);
       continue;
     }
     if (const std::string* type = format_type(s); type && s.has_requirements() && !checks_requirements(s)) {
@@ -304,6 +311,9 @@ schema_ref_result renderer::render_schema_ref(const ir::schema_ref& s, std::stri
   if (s.is_fundamental())  // ссылка на фундаментал напрямую
     return render_fundamental_type(*s.if_fundamental());
   auto& t = schemaof(s);
+  // расширение object+format, is_alias = true чтобы не делать форвард декларацию
+  if (const std::string* type = object_format_type(t))
+    return {.typeref = *type, .is_alias = true};
   // если простой - пытаемся сгенерировать алиас
   // именованные даже простые алиасы оставляем, например чтобы oneof<A, B, C,...> не дублировать во многих
   // местах. Если пользователь в спеке дал ему имя - значит так и хотел
@@ -531,8 +541,9 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
       r += ", .null_when_absent = true";
     return r + "},\n";
   };
-  result += std::format("static constexpr std::array<::svarg::cxx_support::field_info, {}> svarg_fields = {{{{\n",
-                        fields.size());
+  result +=
+      std::format("static constexpr std::array<::svarg::cxx_support::field_info, {}> svarg_fields = {{{{\n",
+                  fields.size());
   for (auto&& f : fields)
     if (f.required)
       result += field_info(f);
@@ -770,7 +781,8 @@ render_result renderer::render_schema(const ir::schema& s) const {
     return {.filename = {}, .rendered = {}};
   const auto sref = s.ref();
   auto [typeref, is_alias] = render_schema_ref(sref, s.spec, s.jsonptr);
-  if (is_alias)
+  // object+format алиас, но имеет свой файл
+  if (is_alias && !(s.name && object_format_type(s)))
     return {.filename = {}, .rendered = {}};
   {
     // include всех упомянутых в реализации зависимостей (рекурсия обрабатывается pragma once)

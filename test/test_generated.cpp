@@ -278,6 +278,16 @@ TEST("formats") {
   REQUIRE(f.days->size() == 1 && (*f.days)[0] == date{2000, 1, 2});
   REQUIRE(*f.since == date{1999, 12, 31});
   REQUIRE(svarg::to_json(f) == json);
+  // объект с форматом - тип пользователя, именованный и инлайн
+  static_assert(std::is_same_v<api::components::schemas::Point, test_codecs::my::point>);
+  static_assert(std::is_same_v<std::remove_cvref_t<decltype(*f.point)>, test_codecs::my::point>);
+  static_assert(std::is_same_v<std::remove_cvref_t<decltype((*f.points)[0])>, test_codecs::my::point>);
+  const boost::json::value with_points = boost::json::parse(
+      R"({"day": "2026-11-04", "count": 1, "point": {"x": 1, "y": 2}, "points": [{"x": 3, "y": 4}]})");
+  Formats p;
+  REQUIRE(!svarg::try_from_json(with_points, p).failed());
+  REQUIRE(*p.point == test_codecs::my::point{1, 2} && (*p.points)[0] == test_codecs::my::point{3, 4});
+  REQUIRE(svarg::to_json(p) == with_points);
   // ограничение встроенного формата проверяется, значение вне int32 - ошибка
   REQUIRE(svarg::try_from_json(boost::json::parse(R"({"day": "2026-11-04", "count": -1})"), f).failed());
   REQUIRE(
@@ -553,7 +563,8 @@ TEST("json") {
   }
   // форматы пользователя (from_json_value)
   check_json_with_mutations<Formats>(
-      R"({"day": "2026-01-02", "count": 1, "ratio": 0.5, "days": ["2026-01-03"]})");
+      R"({"day": "2026-01-02", "count": 1, "ratio": 0.5, "days": ["2026-01-03"], "point": {"x": 1, "y": 2},
+          "points": [{"x": 3, "y": 4}]})");
 
   // то, чего мутации не дают
   for (std::string_view json : {
