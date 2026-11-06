@@ -17,7 +17,10 @@ CPMAddPackage(
   NAME BOOST
   VERSION 1.87.0
   URL https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-cmake.tar.xz
-  OPTIONS "BOOST_ENABLE_CMAKE ON"
+  # из iostreams нужен только mapped_file. Сжатие выключено: find_package(ZLIB...) на macOS находит заголовки
+  # SDK (usr/include) и добавляет их через -isystem раньше libc++, clang из Homebrew на этом ломается
+  OPTIONS "BOOST_ENABLE_CMAKE ON" "BOOST_IOSTREAMS_ENABLE_ZLIB OFF" "BOOST_IOSTREAMS_ENABLE_BZIP2 OFF"
+          "BOOST_IOSTREAMS_ENABLE_LZMA OFF" "BOOST_IOSTREAMS_ENABLE_ZSTD OFF"
 )
 unset(BOOST_INCLUDE_LIBRARIES)
 

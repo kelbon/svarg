@@ -58,7 +58,6 @@ jobs:
           version: "v0.10.0"
 
       - name: Configure CMake
-        env: LLVM: $(brew --prefix llvm)
         run: |
           $SVARG_CXX --version
           cmake . -Dsvarg_ENABLE_TESTING=ON              \
@@ -69,7 +68,6 @@ jobs:
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5            \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache           \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache         \
-            -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="$LLVM/include/c++/v1" \
             -B build -G "Ninja"
       - name: Build
         env:
