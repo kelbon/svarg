@@ -60,7 +60,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME ANYANY
   GITHUB_REPOSITORY kelbon/AnyAny
-  GIT_TAG v1.3.0
+  GIT_TAG main
 )
 
 # on_scope_exit / on_scope_failure (zallib)
