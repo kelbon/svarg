@@ -63,25 +63,4 @@ template <typename T>
 using all_required_schemas_t = decltype(noexport::typelist_rm<std::decay_t<T>>(
     noexport::all_required_schemas<std::decay_t<T>>(metel::typelist<>{})));
 
-namespace noexport {
-
-template <typename R>
-constexpr bool requirement_needs_tokens_reuse() {
-  // TODO для некоторых требований можно обойтись проверкой значения после парса
-  // min/max/pattern/наличие каких-то полей и отсутствие других и тд
-  return true;
-}
-
-template <typename Schema, typename T>
-[[nodiscard]] error_code validate_parsed_object(const T& s) {
-  static_assert(!requirement_needs_tokens_reuse<Schema>());
-  static_assert(required_schemas_t<T>{}.contains(std::type_identity<Schema>{}));
-  // TODO проводит валидацию по схемам не требующим заново парсить токены
-  // min/max/prefixElements и так далее (они должны появится в IR в виде required schemas со
-  // специальным парсингом)
-  return {};
-}
-
-}  // namespace noexport
-
 }  // namespace svarg::cxx_support
