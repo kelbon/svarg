@@ -19,8 +19,8 @@ dd::task<hidi::http_response> server::handle_request(hidi::http_request req, hid
       svarg::error_code ec = svarg::cxx_support::from_request(req, op, "");
       if (ec)
         return on_bad_request(std::move(req), std::move(ec), std::move(ctx));
-      if (std::optional rsp = svarg::cxx_support::before_handle(op, req))
-        return svarg::cxx_support::ready_response(std::move(*rsp));
+      if (dd::task t = svarg::cxx_support::do_handle_request(op, req, *this, ctx))
+        return t;
       return handle(std::move(op), std::move(req), std::move(ctx));
     }
     default:

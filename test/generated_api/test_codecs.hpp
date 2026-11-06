@@ -129,9 +129,10 @@ struct svarg::cxx_support::operation_hooks<Op> {
     if (!op.headers.authorization && test_codecs::current_token)
       req.headers.emplace_back("authorization", "Bearer " + *test_codecs::current_token);
   }
-  static std::optional<hidi::http_response> before_handle(const Op& op, const hidi::http_request&) {
+  static dd::task<hidi::http_response> do_handle_request(Op& op, hidi::http_request&, auto& server,
+                                                         hidi::request_context&) {
     if (op.headers.authorization == "Bearer bad")
-      return hidi::http_response{.status = 403};
-    return std::nullopt;
+      return ready_response(hidi::http_response{.status = 403});
+    return {};
   }
 };

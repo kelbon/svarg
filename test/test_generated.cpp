@@ -149,7 +149,7 @@ struct test_server : api::server {
   }
 
   // запрос без авторизации разбирается, проверка здесь
-  // "Bearer bad" -> перехват before_handle с ответом 403
+  // "Bearer bad" -> перехват do_handle_request с ответом 403
   // "Bearer good" -> проверка здесь и 200, остальное 401
   dd::task<hidi::http_response> handle(api::getSecure op, hidi::http_request,
                                        hidi::request_context) override {
@@ -318,7 +318,7 @@ TEST("operation hooks") {
     api::client cli{client_ref(&h2)};
     test_codecs::current_token = "good";
     by_hook = co_await cli.send(api::getSecure{}, hidi::deadline_t::never());
-    // before_handle отвечает 403 вместо обработчика
+    // do_handle_request отвечает 403 вместо обработчика
     test_codecs::current_token = "bad";
     try {
       (void)co_await cli.send(api::getSecure{}, hidi::deadline_t::never());

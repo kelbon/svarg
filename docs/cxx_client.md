@@ -73,11 +73,11 @@ struct svarg::cxx_support::operation_hooks<Op> {
         req.headers.emplace_back("authorization", "Bearer " + current_token());
   }
   // сервер: после разбора запроса. Возвращённый ответ отправляется вместо вызова обработчика
-  static std::optional<hidi::http_response> before_handle(const Op& op, const hidi::http_request& req) {
+  static dd::task<hidi::http_response> do_handle_request(Op& op, hidi::http_request& req, auto& /*server*/, hidi::request_context&) {
     if constexpr (requires { op.headers.authorization; })
       if (!op.headers.authorization || !check_token(*op.headers.authorization))
-        return hidi::http_response{.status = 401};
-    return std::nullopt;
+        return ready_response(hidi::http_response{.status = 401});
+    return {}; // обработка будет по умолчанию
   }
 };
 ```

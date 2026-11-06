@@ -215,8 +215,8 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
         "{} op;\n"
         "svarg::error_code ec = svarg::cxx_support::from_request(req, op, {});\n"
         "if (ec) return on_bad_request(std::move(req), std::move(ec), std::move(ctx));\n"
-        "if (std::optional rsp = svarg::cxx_support::before_handle(op, req))\n"
-        "return svarg::cxx_support::ready_response(std::move(*rsp));\n"
+        "if (dd::task t = svarg::cxx_support::do_handle_request(op, req, *this, ctx))\n"
+        "return t;\n"
         "return handle(std::move(op), std::move(req), std::move(ctx));\n"
         "}}\n",
         i, make_cxx_ident(r.op->id, options), render_string(r.base_path));
