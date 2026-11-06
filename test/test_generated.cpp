@@ -350,74 +350,133 @@ TEST("webhook") {
   REQUIRE(!from_request(req, parsed) && parsed.body.id == 5);
 }
 
-// разбор JSON тела потоком (кусками разного размера) совпадает с разбором через DOM: результат и вид ошибки
+// JSON. Способы разбора - DOM, поток целиком, поток по частям - дают один и тот же итог: значение или вид
+// ошибки. DOM - эталон. Разобранное значение проходит круг сериализация -> разбор без изменений
+
+// итог разбора, по которому сравниваются способы: "ok: <значение, сериализованное снова>" или вид ошибки.
+// Сообщения ошибок не сравниваются
 template <typename T>
-static void check_json_stream(std::string_view json) {
-  auto kind = [](svarg::error_code& e) -> std::string_view {
+static std::string json_outcome(svarg::error_code& ec, const T& v) {
+  try {
+    ec.rethrow_if_failed();
+  } catch (svarg::validate_error&) {
+    return "validate error";
+  } catch (svarg::parse_error&) {
+    return "parse error";
+  }
+  if constexpr (!requires { svarg::to_json_value<T>{}(v); }) {
+    return "ok";  // not - только требование, не сериализуется
+  } else {
     try {
-      e.rethrow_if_failed();
-      return "ok";
-    } catch (svarg::validate_error&) {
-      return "validate";
-    } catch (svarg::parse_error&) {
-      return "parse";
+      svarg::content_type_params params;
+      http_body_bytes out;
+      json_codec::serialize(v, "application/json", params, out);
+      return "ok: " + std::string((const char*)out.data(), out.size());
+    } catch (std::exception& e) {
+      // разобранное значение не сериализуется: null в необязательном поле без null в схеме DOM принимает как
+      // отсутствие поля, а требование проверялось по исходному JSON
+      return std::format("ok, not serializable: {}", e.what());
     }
-  };
-  // сериализация тоже проверяет требования и может бросить: тогда сравниваются сообщения
-  auto serialized = [](const T& v) -> std::string {
-    if constexpr (!requires { svarg::to_json_value<T>{}(v); }) {
-      return "";  // not не сериализуется: сравнивается только вид ошибки
-    } else {
-      try {
-        return boost::json::serialize(svarg::to_json(v));
-      } catch (std::exception& e) {
-        return std::format("throws: {}", e.what());
-      }
+  }
+}
+
+template <typename T>
+static std::string decode_json_dom(std::string_view json) {
+  T v;
+  svarg::error_code ec = json_codec::parse("application/json", json, v);
+  return json_outcome(ec, v);
+}
+
+// данные режутся на куски по позициям `cuts` (по возрастанию)
+template <typename T>
+static std::string decode_json_stream(std::string_view json, std::span<const size_t> cuts) {
+  T v;
+  svarg::error_code ec;
+  json_codec::stream_parser<T> parser("application/json", v);
+  try {
+    size_t from = 0;
+    for (size_t cut : cuts) {
+      parser.feed(json.substr(from, cut - from), /*last=*/false);
+      from = cut;
     }
-  };
-  T whole;
-  svarg::error_code whole_ec = json_codec::parse("application/json", json, whole);
-  for (size_t chunk : {size_t(1), size_t(2), size_t(3), size_t(7), size_t(64), json.size()}) {
-    if (chunk == 0)
-      continue;
-    T streamed;
-    svarg::error_code ec;
-    json_codec::stream_parser<T> parser("application/json", streamed);
-    try {
-      for (size_t i = 0; i < json.size(); i += chunk)
-        parser.feed(json.substr(i, chunk), i + chunk >= json.size());
-    } catch (svarg::parse_error& e) {
-      ec = std::move(e);
-    } catch (svarg::validate_error& e) {
-      ec = std::move(e);
-    }
-    if (kind(ec) != kind(whole_ec) || (!ec && serialized(streamed) != serialized(whole))) {
-      std::println("json: {}\nchunk {}, stream: {} `{}`, DOM: {} `{}`", json, chunk, kind(ec), ec.message(),
-                   kind(whole_ec), whole_ec.message());
+    parser.feed(json.substr(from), /*last=*/true);
+  } catch (svarg::parse_error& e) {
+    ec = std::move(e);
+  } catch (svarg::validate_error& e) {
+    ec = std::move(e);
+  }
+  return json_outcome(ec, v);
+}
+
+enum struct json_check_e {
+  quick,       // поток целиком, по байту и по половинам
+  exhaustive,  // и разрез на каждой позиции, и каждый обрывок данных
+};
+
+template <typename T>
+static void check_json(std::string_view json, json_check_e depth = json_check_e::quick) {
+  const std::string expected = decode_json_dom<T>(json);
+  auto require_as_dom = [&](std::string_view input, const std::string& got, std::string_view how) {
+    if (got != expected) {
+      std::println("json: {}\ninput: {}\n{}: `{}`\nDOM:  `{}`", json, input, how, got, expected);
       REQUIRE(false);
+    }
+  };
+  auto all_ways = [&](std::string_view input, bool every_cut) {
+    std::vector<size_t> bytes;
+    for (size_t i = 1; i < input.size(); ++i)
+      bytes.push_back(i);
+    require_as_dom(input, decode_json_stream<T>(input, {}), "stream");
+    require_as_dom(input, decode_json_stream<T>(input, bytes), "stream by bytes");
+    size_t half[] = {input.size() / 2};
+    require_as_dom(input, decode_json_stream<T>(input, half), "stream by halves");
+    if (every_cut) {
+      for (size_t& cut : bytes)
+        require_as_dom(input, decode_json_stream<T>(input, std::span(&cut, 1)),
+                       std::format("stream cut at {}", cut));
+    }
+  };
+  all_ways(json, depth == json_check_e::exhaustive);
+
+  // круг: сериализация разбирается в то же значение (и сериализуется так же) всеми способами
+  if (expected.starts_with("ok: ")) {
+    std::string serialized = expected.substr(4);
+    require_as_dom(serialized, decode_json_dom<T>(serialized), "DOM of serialized");
+    all_ways(serialized, false);
+  }
+
+  if (depth == json_check_e::exhaustive) {
+    // каждый обрывок - ошибка, одна и та же у всех способов (обрыв посреди строки, числа, вложенных значений)
+    for (size_t size = 0; size < json.size(); ++size) {
+      std::string_view prefix = json.substr(0, size);
+      if (prefix.find_first_not_of(" \n") == std::string_view::npos ||
+          json.substr(size).find_first_not_of(" \n") == std::string_view::npos)
+        continue;  // пусто или обрезаны только пробелы в конце
+      check_json<T>(prefix);
+      REQUIRE(decode_json_dom<T>(prefix).ends_with("error"));
     }
   }
 }
 
 // все мутации документа: каждое значение заменяется значениями других видов, у каждого объекта удаляется
-// каждый ключ и добавляется каждый из `extra_keys` (неизвестный и упомянутые в требованиях схем: not
-// required)
+// каждый ключ и добавляется каждый из лишних (неизвестный и упомянутые в требованиях схем)
 static std::vector<std::string> json_mutations(const boost::json::value& doc) {
-  static const boost::json::value replacements[] = {
-      nullptr,
-      true,
-      0,
-      -1,
-      1.5,
-      "",
-      "x",
-      "red",
-      "2026-01-02",
-      boost::json::array{},
-      boost::json::object{},
-      boost::json::array{1, "a"},
-      boost::json::object{{"petType", "Dog"}},
-  };
+  static const boost::json::value replacements[] = {nullptr,
+                                                    true,
+                                                    0,
+                                                    -1,
+                                                    1.5,
+                                                    "",
+                                                    "x",
+                                                    "red",
+                                                    "2026-01-02",
+                                                    boost::json::array{},
+                                                    boost::json::object{},
+                                                    boost::json::array{1, "a"},
+                                                    boost::json::object{{"petType", "Dog"}},
+                                                    boost::json::object{{"r", 1}},
+                                                    boost::json::object{{"k", "v"}, {"z", 1}},
+                                                    boost::json::array{boost::json::object{{"b", 1}}}};
   std::vector<std::string> pointers;
   auto collect = [&](this auto& self, const boost::json::value& v, std::string ptr) -> void {
     pointers.push_back(ptr);
@@ -429,43 +488,50 @@ static std::vector<std::string> json_mutations(const boost::json::value& doc) {
         self((*a)[i], ptr + "/" + std::to_string(i));
   };
   collect(doc, "");
-  std::vector<std::string> result{boost::json::serialize(doc)};
+  std::vector<std::string> result;
+  auto at = [](boost::json::value& d, const std::string& ptr) -> boost::json::value& {
+    return ptr.empty() ? d : d.at_pointer(ptr);
+  };
   for (const std::string& ptr : pointers) {
     for (const boost::json::value& r : replacements) {
       boost::json::value d = doc;
-      (ptr.empty() ? d : d.at_pointer(ptr)) = r;
+      at(d, ptr) = r;
       result.push_back(boost::json::serialize(d));
     }
     if (const boost::json::object* o = doc.at_pointer(ptr).if_object()) {
       for (auto& [k, _] : *o) {
         boost::json::value d = doc;
-        (ptr.empty() ? d : d.at_pointer(ptr)).as_object().erase(k);
+        at(d, ptr).as_object().erase(k);
         result.push_back(boost::json::serialize(d));
       }
-      for (std::string_view key : {"unknown", "other", "x"}) {
+      for (std::string_view key : {"unknown", "other", "x", "z", "forbidden"}) {
         if (o->contains(key))
           continue;
-        boost::json::value d = doc;
-        (ptr.empty() ? d : d.at_pointer(ptr)).as_object()[key] = "y";
-        result.push_back(boost::json::serialize(d));
-        d = doc;
-        (ptr.empty() ? d : d.at_pointer(ptr)).as_object()[key] = boost::json::array{1, {{"a", 2}}};
-        result.push_back(boost::json::serialize(d));
+        for (const boost::json::value& r :
+             {boost::json::value("y"), boost::json::value(boost::json::array{1, {{"a", 2}}})}) {
+          boost::json::value d = doc;
+          at(d, ptr).as_object()[key] = r;
+          result.push_back(boost::json::serialize(d));
+        }
       }
     }
   }
   return result;
 }
 
+// документ проверяется полностью, его мутации - быстро
 template <typename T>
-static void check_json_stream_mutations(std::string_view json) {
+static void check_json_with_mutations(std::string_view json) {
+  check_json<T>(json, json_check_e::exhaustive);
   for (const std::string& m : json_mutations(boost::json::parse(json)))
-    check_json_stream<T>(m);
+    check_json<T>(m);
 }
 
-TEST("json stream parsing") {
+TEST("json") {
   using namespace api::components::schemas;
-  check_json_stream_mutations<Item>(R"({
+  // почти все виды схем: объекты, enum, рекурсия, oneOf и anyOf с дискриминатором, требования, ограничения,
+  // additionalProperties, nullable
+  check_json_with_mutations<Item>(R"({
     "name": "a\"b", "count": 12345, "kind": "a", "mode": "fast", "tags": ["x", "yy"],
     "child": {"name": "c", "tags": []}, "color": "red", "filter": {"kind": "k", "id": "i"},
     "pet": {"petType": "kitty", "lives": 9}, "anyPet": {"petType": "Dog", "bark": true}, "reaction": "+1",
@@ -474,52 +540,50 @@ TEST("json stream parsing") {
     "ordered": {"a": "s", "b": 1}, "shape": {"r": 1}, "mix": {"a": "s", "b": 1}, "both": [1, 2],
     "both2": 5, "num": 1.5, "nothing": null
   })");
-  check_json_stream_mutations<Formats>(
-      R"({"day": "2026-01-02", "count": 1, "ratio": 0.5, "days": ["2026-01-03"]})");
-  // не мутации: пробелы в конце, данные после значения, оборванные данные (и посреди строки), повторяющиеся
-  // ключи
-  check_json_stream<Item>("{\"name\": \"a\"}\n ");
-  check_json_stream<Item>(R"({"name": "a"} {"name": "b"})");
-  check_json_stream<Item>(R"({"name": "a")");
-  check_json_stream<Item>(R"({"name": "ab)");
-  check_json_stream<Item>(R"({"name": "a", "name": "b", "tags": ["x"], "tags": ["y"]})");
-  check_json_stream<Item>(R"({"name": "a", "bag": {"x": 1, "x": 2}})");
-  check_json_stream<Item>(R"({"name": "a", "pet": {"petType": "Dog", "bark": true, "bark": false}})");
-  check_json_stream<Item>(R"({"name": "a", "strict": {"code": "abcd"}})");
-  // требования: anyOf не выполнен, not нарушен, оба сразу; ошибка разбора поля важнее нарушения требования,
-  // даже если требование нарушено раньше по тексту (как в DOM: сначала разбор, потом требования)
-  check_json_stream<Item>(R"({"name": "a", "reqs": {}})");
-  check_json_stream<Item>(R"({"name": "a", "reqs": {"a": "s", "x": "y"}})");
-  check_json_stream<Item>(R"({"name": "a", "reqs": {"x": "y"}})");
-  check_json_stream<Item>(R"({"name": "a", "reqs": {"x": "y", "a": "s", "b": "not int"}})");
-  check_json_stream<Item>(R"({"name": "a", "filter": {"kind": "k", "other": 1}})");
-  check_json_stream<Item>(
-      R"({"name": "a", "tree": {"children": [{"children": [], "x": 1}]}, "reqs": {"x": "y"}})");
-  check_json_stream<Reqs>(R"({"x": "y"})");
-  check_json_stream<Reqs>(R"({"x": "y", "b": -1})");
-  // требование (validate_error на a) нарушено раньше, чем разбор значения (parse_error на b): ошибка -
-  // разбора
-  check_json_stream<Ordered>(R"({"a": "long", "b": "x"})");
-  check_json_stream<Ordered>(R"({"a": "long", "b": 1})");
-  // oneOf/anyOf/allOf/not без DOM: ни одна, ровно одна, обе альтернативы; дискриминатор не первым, нет его,
-  // неизвестное значение, не строка, повторяется
-  for (std::string_view shape : {R"("s")", "1", R"({"r": 1})", R"({"w": 1})", R"({"r": 1, "w": 2})", "{}", "true"})
-    check_json_stream<Shape>(shape);
-  for (std::string_view mix : {R"({"a": "s"})", R"({"b": 1})", R"({"a": "s", "b": -1})", "{}", R"({"a": 1})"})
-    check_json_stream<Mix>(mix);
-  for (std::string_view both : {"[]", "[1, 2, 3]", "[1, 2, 3, 4]", R"([1, "x"])", "{}"})
-    check_json_stream<Both>(both);
-  for (std::string_view both2 : {"1", R"("s")", "true", "null"})
-    check_json_stream<Both2>(both2);
-  for (std::string_view not_str : {"1", R"("s")", "{}", R"({"a": "s"})"})
-    check_json_stream<NotStr>(not_str);
-  for (std::string_view pet : {R"({"lives": 9, "petType": "kitty"})", R"({"bark": true})", R"({"petType": "Cow"})",
-                               R"({"petType": 1})", R"({"petType": "Dog", "petType": "kitty", "lives": 1})",
-                               R"({"petType": "Dog", "bark": "loud"})", R"("Dog")"}) {
-    check_json_stream<Pet>(pet);
-    check_json_stream<AnyPet>(pet);
+  // комбинации oneOf/anyOf/allOf/not друг в друге и в массивах; каждая ветвь anyOf отдельно
+  for (std::string_view any :
+       {R"([{"a": "s"}, {"b": 1}, {"a": "t", "b": 2}])", R"({"k": "v"})", R"({"r": 1})", "7"}) {
+    check_json_with_mutations<Combo>(std::format(R"({{
+      "shapes": ["s", 1, {{"r": 1}}, {{"w": 2}}],
+      "pets": [{{"petType": "kitty", "lives": 9}}, {{"bark": true, "petType": "Dog"}}],
+      "any": {}, "both": 7, "tree": {{"children": [{{"children": []}}]}}
+    }})",
+                                                 any));
   }
-  check_json_stream<Reqs>(R"({"b": 1})");
+  // форматы пользователя (from_json_value)
+  check_json_with_mutations<Formats>(
+      R"({"day": "2026-01-02", "count": 1, "ratio": 0.5, "days": ["2026-01-03"]})");
+
+  // то, чего мутации не дают
+  for (std::string_view json : {
+           "{\"name\": \"a\"}\n ",                                         // пробелы в конце
+           R"({"name": "a"} {"name": "b"})",                               // данные после значения
+           R"({"name": "a", "name": "b", "tags": ["x"], "tags": ["y"]})",  // повторяющиеся ключи
+           R"({"name": "a", "bag": {"x": 1, "x": 2}})",                    // и в additionalProperties
+           R"({"name": "a", "pet": {"petType": "Dog", "bark": true, "bark": false}})",  // и в oneOf
+           R"({"name": "a", "reqs": {"x": "y", "a": "s", "b": "not int"}})",  // разбор важнее требования
+           R"({"name": "a", "tree": {"children": [{"children": [], "x": 1}]}, "reqs": {"x": "y"}})",
+       })
+    check_json<Item>(json);
+  // требование нарушено раньше по тексту (validate_error на a), чем разбор (parse_error на b): как в DOM,
+  // ошибка разбора
+  check_json<Ordered>(R"({"a": "long", "b": "x"})");
+  check_json<Reqs>(R"({"x": "y", "b": -1})");
+  // обе части allOf не подходят: первая - parse_error (не целое), вторая - validate_error (maxItems); ошибка
+  // - первой по порядку
+  check_json<Both>(R"([1, 2, 3, "x"])", json_check_e::exhaustive);
+  // дискриминатор: не первым, нет, неизвестное значение, не строка, повторяется (побеждает последний), не
+  // объект
+  for (std::string_view pet :
+       {R"({"lives": 9, "petType": "kitty"})", R"({"bark": true})", R"({"petType": "Cow"})",
+        R"({"petType": 1})", R"({"petType": "Dog", "petType": "kitty", "lives": 1})",
+        R"({"petType": "Dog", "bark": "loud"})", R"("Dog")"}) {
+    check_json<Pet>(pet, json_check_e::exhaustive);
+    check_json<AnyPet>(pet, json_check_e::exhaustive);
+  }
+  // not как тип не сериализуется: только совпадение итогов
+  for (std::string_view not_str : {"1", R"("s")", "{}", R"({"a": "s"})"})
+    check_json<NotStr>(not_str, json_check_e::exhaustive);
 }
 
 // ошибка разбора тела по ходу прихода прерывает запрос и приходит исключением, соединение живо

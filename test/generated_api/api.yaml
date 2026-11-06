@@ -668,6 +668,39 @@ components:
         - required: [b]
       not:
         required: [x]
+    # комбинации: oneOf и oneOf с дискриминатором в массивах, anyOf из oneOf, массива anyOf и allOf с требованием
+    # not, allOf из oneOf и anyOf, рекурсия; у самого объекта требование not
+    Combo:
+      type: object
+      properties:
+        shapes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Shape"
+        pets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pet"
+        any:
+          anyOf:
+            - $ref: "#/components/schemas/Shape"
+            - type: array
+              items:
+                $ref: "#/components/schemas/Mix"
+            - allOf:
+                - type: object
+                  required: [k]
+                  properties:
+                    k:
+                      type: string
+                - not:
+                    required: [z]
+        both:
+          $ref: "#/components/schemas/Both2"
+        tree:
+          $ref: "#/components/schemas/Tree"
+      not:
+        required: [forbidden]
     # oneOf без дискриминатора: строка, число, или объект ровно одного вида ({r, w} подходит под оба - ошибка)
     Shape:
       oneOf:
