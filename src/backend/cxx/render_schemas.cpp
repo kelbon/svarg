@@ -525,6 +525,8 @@ std::string renderer::render_object_fields(const arrayof<ir::object_field_info>&
       r += std::format(", .encoding = {}", render_string(*info->encoding));
     if (info && info->explode)
       r += std::format(", .explode = {}", *info->explode);
+    if (info && info->style)
+      r += std::format(", .style = ::svarg::cxx_support::param_style_e::{}", *info->style);
     if (info && info->null_when_absent)
       r += ", .null_when_absent = true";
     return r + "},\n";

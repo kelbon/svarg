@@ -135,6 +135,10 @@ concept an_operation = tagged_as<T>(parse_tag_e::operation);
 template <typename T>
 concept a_response = tagged_as<T>(parse_tag_e::response);
 
+// стиль параметра (OpenAPI style). default_ - по умолчанию для места параметра: simple в path и header, form
+// в query и cookie. label и matrix - только path, space_delimited, pipe_delimited и deep_object - только query
+enum struct param_style_e { default_, label, matrix, space_delimited, pipe_delimited, deep_object };
+
 // описание поля объекта или структуры параметров операции (path_t, query_t, headers_t, cookies_t).
 // Описания лежат в `static constexpr std::array<field_info, N> fields` в порядке объявления полей
 struct field_info {
@@ -146,6 +150,7 @@ struct field_info {
   // параметр-массив/объект: каждый элемент отдельно (ids=1&ids=2). nullopt - по умолчанию для места
   // параметра (см. param_style.hpp)
   std::optional<bool> explode = std::nullopt;
+  param_style_e style = param_style_e::default_;
   // необязательное поле, отсутствие которого сериализуется в JSON как null (в спеке required, но nullable)
   bool null_when_absent = false;
 };

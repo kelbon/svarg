@@ -38,7 +38,7 @@ target_link_libraries(my_app PRIVATE api_generated)
 
  ✔ `path`, `header`, `cookie`, `query` параметры
 
- ✔ `explode`
+ ✔ `style` и `explode` параметров: `simple`, `form`, `label`, `matrix`, `spaceDelimited`, `pipeDelimited`, `deepObject`
 
  ✔ default ответы
 
@@ -63,8 +63,6 @@ target_link_libraries(my_app PRIVATE api_generated)
 ## Не поддержано
 
  ✘ Swagger 2.0 (можно сконвертировать в OpenAPI 3, например [swagger2openapi](https://github.com/Mermade/oas-kit))
-
- ✘ стили параметров кроме стандартных: `deepObject`, `pipeDelimited`, `spaceDelimited`, `matrix`, `label`
 
  ✘ никем не поддерживаемые и не используемые `if`/`then`/`else`, `patternProperties` и т.п. в JSON Schema игнорируются
 

@@ -147,6 +147,10 @@ struct test_server : api::server {
     co_return ctx.stream_response(rsp.status, make_response_headers(rsp), repeat_parts("data: y\n\n", 2));
   }
 
+  dd::task<hidi::http_response> handle(api::getStyles, hidi::http_request, hidi::request_context) override {
+    co_return make_response(api::getStyles::response_204{});
+  }
+
   // день из параметра пути (формат date) обратно в JSON
   dd::task<hidi::http_response> handle(api::getDay op, hidi::http_request, hidi::request_context) override {
     api::getDay::response_200 rsp;
@@ -271,6 +275,41 @@ TEST("formats") {
   api::getDay::response_200 rsp;
   REQUIRE(!from_response(rsps[0], rsp).failed());
   REQUIRE(rsp.body.day.get() == date{2026, 1, 2} && rsp.body.count.get() == 1);
+}
+
+TEST("parameter styles") {
+  api::getStyles op;
+  op.path.id = 5;
+  op.path.lab = {1, 2};
+  op.path.arr = {1, 2};
+  op.path.mat = {1, 2};
+  op.path.obj.a = 1;
+  op.path.obj.b = 2;
+  op.query.sp = {"x", "y"};
+  op.query.pp = {"x", "y"};
+  op.query.deep.emplace().a = 1;
+  op.query.deep->b = "z";
+  http_request req = make_request(op);
+  REQUIRE(req.path == "/styles/;id=5/.1.2/.1,2/;mat=1;mat=2/;a=1;b=2?deep[a]=1&deep[b]=z&pp=x|y&sp=x%20y");
+
+  api::getStyles back;
+  REQUIRE(!from_request(req, back, "").failed());
+  REQUIRE(back.path.id == 5 && back.path.lab == op.path.lab && back.path.arr == op.path.arr &&
+          back.path.mat == op.path.mat);
+  REQUIRE(back.path.obj.a == 1 && back.path.obj.b == 2);
+  REQUIRE(back.query.sp == op.query.sp && back.query.pp == op.query.pp);
+  REQUIRE(back.query.deep && back.query.deep->a == 1 && back.query.deep->b == "z");
+
+  // разделители, закодированные по-другому
+  req.path = "/styles/;id=5/.1.2/.1,2/;mat=1;mat=2/;a=1;b=2?deep%5Ba%5D=1&pp=x%7Cy&sp=x+y";
+  api::getStyles alt;
+  REQUIRE(!from_request(req, alt, "").failed());
+  REQUIRE(alt.query.sp == op.query.sp && alt.query.pp == op.query.pp && alt.query.deep->a == 1);
+  // label без точки, matrix без имени - ошибка
+  req.path = "/styles/;id=5/1.2/.1,2/;mat=1;mat=2/;a=1;b=2";
+  REQUIRE(from_request(req, alt, "").failed());
+  req.path = "/styles/5/.1.2/.1,2/;mat=1;mat=2/;a=1;b=2";
+  REQUIRE(from_request(req, alt, "").failed());
 }
 
 TEST("required nullable field") {

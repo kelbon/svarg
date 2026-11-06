@@ -172,6 +172,26 @@ inline std::string render_special_field(std::string_view type) {
       type, special_field_name);
 }
 
+// OpenAPI style параметра -> param_style_e (пусто - по умолчанию), nullopt - недопустим для места параметра
+inline std::optional<std::string_view> param_style_enum(parameter_location loc, std::string_view style) {
+  using enum parameter_location;
+  if ((loc == path || loc == header) && style == "simple")
+    return "";
+  if ((loc == query || loc == cookie) && style == "form")
+    return "";
+  if (loc == path && style == "label")
+    return "label";
+  if (loc == path && style == "matrix")
+    return "matrix";
+  if (loc == query && style == "spaceDelimited")
+    return "space_delimited";
+  if (loc == query && style == "pipeDelimited")
+    return "pipe_delimited";
+  if (loc == query && style == "deepObject")
+    return "deep_object";
+  return std::nullopt;
+}
+
 template <typename Params>
 std::string renderer::render_parameters(const Params& params, std::string_view relspec,
                                         const json_pointer& relative) const {
@@ -184,18 +204,19 @@ std::string renderer::render_parameters(const Params& params, std::string_view r
       extra[p.name].encoding = p.encoding->str();
     if (!p.meta)
       continue;
-    // explode из meta (OpenAPI), только явно указанный. Поддержаны style по умолчанию (simple в path и
-    // header, form в query и cookie), для остальных - предупреждение и умолчание
+    // style и explode из meta (OpenAPI), только явно указанные. Стиль, недопустимый для места параметра, -
+    // предупреждение и стиль по умолчанию (simple в path и header, form в query и cookie)
     if (auto it = p.meta->find(x_param_style); it != p.meta->end()) {
       std::string_view st =
           it->second.value.is_string() ? std::string_view(it->second.value.as_string()) : "";
-      bool form_location =
-          p.location == parameter_location::query || p.location == parameter_location::cookie;
-      if (st != (form_location ? "form" : "simple")) {
-        std::println("warning: parameter `{}`: style `{}` is not supported, default style is used", p.name,
-                     st);
+      std::optional<std::string_view> style = param_style_enum(p.location, st);
+      if (!style) {
+        std::println("warning: parameter `{}`: style `{}` is not allowed for `{}` parameters, default style is used",
+                     p.name, st, e2str(p.location));
         continue;
       }
+      if (!style->empty())
+        extra[p.name].style = std::string(*style);
     }
     if (auto it = p.meta->find(x_param_explode); it != p.meta->end() && it->second.value.is_bool())
       extra[p.name].explode = it->second.value.as_bool();
