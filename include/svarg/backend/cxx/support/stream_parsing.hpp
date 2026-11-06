@@ -29,13 +29,6 @@ concept serialize_tokens_consumer =
       v.on_null();
     };
 
-// читает схему из токенов
-// НЕ делает валидацию. это происходит в логике уровнем выше
-template <typename T>
-struct from_tokens {
-  // static tokens_consumer operator()(T& v, sax_token& ctx, dd::with_stack_resource r);
-};
-
 // заглушка, которая неэффективно, но делает "потоковый" парсинг собирая json value и переиспользуя
 // from_json_value
 template <typename T>
@@ -46,6 +39,16 @@ tokens_consumer from_tokens_fallback(T& v, sax_token& tok, dd::with_stack_resour
   if (ec)
     ec.rethrow_if_failed();
 }
+
+// читает схему из токенов
+// НЕ делает валидацию. это происходит в логике уровнем выше
+// По умолчанию - через from_json_value (from_tokens_fallback): так разбираются и типы пользователя (форматы)
+template <typename T>
+struct from_tokens {
+  static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
+    return from_tokens_fallback(v, tok, r);
+  }
+};
 
 // шорткат
 // НЕ валидирует, так что его нужно использовать для верхнеуровневого парса,

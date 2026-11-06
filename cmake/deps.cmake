@@ -53,7 +53,7 @@ endif()
 CPMAddPackage(
   NAME KELCORO
   GITHUB_REPOSITORY kelbon/kelcoro
-  GIT_TAG v1.4.8
+  GIT_TAG v1.4.9
 )
 
 # move_only_function, function ref etc (anyanylib)
@@ -91,7 +91,7 @@ endif()
 CPMAddPackage(
   NAME OMO
   GIT_REPOSITORY https://github.com/kelbon/omo
-  GIT_TAG v0.0.8
+  GIT_TAG v0.0.9
   OPTIONS "omo_DOWNLOAD_BOOST OFF"
 )
 

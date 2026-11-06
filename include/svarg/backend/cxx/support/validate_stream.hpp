@@ -50,7 +50,7 @@ error_code validate_required_schemas(std::span<const sax_token_value> saved, con
     return !ec.failed();
   };
   auto do_validate = [&]<typename... Schemas>(metel::typelist<Schemas...>) {
-    (validate_one(metel::typelist<Schemas>{}) && ...);
+    (void)(validate_one(metel::typelist<Schemas>{}) && ...);
   };
   do_validate(required_schemas_t<T>{});
   if constexpr (has_constraints<T>) {
@@ -88,7 +88,7 @@ tokens_consumer from_tokens_subobject_simple_requirements(T& v, sax_token& tok, 
 
   co_yield dd::elements_of(from_tokens_parser(v, tok, r));
   // не нужны токены, проверяется просто значение
-  validate_required_schemas(/*saved=*/{}, v).rethrow_if_failed();
+  validate_required_schemas(std::span<const sax_token_value>{}, v).rethrow_if_failed();
 }
 
 }  // namespace noexport

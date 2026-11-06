@@ -606,6 +606,10 @@ components:
           $ref: "#/components/schemas/Tree"
         nulls:
           $ref: "#/components/schemas/Nulls"
+        strict:
+          $ref: "#/components/schemas/Strict"
+        bag:
+          $ref: "#/components/schemas/Bag"
     # not как требование (как NfTypeCond в 3GPP TS 29.510): поля other быть не должно
     # и требование из схем, где есть только required (как anyOf у NFProfile): остальные поля допустимы
     Filter:
@@ -621,6 +625,23 @@ components:
           type: string
         id:
           type: string
+    # лишние поля запрещены, необязательное поле с ограничением
+    Strict:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          maxLength: 3
+        n:
+          type: integer
+          minimum: 0
+    # только additionalProperties, у значений ограничение
+    Bag:
+      type: object
+      additionalProperties:
+        type: integer
+        minimum: 0
     # расширяемое перечисление: известные значения + любая строка (открытый enum)
     Color:
       anyOf:

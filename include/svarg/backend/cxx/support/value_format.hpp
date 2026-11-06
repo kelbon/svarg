@@ -11,6 +11,7 @@
 #include "svarg/backend/cxx/support/codec.hpp"
 #include "svarg/backend/cxx/support/concepts.hpp"
 #include "svarg/backend/cxx/support/nonbody.hpp"
+#include "svarg/backend/cxx/support/json_stream.hpp"
 
 // встроенные кодеки значений (json_codec, raw_codec) и медиа типы свойств: параметр с `content:`, поле
 // form-urlencoded тела, часть multipart
@@ -25,9 +26,8 @@ constexpr bool is_plain_value = [] {
     return is_plain_value<svarg::noexport::deoptional_type_t<U>>;
   else
     return has_text_value<U> || std::is_same_v<U, std::string> || std::is_arithmetic_v<U> ||
-           std::is_same_v<U, number> ||
-           std::is_same_v<U, null> || a_string_enum<U> || an_open_string_enum<U> || an_enum<U> ||
-           an_fundamental<U>;
+           std::is_same_v<U, number> || std::is_same_v<U, null> || a_string_enum<U> ||
+           an_open_string_enum<U> || an_enum<U> || an_fundamental<U>;
 }();
 
 // свойство multipart тела, у которого в encoding описаны хедеры части. Вне multipart (JSON) это просто
@@ -72,13 +72,16 @@ constexpr std::string_view field_media_type() {
 
 // то же как constexpr_string, для codec_for
 template <typename T>
-constexpr auto default_media_type_v = constexpr_string<default_media_type<T>().size()>(default_media_type<T>());
+constexpr auto default_media_type_v =
+    constexpr_string<default_media_type<T>().size()>(default_media_type<T>());
 
 template <typename T, size_t I>
-constexpr auto field_media_type_v = constexpr_string<field_media_type<T, I>().size()>(field_media_type<T, I>());
+constexpr auto field_media_type_v =
+    constexpr_string<field_media_type<T, I>().size()>(field_media_type<T, I>());
 
 template <typename T, size_t I>
-constexpr auto field_encoding_v = constexpr_string<get_field_encoding<I, T>().size()>(get_field_encoding<I, T>());
+constexpr auto field_encoding_v =
+    constexpr_string<get_field_encoding<I, T>().size()>(get_field_encoding<I, T>());
 
 namespace noexport {
 
@@ -100,9 +103,6 @@ inline void serialize_json_into(http_body_bytes& out, const boost::json::value& 
 }
 
 }  // namespace noexport
-
-template <typename T>
-struct json_body_stream_parser;  // json_stream.hpp
 
 struct json_codec {
   template <typename T>
