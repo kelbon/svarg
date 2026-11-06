@@ -362,6 +362,14 @@ static void check_json_stream(std::string_view json) {
       return "parse";
     }
   };
+  // сериализация тоже проверяет требования и может бросить: тогда сравниваются сообщения
+  auto serialized = [](const T& v) -> std::string {
+    try {
+      return boost::json::serialize(svarg::to_json(v));
+    } catch (std::exception& e) {
+      return std::format("throws: {}", e.what());
+    }
+  };
   T whole;
   svarg::error_code whole_ec = json_codec::parse("application/json", json, whole);
   for (size_t chunk : {size_t(1), size_t(2), size_t(3), size_t(7), size_t(64), json.size()}) {
@@ -378,7 +386,7 @@ static void check_json_stream(std::string_view json) {
     } catch (svarg::validate_error& e) {
       ec = std::move(e);
     }
-    if (kind(ec) != kind(whole_ec) || (!ec && svarg::to_json(streamed) != svarg::to_json(whole))) {
+    if (kind(ec) != kind(whole_ec) || (!ec && serialized(streamed) != serialized(whole))) {
       std::println("json: {}\nchunk {}, stream: {} `{}`, DOM: {} `{}`", json, chunk, kind(ec), ec.message(),
                    kind(whole_ec), whole_ec.message());
       REQUIRE(false);
@@ -387,7 +395,7 @@ static void check_json_stream(std::string_view json) {
 }
 
 // все мутации документа: каждое значение заменяется значениями других видов, у каждого объекта удаляется
-// каждый ключ и добавляется неизвестный
+// каждый ключ и добавляется каждый из `extra_keys` (неизвестный и упомянутые в требованиях схем: not required)
 static std::vector<std::string> json_mutations(const boost::json::value& doc) {
   static const boost::json::value replacements[] = {
       nullptr,
@@ -428,9 +436,16 @@ static std::vector<std::string> json_mutations(const boost::json::value& doc) {
         (ptr.empty() ? d : d.at_pointer(ptr)).as_object().erase(k);
         result.push_back(boost::json::serialize(d));
       }
-      boost::json::value d = doc;
-      (ptr.empty() ? d : d.at_pointer(ptr)).as_object()["unknown"] = boost::json::array{1, {{"a", 2}}};
-      result.push_back(boost::json::serialize(d));
+      for (std::string_view key : {"unknown", "other", "x"}) {
+        if (o->contains(key))
+          continue;
+        boost::json::value d = doc;
+        (ptr.empty() ? d : d.at_pointer(ptr)).as_object()[key] = "y";
+        result.push_back(boost::json::serialize(d));
+        d = doc;
+        (ptr.empty() ? d : d.at_pointer(ptr)).as_object()[key] = boost::json::array{1, {{"a", 2}}};
+        result.push_back(boost::json::serialize(d));
+      }
     }
   }
   return result;
@@ -449,7 +464,8 @@ TEST("json stream parsing") {
     "child": {"name": "c", "tags": []}, "color": "red", "filter": {"kind": "k", "id": "i"},
     "pet": {"petType": "kitty", "lives": 9}, "anyPet": {"petType": "Dog", "bark": true}, "reaction": "+1",
     "fields": "f", "tree": {"children": [{"children": []}]}, "nulls": {"a": null, "b": "b"},
-    "strict": {"code": "abc", "n": 1}, "bag": {"x": 1, "y": 2}
+    "strict": {"code": "abc", "n": 1}, "bag": {"x": 1, "y": 2}, "reqs": {"a": "s"},
+    "ordered": {"a": "s", "b": 1}
   })");
   check_json_stream_mutations<Formats>(
       R"({"day": "2026-01-02", "count": 1, "ratio": 0.5, "days": ["2026-01-03"]})");
@@ -463,6 +479,20 @@ TEST("json stream parsing") {
   check_json_stream<Item>(R"({"name": "a", "bag": {"x": 1, "x": 2}})");
   check_json_stream<Item>(R"({"name": "a", "pet": {"petType": "Dog", "bark": true, "bark": false}})");
   check_json_stream<Item>(R"({"name": "a", "strict": {"code": "abcd"}})");
+  // требования: anyOf не выполнен, not нарушен, оба сразу; ошибка разбора поля важнее нарушения требования,
+  // даже если требование нарушено раньше по тексту (как в DOM: сначала разбор, потом требования)
+  check_json_stream<Item>(R"({"name": "a", "reqs": {}})");
+  check_json_stream<Item>(R"({"name": "a", "reqs": {"a": "s", "x": "y"}})");
+  check_json_stream<Item>(R"({"name": "a", "reqs": {"x": "y"}})");
+  check_json_stream<Item>(R"({"name": "a", "reqs": {"x": "y", "a": "s", "b": "not int"}})");
+  check_json_stream<Item>(R"({"name": "a", "filter": {"kind": "k", "other": 1}})");
+  check_json_stream<Item>(R"({"name": "a", "tree": {"children": [{"children": [], "x": 1}]}, "reqs": {"x": "y"}})");
+  check_json_stream<Reqs>(R"({"x": "y"})");
+  check_json_stream<Reqs>(R"({"x": "y", "b": -1})");
+  // требование (validate_error на a) нарушено раньше, чем разбор значения (parse_error на b): ошибка - разбора
+  check_json_stream<Ordered>(R"({"a": "long", "b": "x"})");
+  check_json_stream<Ordered>(R"({"a": "long", "b": 1})");
+  check_json_stream<Reqs>(R"({"b": 1})");
 }
 
 // ошибка разбора тела по ходу прихода прерывает запрос и приходит исключением, соединение живо

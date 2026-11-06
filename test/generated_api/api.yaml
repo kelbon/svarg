@@ -610,6 +610,10 @@ components:
           $ref: "#/components/schemas/Strict"
         bag:
           $ref: "#/components/schemas/Bag"
+        reqs:
+          $ref: "#/components/schemas/Reqs"
+        ordered:
+          $ref: "#/components/schemas/Ordered"
     # not как требование (как NfTypeCond в 3GPP TS 29.510): поля other быть не должно
     # и требование из схем, где есть только required (как anyOf у NFProfile): остальные поля допустимы
     Filter:
@@ -636,6 +640,35 @@ components:
         n:
           type: integer
           minimum: 0
+    # требования, которые нарушаются независимо от полей: нужно a или b, x быть не должно
+    Reqs:
+      type: object
+      properties:
+        a:
+          type: string
+        b:
+          type: integer
+          minimum: 0
+        x:
+          type: string
+      anyOf:
+        - required: [a]
+        - required: [b]
+      not:
+        required: [x]
+    # требование - объект (allOf): разбирается по токенам и падает на поле a раньше, чем само значение на b
+    Ordered:
+      type: object
+      properties:
+        a:
+          type: string
+        b:
+          type: integer
+      allOf:
+        - properties:
+            a:
+              type: string
+              maxLength: 1
     # только additionalProperties, у значений ограничение
     Bag:
       type: object
