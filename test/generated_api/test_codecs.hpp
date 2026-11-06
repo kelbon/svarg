@@ -9,8 +9,12 @@
 #include "svarg/backend/cxx/support/codec.hpp"
 #include "svarg/backend/cxx/support/value_format.hpp"
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
+#include "svarg/backend/cxx/support/hooks.hpp"
 
 namespace test_codecs {
+
+// токен, который хук before_send добавляет в незаполненную авторизацию
+inline std::optional<std::string> current_token;
 
 using namespace svarg::cxx_support;
 
@@ -115,4 +119,19 @@ struct svarg::cxx_support::media_codec<"application/x-upper"> : test_codecs::upp
 template <>
 struct svarg::cxx_support::media_type_base<"application/vnd.test.object"> {
   static constexpr std::string_view value = "application/json";
+};
+
+// хуки для всех операций спеки с хедером authorization
+template <svarg::cxx_support::an_operation Op>
+  requires(Op::spec == "api" && requires(Op op) { op.headers.authorization; })
+struct svarg::cxx_support::operation_hooks<Op> {
+  static void before_send(const Op& op, hidi::http_request& req) {
+    if (!op.headers.authorization && test_codecs::current_token)
+      req.headers.emplace_back("authorization", "Bearer " + *test_codecs::current_token);
+  }
+  static std::optional<hidi::http_response> before_handle(const Op& op, const hidi::http_request&) {
+    if (op.headers.authorization == "Bearer bad")
+      return hidi::http_response{.status = 403};
+    return std::nullopt;
+  }
 };

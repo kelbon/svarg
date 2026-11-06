@@ -14,6 +14,10 @@ api::getItem::result_t r = co_await cli.send(api::getItem{...}, hidi::deadline_t
 
 ## middleware и всё такое
 
+Есть два уровня для определения middleware - один получает типизированный запрос/ответ в хуке, о них [ниже](#хуки)
+
+Второй получает уже закодированный нетипизированный запрос - `any_client`
+
 `svarg::cxx_support::any_client` - всё, что умеет отправить запрос. Интерфейс состоит из одного метода:
 
 ```cpp
@@ -50,6 +54,35 @@ shop::client cli{request_log{svarg::cxx_support::client_ref(&h2)}};
 ```
 
 Ответ сгенерированный клиент собирает и парсит сам поверх этого метода
+
+## Хуки
+
+ Хук это специализация
+`svarg::cxx_support::operation_hooks` на операцию. Для удобства в каждой спеке генерируется `spec` - имя спеки откуда взята операция
+
+Пример:
+
+```cpp
+template <svarg::cxx_support::an_operation Op>
+  requires(Op::spec == "shop")
+struct svarg::cxx_support::operation_hooks<Op> {
+  // клиент: в конце make_request, запрос уже собран
+  static void before_send(const Op& op, hidi::http_request& req) {
+    if constexpr (requires { op.headers.authorization; })
+      if (!op.headers.authorization)
+        req.headers.emplace_back("authorization", "Bearer " + current_token());
+  }
+  // сервер: после разбора запроса. Возвращённый ответ отправляется вместо вызова обработчика
+  static std::optional<hidi::http_response> before_handle(const Op& op, const hidi::http_request& req) {
+    if constexpr (requires { op.headers.authorization; })
+      if (!op.headers.authorization || !check_token(*op.headers.authorization))
+        return hidi::http_response{.status = 401};
+    return std::nullopt;
+  }
+};
+```
+
+При переопределении хука не забудьте подключить его через `FILE_PREFIX`
 
 ## Авторизация
 

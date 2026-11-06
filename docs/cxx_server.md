@@ -26,6 +26,9 @@ struct my_server : api::server {
   тело, ограничения схемы), по умолчанию 400
 - `on_user_route(id, req, ctx)` - подошёл маршрут не из спеки (см. ниже), по умолчанию `on_unknown_operation`
 
+Общую для операций проверку (например авторизацию) до вызова обработчика можно сделать хуком `before_handle`,
+см. [хуки](cxx_client.md#хуки)
+
 Для `servers: [{url: https://example.com/v1}]` и пути `/items/{id}` маршрут - `/v1/items/{id}`
 
 ## Роутер (маршрутизация)

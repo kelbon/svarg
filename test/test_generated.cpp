@@ -148,7 +148,10 @@ struct test_server : api::server {
   }
 
   // запрос без авторизации разбирается, проверка здесь
-  dd::task<hidi::http_response> handle(api::getSecure op, hidi::http_request, hidi::request_context) override {
+  // "Bearer bad" -> перехват before_handle с ответом 403
+  // "Bearer good" -> проверка здесь и 200, остальное 401
+  dd::task<hidi::http_response> handle(api::getSecure op, hidi::http_request,
+                                       hidi::request_context) override {
     if (op.headers.authorization == "Bearer good" || op.query.key == "k")
       co_return make_response(api::getSecure::response_200{});
     co_return make_response(api::getSecure::response_401{});
@@ -269,7 +272,8 @@ TEST("formats") {
   REQUIRE(svarg::to_json(f) == json);
   // ограничение встроенного формата проверяется, значение вне int32 - ошибка
   REQUIRE(svarg::try_from_json(boost::json::parse(R"({"day": "2026-11-04", "count": -1})"), f).failed());
-  REQUIRE(svarg::try_from_json(boost::json::parse(R"({"day": "2026-11-04", "count": 3000000000})"), f).failed());
+  REQUIRE(
+      svarg::try_from_json(boost::json::parse(R"({"day": "2026-11-04", "count": 3000000000})"), f).failed());
   REQUIRE(svarg::try_from_json(boost::json::parse(R"({"day": "04.11.2026", "count": 1})"), f).failed());
 
   // параметр пути - текст типа формата
@@ -302,6 +306,27 @@ TEST("optional authorization") {
     by_bearer = co_await cli.send(bearer, hidi::deadline_t::never());
   });
   REQUIRE(anonymous.get_if_401() && by_key.get_if_200() && by_bearer.get_if_200());
+}
+
+// хуки - в test_codecs.hpp
+TEST("operation hooks") {
+  test_server server(hidi::server_ssl_context_ptr(nullptr));
+  api::getSecure::result_t by_hook;
+  bool rejected = false;
+  run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
+    api::client cli{client_ref(&h2)};
+    test_codecs::current_token = "good";
+    by_hook = co_await cli.send(api::getSecure{}, hidi::deadline_t::never());
+    // before_handle отвечает 403 вместо обработчика
+    test_codecs::current_token = "bad";
+    try {
+      (void)co_await cli.send(api::getSecure{}, hidi::deadline_t::never());
+    } catch (unexpected_response& e) {
+      rejected = e.response.status == 403;
+    }
+  });
+  test_codecs::current_token.reset();
+  REQUIRE(by_hook.get_if_200() && rejected);
 }
 
 TEST("parameter styles") {

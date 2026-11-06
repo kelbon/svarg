@@ -14,7 +14,7 @@ svarg_generate_cxx(
     INCLUDE_DIRS         ...         # -I
     STREAM_CONTENT_TYPES ...         # --stream-content-type
     FORMATS              ...         # --add-format
-    FILE_PREFIX          ...         # --file-prefix: свои кодеки и типы форматов
+    FILE_PREFIX          ...         # --file-prefix: свои кодеки, типы форматов и хуки
     SOURCES_PER_SPEC     ...         # --sources-per-spec
 )
 target_link_libraries(my_app PRIVATE api_generated)
@@ -28,7 +28,7 @@ target_link_libraries(my_app PRIVATE api_generated)
 
  ✔ `anyOf`, `oneOf`, `allOf`, `not`. Поддержано поведение `allOf` как "наследования" или объединения схем
 
- ✔ OAuth2 и другие виды авторизации (генерируются в С++ как необязательные параметры - проверять их задача сервера)
+ ✔ OAuth2 и другие виды авторизации (генерируются в С++ как необязательные параметры - проверять их задача сервера, удобно в [хуках](cxx_client.md#хуки))
 
  ✔ рекурсивные схемы
 
@@ -136,7 +136,7 @@ svarg -s <папка со спеками> -o <папка для кода> [оп�
 | `--unsetted-additional-properties` | `true` | если `additionalProperties` не выставлен это true или false? |
 | `--sources-per-spec N` | `1` | на сколько `.cpp` делится код каждой спеки, см. ниже |
 | `--stream-content-type` | | потоковые медиа типы ответов |
-| `--file-prefix` | | текст в начале каждого заголовка, например `#include` для своих специализаций парсинга |
+| `--file-prefix` | | текст в начале каждого заголовка, например `#include` для своих кодеков и хуков |
 | `--add-format` | | C++ тип формата: `string+date=my::date`, см. [форматы](cxx_format.md) |
 | `--ignore-requirements` | | не проверять ограничения и требования схем: меньше кода, неполная проверка |
 | `--allow-remove` | `only_inline_schemas` | какие схемы оптимизация может удалять: `noone`, `only_inline_schemas`, `any` |

@@ -7,6 +7,7 @@
 #include "svarg/backend/cxx/support/utility_for_generated.hpp"
 #include "svarg/backend/cxx/support/x_www_form_urlencoded.hpp"
 #include "svarg/backend/cxx/support/names.hpp"
+#include "svarg/backend/cxx/support/hooks.hpp"
 
 #include "svarg/utils/path_tools.hpp"
 
@@ -225,6 +226,7 @@ template <typename T>
 // не заполняет req.path, если у операции нет пути (вебхук...)
 // складывает content_type не в headers, а в req.body.content_type
 // не выставляет req.scheme и req.authority, это должно заполняться уже клиентом при отправке
+// в конце вызывает хук operation_hooks<Op>::before_send, если он есть (см. hooks.hpp)
 // `base_path` - путь из url сервера (например "/v1"), добавляется перед путём операции
 template <an_operation Op>
 http_request make_request(const Op& op, const content_type_params& ctparams = {},
@@ -285,6 +287,7 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
     });
   }
 
+  before_send(op, req);
   return req;
 }
 
