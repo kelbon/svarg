@@ -417,7 +417,6 @@
         "name": "x-api-key"
         "schema":
           "spec": "@string@"
-        "required": true
         "auth_related": true
     "responses":
       - "status": "200"
@@ -451,7 +450,6 @@
         "name": "x-api-key"
         "schema":
           "spec": "@string@"
-        "required": true
         "auth_related": true
     "responses":
       - "status": "200"

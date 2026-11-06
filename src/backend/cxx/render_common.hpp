@@ -211,8 +211,9 @@ std::string renderer::render_parameters(const Params& params, std::string_view r
           it->second.value.is_string() ? std::string_view(it->second.value.as_string()) : "";
       std::optional<std::string_view> style = param_style_enum(p.location, st);
       if (!style) {
-        std::println("warning: parameter `{}`: style `{}` is not allowed for `{}` parameters, default style is used",
-                     p.name, st, e2str(p.location));
+        std::println(
+            "warning: parameter `{}`: style `{}` is not allowed for `{}` parameters, default style is used",
+            p.name, st, e2str(p.location));
         continue;
       }
       if (!style->empty())

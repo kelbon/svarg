@@ -478,6 +478,18 @@ paths:
             text/event-stream:
               schema:
                 type: string
+  # авторизация: bearer или ключ в query
+  /secure:
+    get:
+      operationId: getSecure
+      security:
+        - bearer: []
+        - queryKey: []
+      responses:
+        "200":
+          description: authorized
+        "401":
+          description: no authorization
   /days/{day}:
     get:
       operationId: getDay
@@ -495,6 +507,14 @@ paths:
               schema:
                 $ref: "#/components/schemas/Formats"
 components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+    queryKey:
+      type: apiKey
+      in: query
+      name: key
   schemas:
     # date - тип пользователя (test_codecs.hpp), int32 и float - встроенные
     Day:

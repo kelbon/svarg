@@ -147,6 +147,13 @@ struct test_server : api::server {
     co_return ctx.stream_response(rsp.status, make_response_headers(rsp), repeat_parts("data: y\n\n", 2));
   }
 
+  // запрос без авторизации разбирается, проверка здесь
+  dd::task<hidi::http_response> handle(api::getSecure op, hidi::http_request, hidi::request_context) override {
+    if (op.headers.authorization == "Bearer good" || op.query.key == "k")
+      co_return make_response(api::getSecure::response_200{});
+    co_return make_response(api::getSecure::response_401{});
+  }
+
   dd::task<hidi::http_response> handle(api::getStyles, hidi::http_request, hidi::request_context) override {
     co_return make_response(api::getStyles::response_204{});
   }
@@ -275,6 +282,26 @@ TEST("formats") {
   api::getDay::response_200 rsp;
   REQUIRE(!from_response(rsps[0], rsp).failed());
   REQUIRE(rsp.body.day.get() == date{2026, 1, 2} && rsp.body.count.get() == 1);
+}
+
+TEST("optional authorization") {
+  // незаполненная авторизация не отправляется
+  api::getSecure op;
+  REQUIRE(make_request(op).headers.empty());
+  op.query.key = "k";
+  REQUIRE(make_request(op).path == "/secure?key=k");
+  api::getSecure bearer;
+  bearer.headers.authorization = "Bearer good";
+
+  test_server server(hidi::server_ssl_context_ptr(nullptr));
+  api::getSecure::result_t anonymous, by_key, by_bearer;
+  run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
+    api::client cli{client_ref(&h2)};
+    anonymous = co_await cli.send(api::getSecure{}, hidi::deadline_t::never());
+    by_key = co_await cli.send(op, hidi::deadline_t::never());
+    by_bearer = co_await cli.send(bearer, hidi::deadline_t::never());
+  });
+  REQUIRE(anonymous.get_if_401() && by_key.get_if_200() && by_bearer.get_if_200());
 }
 
 TEST("parameter styles") {

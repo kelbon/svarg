@@ -1052,7 +1052,6 @@ static std::optional<ir::operation_parameter> auth_parameter(const security_sche
     // хедер - в нижнем регистре, как и остальные хедеры
     param.name = in == parameter_location::header ? lowered(name) : std::string(name);
     param.location = in;
-    param.required = true;  // позже станет optional если есть другие параметры
     param.schema = ir::make_fundamental_ref(ir::fundamental_e::string);
     param.auth_related = true;
     return param;
@@ -1081,8 +1080,6 @@ static std::optional<ir::operation_parameter> auth_parameter(const security_sche
 
 static std::vector<ir::operation_parameter> make_auth_parameters(
     const std::vector<std::vector<security_scheme_object>>& requirement_groups) {
-  // несколько групп авторизаций с ||, значит каждая из них становится опциональной
-  bool is_optional = requirement_groups.size() > 1;
   std::vector<ir::operation_parameter> result;
   for (auto& group : requirement_groups) {
     for (const security_scheme_object& sec : group) {
@@ -1090,7 +1087,9 @@ static std::vector<ir::operation_parameter> make_auth_parameters(
       // если такого name + location ещё нет
       if (p && !std::ranges::contains(result, *p)) {
         result.push_back(std::move(*p));
-        result.back().required = !is_optional;
+        // проверять авторизацию это не задача парсинга (а задача сервера), для которого пишется required
+        // например ответ должен быть 401 если нет авторизации и 400 если required поле не пришло
+        // неявно result.back().required = false;
       }
     }
   }

@@ -54,8 +54,7 @@ shop::client cli{request_log{svarg::cxx_support::client_ref(&h2)}};
 ## Авторизация
 
 `security` из спеки превращается в обычные параметры операции: `http` (bearer, basic) и `oauth2` - хедер
-`authorization`, `apiKey` - параметр с именем из спеки. Если вариантов авторизации несколько, параметры
-необязательные
+`authorization`, `apiKey` - параметр с именем из спеки. Параметры авторизации всегда необязательные - проверять их это задача сервера
 
 ```cpp
 shop::getOrder get;  // security: bearer
@@ -70,7 +69,7 @@ create.headers.x_api_key = key;
 
 ```cpp
 dd::task<hidi::http_response> handle(shop::getOrder op, hidi::http_request, hidi::request_context) override {
-  if (!check_token(op.headers.authorization))
+  if (!op.headers.authorization || !check_token(*op.headers.authorization))
     co_return hidi::http_response{.status = 401};
   ...
 }

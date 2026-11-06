@@ -10,13 +10,11 @@
         "name": "api_key"
         "schema":
           "spec": "@string@"
-        "required": true
         "auth_related": true
       - "location": "header"
         "name": "authorization"
         "schema":
           "spec": "@string@"
-        "required": true
         "auth_related": true
     "responses":
       - "status": "200"
@@ -32,13 +30,11 @@
         "name": "api_key"
         "schema":
           "spec": "@string@"
-        "required": false
         "auth_related": true
       - "location": "header"
         "name": "authorization"
         "schema":
           "spec": "@string@"
-        "required": false
         "auth_related": true
     "responses":
       - "status": "200"

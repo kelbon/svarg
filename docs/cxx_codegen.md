@@ -65,7 +65,7 @@ paths:
 | ответ `default` | `getOrder::default_response`, статус в поле `status` |
 | несколько ответов | `getOrder::result_t` с `get_if_200()`, `get_if_404()`, `get_if_default()` |
 | один ответ | `result_t` - сам ответ |
-| `security` | параметры: `http` и `oauth2` - `op.headers.authorization`, `apiKey` - параметр с его именем |
+| `security` | необязательные параметры: `http` и `oauth2` - `op.headers.authorization`, `apiKey` - параметр с его именем |
 | `servers: [{url: https://shop.example.com/v1}]` | `client::base_path = "/v1"`, маршруты сервера с `/v1` |
 
 На спеку генерируются `shop::server` (`shop/server.hpp`) с обработчиком `handle(getOrder, ...)` на каждую операцию и
