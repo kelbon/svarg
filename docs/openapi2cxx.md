@@ -20,6 +20,22 @@ svarg_generate_cxx(
 target_link_libraries(my_app PRIVATE api_generated)
 ```
 
+Несколько значений перечисляются через пробел, значение с пробелом - в кавычках:
+
+```cmake
+svarg_generate_cxx(
+    TARGET               shop_api
+    SPECS_DIR            ${CMAKE_CURRENT_SOURCE_DIR}/openapi
+    OUT_DIR              ${CMAKE_CURRENT_BINARY_DIR}/generated
+    SPECS                users.yaml orders.yaml admin/*  # admin/* - все спеки в openapi/admin
+    INCLUDE_DIRS         ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_SOURCE_DIR}/third_party/specs
+    STREAM_CONTENT_TYPES text/event-stream application/x-ndjson
+    FORMATS              string+date=my::date string+uuid=my::uuid "integer+unix-time=std::chrono::sys_seconds"
+    FILE_PREFIX          "#include \"my_codecs.hpp\""  # одна строка: несколько заголовков подключите из него
+    SOURCES_PER_SPEC     4
+)
+```
+
 Функция `svarg_generate_cxx` сама заботится о выставлении зависимостей, списке сгенерированных файлов, корректной перегенерации после изменения спек, при этом точно отслеживает изменение какой спеки действительно влияет на генерацию
 
 ## Поддержка OpenAPI
