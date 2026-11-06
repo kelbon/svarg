@@ -37,12 +37,11 @@ using namespace svarg;
   return monomorph_mask(s).ends_with("/*");
 }
 
+// `p` - относительно specs_dir
 [[nodiscard]] static bool match_mask(const std::filesystem::path& p, std::string_view mask) {
   SVARG_ASSERT(is_mask(mask));
   std::string m = monomorph_mask(mask);
-  // убираем /*
-  m.pop_back();
-  m.pop_back();
+  m.pop_back();  // убираем *, "/" остаётся: admin/* не подходит для administrator/x.yaml
   return p.generic_string().starts_with(m);
 }
 
@@ -75,7 +74,7 @@ static std::set<fs::path> collect_input_files(fs::path specs_dir,
     if (entry.is_regular_file()) {
       bool match_any_mask = [&] {
         for (auto& m : masks)
-          if (match_mask(entry.path(), m))
+          if (match_mask(fs::relative(entry.path(), specs_dir), m))
             return true;
         return false;
       }();
