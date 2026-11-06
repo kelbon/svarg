@@ -255,6 +255,12 @@ std::unordered_set<std::string> a_jsonptrs_optimized2{
     "/paths/~1users~1{userId}/get/parameters/0/schema/items/constraints",
     "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema",
     "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema/constraints",
+    // используются вебхуком
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema",
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event",
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId",
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId/"
+    "constraints",
 };
 
 std::unordered_set<std::string> a_jsonptrs_optimized_no_exception2{
@@ -283,6 +289,12 @@ std::unordered_set<std::string> a_jsonptrs_optimized_no_exception2{
     "/paths/~1users~1{userId}/get/parameters/0/schema/items/constraints",
     "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema",
     "/paths/~1users~1{userId}/get/responses/200/headers/X-Rate-Limit/schema/constraints",
+    // используются вебхуком
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema",
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/event",
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId",
+    "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema/properties/orderId/"
+    "constraints",
 };
 
 std::unordered_set<std::string> b_jsonptrs_optimized2_no_exception{

@@ -543,6 +543,18 @@
             "required": true
     "priority": 1
 "webhooks":
+  - "id": "postNewOrderWebhook"
+    "spec": "api-a"
+    "path": ""
+    "method": "POST"
+    "bodies":
+      - "contentType": "application/json"
+        "schema":
+          "spec": "api-a"
+          "jsonptr": "/webhooks/newOrderWebhook/post/requestBody/content/application~1json/schema"
+        "required": false
+    "responses":
+      - "status": "200"
   - "id": "postOrderStatus"
     "spec": "api-a"
     "path": ""

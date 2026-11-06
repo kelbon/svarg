@@ -6,6 +6,7 @@
 // сгенерировано из generated_api/api.yaml (см. test/CMakeLists.txt)
 #include "api/server.hpp"
 #include "api/client.hpp"
+#include "api/all_webhooks.hpp"
 
 using namespace svarg::cxx_support;
 
@@ -327,6 +328,16 @@ TEST("operation hooks") {
   });
   test_codecs::current_token.reset();
   REQUIRE(by_hook.get_if_200() && rejected);
+}
+
+TEST("webhook") {
+  api::itemChanged hook;
+  hook.body.id = 5;
+  http_request req = make_request(hook);
+  REQUIRE(req.method == hidi::http_method_e::POST && req.body.content_type == "application/json");
+  // получатель вебхука разбирает запрос так же, как сервер операции
+  api::itemChanged parsed;
+  REQUIRE(!from_request(req, parsed) && parsed.body.id == 5);
 }
 
 TEST("parameter styles") {

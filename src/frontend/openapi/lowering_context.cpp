@@ -1278,6 +1278,17 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
                           }
                         });
 
+    // вебхуки - те же калбеки, только без выражения
+    if (api.webhooks) {
+      for (auto& [name, item] : *api.webhooks) {
+        auto [ritem, file, item_jp] = resolve_ref_and_ret(item, obj_file, "/webhooks"_jp / name, *this);
+        auto ops = path_item_object_lowering(api, /*path=*/"", obj_file, file, std::move(item_jp), name,
+                                             std::move(ritem));
+        for (auto& [method, op] : ops)
+          result.webhooks->insert(std::move(op));
+      }
+    }
+
     if (api.paths) {
       // если были pathItems и на них ссылались и в paths и в webhooks, то они продублируются на уровне IR
       // но это нормально

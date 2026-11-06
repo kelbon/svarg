@@ -506,6 +506,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Formats"
+# вебхук: операция без пути, запрос шлёт сервер
+webhooks:
+  itemChanged:
+    post:
+      operationId: itemChanged
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: {type: integer}
+      responses:
+        "204":
+          description: received
 components:
   securitySchemes:
     bearer:
