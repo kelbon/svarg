@@ -17,29 +17,32 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            name: windows-msvc
+            name: windows-clang
           - os: macos-latest
             name: macos-clang
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
 
-      # MSVC в окружении (cl, link) для Ninja, nasm для AWS-LC (TLS в hidi)
-      - name: Setup MSVC
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+      # официальная сборка clang 23 и lld, nasm для AWS-LC (TLS в hidi)
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
         run: |
           choco install ninja nasm -y
-          Add-Content $env:GITHUB_PATH "C:\Program Files\NASM"
-          Add-Content $env:GITHUB_ENV "SVARG_CXX=cl"
-          Add-Content $env:GITHUB_ENV "SVARG_CC=cl"
+          echo "C:\Program Files\NASM" >> $GITHUB_PATH
+          mkdir -p /c/llvm
+          curl -sSL https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/clang+llvm-23.1.5-x86_64-pc-windows-msvc.tar.xz \
+            | tar -xJ -C /c/llvm --strip-components=1
+          echo "SVARG_CXX=C:/llvm/bin/clang++.exe" >> $GITHUB_ENV
+          echo "SVARG_CC=C:/llvm/bin/clang.exe" >> $GITHUB_ENV
+          echo "LDFLAGS=-fuse-ld=lld" >> $GITHUB_ENV
 
-      # clang из Homebrew со своей libc++: системная libc++ отстаёт по C++23
+      # clang из Homebrew (сейчас 23) со своей libc++: системная libc++ отстаёт по C++23
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -55,8 +58,8 @@ jobs:
           version: "v0.10.0"
 
       - name: Configure CMake
-        shell: bash
         run: |
+          $SVARG_CXX --version
           cmake . -Dsvarg_ENABLE_TESTING=ON              \
             -Dsvarg_CI=ON                                 \
             -DCMAKE_BUILD_TYPE=Release                    \
@@ -78,7 +81,6 @@ jobs:
 
       # пример на реальной спеке как отдельный проект: svarg подключается, как у пользователя
       - name: Configure example (as user project)
-        shell: bash
         run: |
           cmake -S examples/cxx_nrf                       \
             -DCMAKE_BUILD_TYPE=Release                    \
@@ -94,6 +96,5 @@ jobs:
         run: |
           cmake --build build_nrf
       - name: Run example (as user project)
-        shell: bash
         run: |
           ./build_nrf/svarg_nrf_example

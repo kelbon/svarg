@@ -36,7 +36,7 @@ static constexpr bool is_ident_continue_no_z(char c) {
 static constexpr bool is_ident_continue(char c) {
   switch (c) {
     case 'a' ... 'z':
-    case 'A' ... 'Z':  // Z исключено
+    case 'A' ... 'Z':
     case '0' ... '9':
     case '_':
       return true;
