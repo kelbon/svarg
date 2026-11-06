@@ -1,0 +1,99 @@
+name: build_other_os
+
+'on':
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' || !github.ref }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-msvc
+          - os: macos-latest
+            name: macos-clang
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # MSVC в окружении (cl, link) для Ninja, nasm для AWS-LC (TLS в hidi)
+      - name: Setup MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ninja nasm -y
+          Add-Content $env:GITHUB_PATH "C:\Program Files\NASM"
+          Add-Content $env:GITHUB_ENV "SVARG_CXX=cl"
+          Add-Content $env:GITHUB_ENV "SVARG_CC=cl"
+
+      # clang из Homebrew со своей libc++: системная libc++ отстаёт по C++23
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja llvm
+          LLVM=$(brew --prefix llvm)
+          echo "SVARG_CXX=$LLVM/bin/clang++" >> $GITHUB_ENV
+          echo "SVARG_CC=$LLVM/bin/clang" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$LLVM/lib/c++ -L$LLVM/lib/unwind -lunwind -Wl,-rpath,$LLVM/lib/c++" >> $GITHUB_ENV
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          cmake . -Dsvarg_ENABLE_TESTING=ON              \
+            -Dsvarg_CI=ON                                 \
+            -DCMAKE_BUILD_TYPE=Release                    \
+            -DCMAKE_C_COMPILER="$SVARG_CC"                \
+            -DCMAKE_CXX_COMPILER="$SVARG_CXX"             \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5            \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache           \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache         \
+            -B build -G "Ninja"
+      - name: Build
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+        run: |
+          cmake --build build
+      - name: Test
+        run: |
+          cd build
+          ctest --output-on-failure -C Release
+
+      # пример на реальной спеке как отдельный проект: svarg подключается, как у пользователя
+      - name: Configure example (as user project)
+        shell: bash
+        run: |
+          cmake -S examples/cxx_nrf                       \
+            -DCMAKE_BUILD_TYPE=Release                    \
+            -DCMAKE_C_COMPILER="$SVARG_CC"                \
+            -DCMAKE_CXX_COMPILER="$SVARG_CXX"             \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5            \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache           \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache         \
+            -B build_nrf -G "Ninja"
+      - name: Build example (as user project)
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+        run: |
+          cmake --build build_nrf
+      - name: Run example (as user project)
+        shell: bash
+        run: |
+          ./build_nrf/svarg_nrf_example
