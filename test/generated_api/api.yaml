@@ -614,6 +614,18 @@ components:
           $ref: "#/components/schemas/Reqs"
         ordered:
           $ref: "#/components/schemas/Ordered"
+        shape:
+          $ref: "#/components/schemas/Shape"
+        mix:
+          $ref: "#/components/schemas/Mix"
+        both:
+          $ref: "#/components/schemas/Both"
+        both2:
+          $ref: "#/components/schemas/Both2"
+        num:
+          type: number
+        nothing:
+          type: "null"
     # not как требование (как NfTypeCond в 3GPP TS 29.510): поля other быть не должно
     # и требование из схем, где есть только required (как anyOf у NFProfile): остальные поля допустимы
     Filter:
@@ -656,6 +668,56 @@ components:
         - required: [b]
       not:
         required: [x]
+    # oneOf без дискриминатора: строка, число, или объект ровно одного вида ({r, w} подходит под оба - ошибка)
+    Shape:
+      oneOf:
+        - type: string
+        - type: integer
+        - type: object
+          required: [r]
+          properties:
+            r:
+              type: integer
+        - type: object
+          required: [w]
+          properties:
+            w:
+              type: integer
+    # anyOf без дискриминатора: заполняются все подошедшие части
+    Mix:
+      anyOf:
+        - type: object
+          required: [a]
+          properties:
+            a:
+              type: string
+        - type: object
+          required: [b]
+          properties:
+            b:
+              type: integer
+              minimum: 0
+    # allOf не объектов: массив целых не длиннее 3
+    Both:
+      allOf:
+        - type: array
+          items:
+            type: integer
+        - type: array
+          maxItems: 3
+    # allOf из oneOf и anyOf: целое (строка подходит под oneOf, но не под anyOf)
+    Both2:
+      allOf:
+        - oneOf:
+            - type: string
+            - type: integer
+        - anyOf:
+            - type: integer
+            - type: boolean
+    # не строка
+    NotStr:
+      not:
+        type: string
     # требование - объект (allOf): разбирается по токенам и падает на поле a раньше, чем само значение на b
     Ordered:
       type: object

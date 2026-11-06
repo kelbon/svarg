@@ -40,6 +40,14 @@ struct part {
   bool operator==(const part&) const = default;
 };
 
+// в JSON часть - просто значение
+template <typename T, typename H>
+struct from_tokens<part<T, H>> {
+  static tokens_consumer operator()(part<T, H>& v, sax_token& tok, dd::with_stack_resource r) {
+    return from_tokens_subobject(v.value, tok, r);
+  }
+};
+
 template <typename T>
 constexpr bool is_part = false;
 

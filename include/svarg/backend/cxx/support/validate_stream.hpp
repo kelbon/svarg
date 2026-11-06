@@ -6,6 +6,7 @@
 
 #include <array>
 #include <exception>
+#include <span>
 #include <tuple>
 
 namespace svarg::cxx_support {
@@ -15,58 +16,97 @@ tokens_consumer from_tokens_subobject(T& v, sax_token& tok, dd::with_stack_resou
 
 namespace noexport {
 
-// значение и требования к нему (required_schemas_t<T>) разбираются одновременно по одним и тем же токенам:
-// каждый токен отдаётся основному разбору и каждой схеме-требованию. Ошибки - как в DOM: сначала разбор
-// значения (сразу), потом требования по порядку, потом ограничения, даже если требование нарушено раньше по
-// тексту. У каждого разбора свой стек-ресурс: общий освобождает память только в обратном порядке, а разборы
-// идут вперемешку
-template <typename T, typename... Schemas>
-tokens_consumer from_tokens_with_requirements(T& v, sax_token& tok, metel::typelist<Schemas...>,
-                                              dd::with_stack_resource) {
-  static_assert(!has_recursive_requirements<T>());  //  избегаем бесконечной рекурсии
-  constexpr size_t n = sizeof...(Schemas);
-  std::array<dd::stack_resource, n + 1> resources;
-  std::tuple<Schemas...> schemas;  // значения требований не нужны, важно лишь что разобрались
-  std::array<std::exception_ptr, n> errors;
-  std::array<tokens_consumer, n + 1> parsers;  // [0] - значение, [i + 1] - требование i
+// пропускает одно значение
+inline tokens_consumer skip_json_value(sax_token& tok, dd::with_stack_resource r) {
+  return omo::collect_json_value_tokens(tok, [](sax_token&) {}, r);
+}
 
-  // вызов разбора (и для скаляра сразу разбор первого токена) или продвижение на следующий токен
-  auto requirement_step = [&](size_t i, auto&& step) {
-    if (errors[i])
-      return;
+// разборы одного значения в разные значения одновременно: альтернативы oneOf/anyOf, части allOf, not,
+// требования. У каждого свой стек-ресурс (пустой): общий освобождает память только в обратном порядке, а
+// разборы идут вперемешку
+template <size_t N>
+struct parallel_parsers {
+  std::array<dd::stack_resource, N> resources;
+  std::array<std::exception_ptr, N> errors;  // ошибка разбора i, после неё он не продолжается
+  std::array<tokens_consumer, N> parsers;
+
+  // начинает разбор i с первого токена значения (скаляр разбирается сразу)
+  template <typename T>
+  void start(size_t i, T& out, sax_token& tok) {
     try {
-      step();
+      parsers[i] = from_tokens_subobject(out, tok, dd::with_stack_resource(resources[i]));
     } catch (...) {
       errors[i] = std::current_exception();
     }
-  };
-  parsers[0] = from_tokens_parser(v, tok, dd::with_stack_resource(resources[0]));
-  [&]<size_t... I>(std::index_sequence<I...>) {
-    (requirement_step(I,
-                      [&] {
-                        parsers[I + 1] =
-                            from_tokens_subobject(std::get<I>(schemas), tok, dd::with_stack_resource(resources[I + 1]));
-                      }),
-     ...);
-  }(std::index_sequence_for<Schemas...>{});
+  }
 
+  [[nodiscard]] bool parsed(size_t i) const noexcept {
+    return !errors[i];
+  }
+
+  void rethrow_first_error() const {
+    for (const std::exception_ptr& e : errors)
+      if (e)
+        std::rethrow_exception(e);
+  }
+};
+
+void feed_in_parallel_step(std::span<tokens_consumer> parsers, std::span<std::exception_ptr> errors);
+void feed_in_parallel_end(std::span<tokens_consumer> parsers, std::span<std::exception_ptr> errors);
+
+// каждый токен значения отдаётся `main` и всем `parsers`. Ошибка main - сразу ошибка, ошибки остальных
+// запоминаются. Значение кончается вместе с main, не закончивший к этому моменту разбор получает ошибку
+// pre: все созданы на первом токене значения
+// Кадр - не в стек-ресурсе: main может разбираться в ресурсе родителя, и его вложенные кадры выделяются поверх
+// этого. При ошибке main они ещё живы, когда этот кадр уже уничтожается
+inline tokens_consumer feed_in_parallel(tokens_consumer& main, std::span<tokens_consumer> parsers,
+                                        std::span<std::exception_ptr> errors) {
   for (;;) {
-    if (!parsers[0].empty())
-      ++parsers[0].cur_iterator();
-    for (size_t i = 0; i < n; ++i) {
-      if (!parsers[i + 1].empty())
-        requirement_step(i, [&] { ++parsers[i + 1].cur_iterator(); });
-    }
-    if (parsers[0].empty())  // значение кончилось
+    if (!main.empty())
+      ++main.cur_iterator();
+    feed_in_parallel_step(parsers, errors);
+    if (main.empty())  // значение кончилось
       break;
     co_yield {};
   }
-  for (size_t i = 0; i < n; ++i) {
-    if (errors[i])
-      std::rethrow_exception(errors[i]);
-    if (!parsers[i + 1].empty())
-      throw parse_error("when parsing schema `{}`: value ended, but its requirement did not", type_name<T>());
+  feed_in_parallel_end(parsers, errors);
+}
+
+inline void feed_in_parallel_step(std::span<tokens_consumer> parsers, std::span<std::exception_ptr> errors) {
+  for (size_t i = 0; i < parsers.size(); ++i) {
+    if (errors[i] || parsers[i].empty())
+      continue;
+    try {
+      ++parsers[i].cur_iterator();
+    } catch (...) {
+      errors[i] = std::current_exception();
+    }
   }
+}
+
+inline void feed_in_parallel_end(std::span<tokens_consumer> parsers, std::span<std::exception_ptr> errors) {
+  for (size_t i = 0; i < parsers.size(); ++i) {
+    if (!errors[i] && !parsers[i].empty())
+      errors[i] = std::make_exception_ptr(parse_error("value ended, but its parser did not"));
+  }
+}
+
+// значение и требования к нему (required_schemas_t<T>) разбираются одновременно по одним и тем же токенам.
+// Ошибки - как в DOM: сначала разбор значения (сразу), потом требования по порядку, потом ограничения, даже если
+// требование нарушено раньше по тексту. Значение разбирается в стек-ресурсе родителя: кроме него туда никто не
+// пишет, пока идёт разбор
+template <typename T, typename... Schemas>
+tokens_consumer from_tokens_with_requirements(T& v, sax_token& tok, metel::typelist<Schemas...>,
+                                              dd::with_stack_resource r) {
+  static_assert(!has_recursive_requirements<T>());  //  избегаем бесконечной рекурсии
+  std::tuple<Schemas...> schemas;  // значения требований не нужны, важно лишь что разобрались
+  parallel_parsers<sizeof...(Schemas)> requirements;
+  tokens_consumer main = from_tokens_parser(v, tok, r);
+  [&]<size_t... I>(std::index_sequence<I...>) {
+    (requirements.start(I, std::get<I>(schemas), tok), ...);
+  }(std::index_sequence_for<Schemas...>{});
+  co_yield dd::elements_of(feed_in_parallel(main, requirements.parsers, requirements.errors));
+  requirements.rethrow_first_error();
   if constexpr (has_constraints<T>)
     check_constraints(v).rethrow_if_failed();
 }

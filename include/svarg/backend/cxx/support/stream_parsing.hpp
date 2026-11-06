@@ -29,24 +29,23 @@ concept serialize_tokens_consumer =
       v.on_null();
     };
 
-// заглушка, которая неэффективно, но делает "потоковый" парсинг собирая json value и переиспользуя
-// from_json_value
+// значение - JSON (схема без типа, Any), либо тип пользователя (формат), который разбирается своим
+// from_json_value: скаляр собирается из одного токена, массив и объект - целиком
 template <typename T>
-tokens_consumer from_tokens_fallback(T& v, sax_token& tok, dd::with_stack_resource r) {
+tokens_consumer from_tokens_via_json_value(T& v, sax_token& tok, dd::with_stack_resource r) {
   boost::json::value value;
   co_yield dd::elements_of(omo::json_value_collector(tok, value, r));
-  error_code ec = try_from_json(value, v);
-  if (ec)
-    ec.rethrow_if_failed();
+  try_from_json(value, v).rethrow_if_failed();
 }
 
 // читает схему из токенов
 // НЕ делает валидацию. это происходит в логике уровнем выше
-// По умолчанию - через from_json_value (from_tokens_fallback): так разбираются и типы пользователя (форматы)
+// Схемы разбираются своими специализациями (from_tokens.hpp), по умолчанию - через from_json_value: JSON как
+// есть и типы пользователя
 template <typename T>
 struct from_tokens {
   static tokens_consumer operator()(T& v, sax_token& tok, dd::with_stack_resource r) {
-    return from_tokens_fallback(v, tok, r);
+    return from_tokens_via_json_value(v, tok, r);
   }
 };
 

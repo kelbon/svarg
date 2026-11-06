@@ -10,6 +10,7 @@
 #include "api/server.hpp"
 #include "api/client.hpp"
 #include "api/all_webhooks.hpp"
+#include "api/all_schemas.hpp"
 
 using namespace svarg::cxx_support;
 
@@ -364,10 +365,14 @@ static void check_json_stream(std::string_view json) {
   };
   // сериализация тоже проверяет требования и может бросить: тогда сравниваются сообщения
   auto serialized = [](const T& v) -> std::string {
-    try {
-      return boost::json::serialize(svarg::to_json(v));
-    } catch (std::exception& e) {
-      return std::format("throws: {}", e.what());
+    if constexpr (!requires { svarg::to_json_value<T>{}(v); }) {
+      return "";  // not не сериализуется: сравнивается только вид ошибки
+    } else {
+      try {
+        return boost::json::serialize(svarg::to_json(v));
+      } catch (std::exception& e) {
+        return std::format("throws: {}", e.what());
+      }
     }
   };
   T whole;
@@ -466,7 +471,8 @@ TEST("json stream parsing") {
     "pet": {"petType": "kitty", "lives": 9}, "anyPet": {"petType": "Dog", "bark": true}, "reaction": "+1",
     "fields": "f", "tree": {"children": [{"children": []}]}, "nulls": {"a": null, "b": "b"},
     "strict": {"code": "abc", "n": 1}, "bag": {"x": 1, "y": 2}, "reqs": {"a": "s"},
-    "ordered": {"a": "s", "b": 1}
+    "ordered": {"a": "s", "b": 1}, "shape": {"r": 1}, "mix": {"a": "s", "b": 1}, "both": [1, 2],
+    "both2": 5, "num": 1.5, "nothing": null
   })");
   check_json_stream_mutations<Formats>(
       R"({"day": "2026-01-02", "count": 1, "ratio": 0.5, "days": ["2026-01-03"]})");
@@ -495,6 +501,24 @@ TEST("json stream parsing") {
   // разбора
   check_json_stream<Ordered>(R"({"a": "long", "b": "x"})");
   check_json_stream<Ordered>(R"({"a": "long", "b": 1})");
+  // oneOf/anyOf/allOf/not без DOM: ни одна, ровно одна, обе альтернативы; дискриминатор не первым, нет его,
+  // неизвестное значение, не строка, повторяется
+  for (std::string_view shape : {R"("s")", "1", R"({"r": 1})", R"({"w": 1})", R"({"r": 1, "w": 2})", "{}", "true"})
+    check_json_stream<Shape>(shape);
+  for (std::string_view mix : {R"({"a": "s"})", R"({"b": 1})", R"({"a": "s", "b": -1})", "{}", R"({"a": 1})"})
+    check_json_stream<Mix>(mix);
+  for (std::string_view both : {"[]", "[1, 2, 3]", "[1, 2, 3, 4]", R"([1, "x"])", "{}"})
+    check_json_stream<Both>(both);
+  for (std::string_view both2 : {"1", R"("s")", "true", "null"})
+    check_json_stream<Both2>(both2);
+  for (std::string_view not_str : {"1", R"("s")", "{}", R"({"a": "s"})"})
+    check_json_stream<NotStr>(not_str);
+  for (std::string_view pet : {R"({"lives": 9, "petType": "kitty"})", R"({"bark": true})", R"({"petType": "Cow"})",
+                               R"({"petType": 1})", R"({"petType": "Dog", "petType": "kitty", "lives": 1})",
+                               R"({"petType": "Dog", "bark": "loud"})", R"("Dog")"}) {
+    check_json_stream<Pet>(pet);
+    check_json_stream<AnyPet>(pet);
+  }
   check_json_stream<Reqs>(R"({"b": 1})");
 }
 
