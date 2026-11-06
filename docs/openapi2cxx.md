@@ -52,13 +52,21 @@ target_link_libraries(my_app PRIVATE api_generated)
 
  ✔ `callbacks` и `webhooks` - генерируются как схемы, отправляются пользователем
 
- ✔ `nullable` при отправке ставит `null` пустому значению
+ ✔ `nullable` при отправке ставит `null` пустому значению (при получении парсер считает его эквивалентным отсутствием поля)
 
  ✔ `additionalProperties`: `false`, `true` или схема
 
  ✔ схема указанная как `true`/`false` также поддерживается
 
  ✔ OpenAPI файлы в JSON формате
+
+## Не поддержано
+
+ ✘ Swagger 2.0 (можно сконвертировать в OpenAPI 3, например [swagger2openapi](https://github.com/Mermade/oas-kit))
+
+ ✘ стили параметров кроме стандартных: `deepObject`, `pipeDelimited`, `spaceDelimited`, `matrix`, `label`
+
+ ✘ никем не поддерживаемые и не используемые `if`/`then`/`else`, `patternProperties` и т.п. в JSON Schema игнорируются
 
 ## Расширения
 
@@ -113,7 +121,7 @@ endif()
 
 ## CLI интерфейс svarg
 
-svarg cli преобразует OpenAPI (YAML/JSON) спецификации в С++, svarg-ir преобразует только до уровня svarg IR, а svarg-cxx преобразует IR -> C++ код
+svarg cli преобразует OpenAPI (YAML/JSON) спецификации в С++, svarg-ir преобразует только до уровня svarg IR, а svarg-ir-cxx преобразует IR -> C++ код
 
 ```
 svarg -s <папка со спеками> -o <папка для кода> [опции] api.yaml [другие спеки...]
@@ -133,3 +141,17 @@ svarg -s <папка со спеками> -o <папка для кода> [оп�
 | `--file-prefix` | | текст в начале каждого заголовка, например `#include` для своих специализаций парсинга |
 | `--add-format` | | C++ тип формата: `string+date=my::date`, см. [форматы](cxx_format.md) |
 | `--ignore-requirements` | | не проверять ограничения и требования схем: меньше кода, неполная проверка |
+| `--allow-remove` | `only_inline_schemas` | какие схемы оптимизация может удалять: `noone`, `only_inline_schemas`, `any` |
+
+Остальные опции:
+
+| Опция | По умолчанию | Что делает |
+|---|---|---|
+| `--out` (`-o`) | | папка для сгенерированного кода |
+| `--specs-dir` (`-s`) | текущая папка | папка со спеками |
+| `--include-dirs` (`-I`) | | дополнительные папки для поиска спек |
+| `--allow-network-refs` | `false` | `$ref` по URL (`https://...`), svarg должен быть собран с `svarg_ENABLE_NETWORK_REFS` |
+| `--references-max-recursion-depth` | `50` | максимальная глубина вложенности `$ref` |
+| `--depfile` | | записать депфайл: от каких прочитанных спек зависят сгенерированные `.cpp` (для `DEPFILE` в CMake) |
+| `--dry-run` | | ничего не генерировать, только записать список файлов в `generated_files.txt` |
+| `--help` (`-h`) | | список всех опций |
