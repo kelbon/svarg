@@ -42,7 +42,7 @@ template <typename T>
 tokens_consumer from_tokens_fallback(T& v, sax_token& tok, dd::with_stack_resource r) {
   boost::json::value value;
   co_yield dd::elements_of(omo::json_value_collector(tok, value, r));
-  error_code ec = try_from_json(v, value);
+  error_code ec = try_from_json(value, v);
   if (ec)
     ec.rethrow_if_failed();
 }

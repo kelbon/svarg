@@ -8,6 +8,7 @@
 #include "svarg/backend/cxx/support/x_www_form_urlencoded.hpp"
 #include "svarg/backend/cxx/support/names.hpp"
 #include "svarg/backend/cxx/support/hooks.hpp"
+#include "svarg/backend/cxx/support/json_stream.hpp"
 
 #include "svarg/utils/path_tools.hpp"
 
@@ -474,7 +475,8 @@ template <a_response R>
   return rawrsp;
 }
 
-template <a_response R>
+// `ParseBody` = false: тело уже разобрано потоком, разбираются только статус и хедеры
+template <a_response R, bool ParseBody = true>
 error_code from_response(const http_response& rawrsp, R& rsp) {
   static_assert(metel::is_decayed_v<R>);
 
@@ -526,7 +528,7 @@ error_code from_response(const http_response& rawrsp, R& rsp) {
     if (unparsed.any())
       return noexport::unparsed_error(unparsed, "header");
   }
-  if constexpr (has_body<R>) {
+  if constexpr (has_body<R> && ParseBody) {
     ec = noexport::parse_body_of(content_type, rawrsp.body_strview(), rsp);
     if (ec)
       return ec;
@@ -578,16 +580,6 @@ template <an_operation Op>
   });
 }
 
-// отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
-// бросает исключение при ошибке транспорта, неразобранном ответе и unexpected_response
-template <an_operation Op>
-[[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
-                                                          deadline_t deadline) {
-  static_assert(metel::is_decayed_v<Op>);
-  http_response rsp = co_await send_buffered(client, std::move(req), deadline);
-  // TODO sax parsing
-  co_return parse_response<Op>(rsp);
-}
 
 // тело ответа операции со статусом `status` и хедером content-type `content_type` - поток. Ответ выбирается
 // по статусу, тело ответа - по content-type, как в спецификации: responses[статус].content[медиа тип]
@@ -606,36 +598,166 @@ template <an_operation Op>
 using on_stream_part_fn_ptr = hidi::fn_ptr<void(int status, std::string_view content_type,
                                                 std::span<const hidi::byte_t> part, bool last)>;
 
-// для операций с потоковыми телами ответов. Тело потокового медиа типа (по статусу и content-type) отдаётся в
-// `on_part` по мере прихода, любое другое собирается и разбирается, как в send_request. Исключения - как у
-// send_request
+namespace noexport {
+
+template <typename Codec, typename T>
+concept has_stream_parser = requires { typename Codec::template stream_parser<T>; };
+
+// куда идут данные тела ответа: колбэк потокового медиа типа, парсер кодека или буфер. Ошибка - исключение:
+// hidi прерывает запрос и отдаёт его из send_request
+anyany_method2_n(feed_m, feed, (&self, std::string_view part, bool last) requires(self.feed(part, last))->void);
+
+using body_sink = aa::any_with<feed_m>;
+
+struct body_buffer {
+  http_body_bytes* body;
+
+  void feed(std::string_view part, bool) {
+    body->insert(body->end(), part.begin(), part.end());
+  }
+};
+
+struct stream_part_callback {
+  on_stream_part_fn_ptr on_part;
+  int status;
+  std::string content_type;
+
+  void feed(std::string_view part, bool last) {
+    (*on_part)(status, content_type, std::span((const hidi::byte_t*)part.data(), part.size()), last);
+  }
+};
+
+// R внутри результата операции: сам результат, если ответ один, иначе альтернатива варианта
+template <typename R, typename Result>
+R& emplace_response(Result& result) {
+  if constexpr (std::is_same_v<Result, R>)
+    return result;
+  else
+    return result.data.template emplace<R>();
+}
+
+template <typename R, typename Result>
+R& get_response(Result& result) {
+  if constexpr (std::is_same_v<Result, R>)
+    return result;
+  else
+    return std::get<R>(result.data);
+}
+
+// парсер кодека тела ответа `R` с этим content type, если кодек разбирает потоком. Тело выбирается, как в
+// parse_body_of, R создаётся в `result`
+template <typename R, typename Result>
+bool emplace_body_parser(body_sink& sink, Result& result, std::string_view content_type) {
+  if constexpr (!has_body<R>) {
+    return false;
+  } else if constexpr (has_single_body<R>()) {
+    using C = codec_for<single_body_media_type_v<R>>;
+    using T = single_body_t<R>;
+    if constexpr (has_stream_parser<C, T>) {
+      if (!match_content_type(R::body_content_type, content_type))
+        return false;
+      R& r = emplace_response<R>(result);
+      if constexpr (is_body_required<R>())
+        sink.emplace<typename C::template stream_parser<T>>(content_type, r.body);
+      else
+        sink.emplace<typename C::template stream_parser<T>>(content_type, r.body.emplace());
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    return R::select_body_type(content_type, [&]<typename B>() -> bool {
+      if constexpr (std::is_void_v<B>) {
+        return false;
+      } else {
+        using C = codec_for<body_wrapper_media_type_v<B>>;
+        using T = body_wrapper_value_t<B>;
+        if constexpr (has_stream_parser<C, T>) {
+          sink.emplace<typename C::template stream_parser<T>>(
+              content_type, get_special_field(emplace_response<R>(result).body.template emplace<B>()));
+          return true;
+        } else {
+          return false;
+        }
+      }
+    });
+  }
+}
+
+// выбирает, куда идут данные тела. true - тело разбирается потоком в `result`
 template <an_operation Op>
-[[nodiscard]] dd::task<operation_result<Op>> send_streaming(any_client& client, http_request req,
-                                                            on_stream_part_fn_ptr on_part,
-                                                            deadline_t deadline) {
+bool select_body_sink(body_sink& sink, operation_result<Op>& result, http_response& rsp, int status,
+                      on_stream_part_fn_ptr on_part) {
+  // первый content-type, как в from_response
+  auto ct = std::ranges::find(rsp.headers, content_type_hdr, &http_header_t::hname);
+  std::string_view content_type = ct == rsp.headers.end() ? std::string_view{} : ct->value();
+  if (on_part && is_stream_body_of<Op>(status, content_type)) {
+    sink.emplace<stream_part_callback>(on_part, status, std::string(content_type));
+    return false;
+  }
+  bool parsed = Op::visit_response_status(status, [&]<typename R>() {
+    if constexpr (std::is_void_v<R>)
+      return false;  // неописанный статус: тело уйдёт в unexpected_response
+    else
+      return emplace_body_parser<R>(sink, result, content_type);
+  });
+  if (!parsed)
+    sink.emplace<body_buffer>(&rsp.body);
+  return parsed;
+}
+
+// тело потокового медиа типа отдаётся в `on_part` (если он есть), тело, которое кодек разбирает потоком, -
+// разбирается по мере прихода, остальное собирается и разбирается целиком
+template <an_operation Op>
+dd::task<operation_result<Op>> receive_response(any_client& client, http_request req,
+                                                on_stream_part_fn_ptr on_part, deadline_t deadline) {
   static_assert(metel::is_decayed_v<Op>);
   hidi::client_request_context ctx;
   http_response rsp;
-  std::optional<std::string> stream_content_type;  // выбирается на первом куске данных
+  operation_result<Op> result;
+  body_sink sink;            // выбирается на первом куске данных
+  bool body_parsed = false;  // тело уже разобрано в result
   auto on_header = [&](std::string_view name, std::string_view value) {
     // трейлеры и промежуточные ответы могут примешаться, можно обработать в мидлваре
     rsp.headers.emplace_back(std::string(name), std::string(value));
   };
   // DATA приходит после HEADERS: статус и content-type уже известны
   auto on_data_part = [&](std::span<const hidi::byte_t> part, bool last) {
-    if (!stream_content_type) {
-      // первый content-type, как в from_response
-      auto ct = std::ranges::find(rsp.headers, content_type_hdr, &http_header_t::hname);
-      std::string_view value = ct == rsp.headers.end() ? std::string_view{} : ct->value();
-      stream_content_type = is_stream_body_of<Op>(ctx.status(), value) ? std::string(value) : std::string();
-    }
-    if (!stream_content_type->empty())
-      (*on_part)(ctx.status(), *stream_content_type, part, last);
-    else
-      rsp.body.insert(rsp.body.end(), part.begin(), part.end());
+    if (!sink)
+      body_parsed = select_body_sink<Op>(sink, result, rsp, ctx.status(), on_part);
+    sink.feed(std::string_view((const char*)part.data(), part.size()), last);
   };
   rsp.status = co_await client.send_request(ctx, &on_header, &on_data_part, std::move(req), deadline);
-  co_return parse_response<Op>(rsp);
+  if (rsp.status < 0)
+    throw_transport_error(rsp.status);
+  if (!body_parsed)
+    co_return parse_response<Op>(rsp);
+  // остались статус и хедеры
+  Op::visit_response_status(rsp.status, [&]<typename R>() {
+    if constexpr (!std::is_void_v<R>)
+      from_response<R, /*ParseBody=*/false>(rsp, get_response<R>(result)).rethrow_if_failed();
+  });
+  co_return std::move(result);
+}
+
+}  // namespace noexport
+
+// отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
+// бросает исключение при ошибке транспорта, неразобранном ответе и unexpected_response. Тело, кодек которого
+// умеет разбирать потоком (JSON), разбирается по мере прихода
+template <an_operation Op>
+[[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
+                                                          deadline_t deadline) {
+  return noexport::receive_response<Op>(client, std::move(req), nullptr, deadline);
+}
+
+// для операций с потоковыми телами ответов. Тело потокового медиа типа (по статусу и content-type) отдаётся в
+// `on_part` по мере прихода, любое другое разбирается, как в send_request. Исключения - как у send_request
+template <an_operation Op>
+[[nodiscard]] dd::task<operation_result<Op>> send_streaming(any_client& client, http_request req,
+                                                            on_stream_part_fn_ptr on_part,
+                                                            deadline_t deadline) {
+  return noexport::receive_response<Op>(client, std::move(req), on_part, deadline);
 }
 
 }  // namespace svarg::cxx_support

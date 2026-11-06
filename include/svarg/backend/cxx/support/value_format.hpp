@@ -101,6 +101,9 @@ inline void serialize_json_into(http_body_bytes& out, const boost::json::value& 
 
 }  // namespace noexport
 
+template <typename T>
+struct json_body_stream_parser;  // json_stream.hpp
+
 struct json_codec {
   template <typename T>
   static void serialize(const T& value, std::string_view, content_type_params&, http_body_bytes& out) {
@@ -114,6 +117,8 @@ struct json_codec {
       return parse_error("cannot parse JSON: {}", jec.message());
     return try_from_json(v, out);
   }
+  template <typename T>
+  using stream_parser = json_body_stream_parser<T>;
 };
 
 // значение как есть (text/plain "abc", а не "\"abc\""), для медиа типов без своего кодека

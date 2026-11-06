@@ -35,6 +35,18 @@ template <>
 struct svarg::cxx_support::media_codec<"application/xml"> : my_xml_codec {};
 ```
 
+Кодек может разбирать и потоком - тогда клиент разбирает им тело ответа по мере прихода, не собирая его
+целиком (встроенный JSON так и делает):
+
+```cpp
+  template <typename T>
+  using stream_parser = my_xml_parser<T>;
+
+// у парсера: конструктор (std::string_view content_type, T& out), out - по ссылке, last - кусок последний.
+// Ошибка - исключение (svarg::parse_error, svarg::validate_error), запрос прерывается
+void feed(std::string_view part, bool last);
+```
+
 Кодек выбирается так: `media_codec<медиа тип>`, затем кодек базового медиа типа (`media_type_base` медиа
 типа, затем его суффикса), затем встроенный. Медиа типы - в нижнем регистре. Для обхода полей объекта в кодеке есть `FOR_EACH_FIELD_INDEX_OF(T)`,
 `get_field_name<I, T>()`, `get_field<I>(obj)`, пример - `test/generated_api/test_codecs.hpp`.

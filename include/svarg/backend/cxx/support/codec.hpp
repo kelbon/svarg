@@ -23,6 +23,13 @@
 //     // `content_type` - значение хедера content-type целиком, с параметрами
 //     template <typename T>
 //     static error_code parse(std::string_view content_type, std::string_view data, T& out);
+//
+//     // необязательно: потоковый разбор. Если он есть, клиент разбирает им тело ответа по мере прихода,
+//     // не собирая его целиком. Конструируется из (std::string_view content_type, T& out), хранит `out` по
+//     // ссылке, `content_type` валиден только в конструкторе. Метод: void feed(std::string_view part,
+//     // bool last), ошибка - исключение (parse_error, validate_error): запрос прерывается
+//     template <typename T>
+//     using stream_parser = my_stream_parser<T>;
 //   };
 //
 // Встроенные (выбираются по body_format_of медиа типа):

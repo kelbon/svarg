@@ -20,6 +20,8 @@ struct test_server : api::server {
   dd::task<hidi::http_response> handle(api::getItem op, hidi::http_request, hidi::request_context) override {
     if (op.headers.x_request_id)
       request_id = *op.headers.x_request_id;
+    if (op.path.id.get() == 13)  // тело ответа - не JSON
+      co_return hidi::http_response{.status = 200, .headers = {{"content-type", "application/json"}}, .body = {'"', 'a'}};
     api::getItem::response_200 rsp;
     // limit и tag со значениями по умолчанию
     rsp.body = std::format("item{}/{}/{}", op.path.id.get(), op.query.limit.get(), op.query.tag);
@@ -341,6 +343,73 @@ TEST("webhook") {
   // получатель вебхука разбирает запрос так же, как сервер операции
   api::itemChanged parsed;
   REQUIRE(!from_request(req, parsed) && parsed.body.id == 5);
+}
+
+// разбор JSON тела по кускам любого размера совпадает с разбором целиком
+template <typename T>
+static void check_json_stream(std::string_view json) {
+  T whole;
+  svarg::error_code whole_ec = json_codec::parse("application/json", json, whole);
+  for (size_t chunk = 1; chunk <= json.size(); ++chunk) {
+    T streamed;
+    svarg::error_code ec;
+    try {
+      json_codec::stream_parser<T> parser("application/json", streamed);
+      for (size_t i = 0; i < json.size(); i += chunk)
+        parser.feed(json.substr(i, chunk), i + chunk >= json.size());
+    } catch (svarg::parse_error& e) {
+      ec = std::move(e);
+    } catch (svarg::validate_error& e) {
+      ec = std::move(e);
+    }
+    // вид ошибки сохраняется (ограничение схемы - validate_error)
+    auto kind = [](svarg::error_code& e) -> std::string_view {
+      try {
+        e.rethrow_if_failed();
+        return "ok";
+      } catch (svarg::validate_error&) {
+        return "validate";
+      } catch (svarg::parse_error&) {
+        return "parse";
+      }
+    };
+    REQUIRE(kind(ec) == kind(whole_ec));
+    if (!ec)
+      REQUIRE(svarg::to_json(streamed) == svarg::to_json(whole));
+  }
+}
+
+TEST("json stream parsing") {
+  using api::components::schemas::Item;
+  using api::components::schemas::Formats;
+  check_json_stream<Item>(R"({"name": "a\"b", "count": 12345, "tags": ["x", "yy"], "child": {"name": "c"}})");
+  check_json_stream<Item>("{\"name\": \"a\"}\n");                            // пробелы в конце
+  check_json_stream<Item>(R"({"name": "a"} {"name": "b"})");                      // данные после значения
+  check_json_stream<Item>(R"({"name": "a")");                                     // оборвано
+  check_json_stream<Item>(R"({"name": "ab)");                                     // оборвано посреди строки
+  check_json_stream<Item>(R"({"count": 1})");                                     // нет обязательного поля
+  check_json_stream<Formats>(R"({"day": "2026-01-02", "count": 1, "ratio": 0.5})");
+  check_json_stream<Formats>(R"({"day": "2026-01-02", "count": -1})");            // minimum: 0
+}
+
+// ошибка разбора тела по ходу прихода прерывает запрос и приходит исключением, соединение живо
+TEST("broken JSON response") {
+  test_server server(hidi::server_ssl_context_ptr(nullptr));
+  bool thrown = false;
+  api::getItem::result_t after;
+  run_with_server(server, [&](hidi::h2client& h2) -> dd::task<void> {
+    api::client cli{client_ref(&h2)};
+    api::getItem get;
+    get.path.id.get() = 13;
+    try {
+      (void)co_await cli.send(get, hidi::deadline_t::never());
+    } catch (svarg::parse_error&) {
+      thrown = true;
+    }
+    get.path.id.get() = 7;
+    after = co_await cli.send(get, hidi::deadline_t::never());
+  });
+  REQUIRE(thrown && after.get_if_200());
 }
 
 TEST("parameter styles") {
