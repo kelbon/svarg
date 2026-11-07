@@ -94,7 +94,10 @@ endforeach()
 # компилятором проекта, при кросс-компиляции - хостовым), чтобы кодогенерация не шла отладочной сборкой
 if(svarg_BUILD_CXX_SUPPORT AND NOT svarg_BUILD_GENERATOR)
   include(ExternalProject)
-  set(svarg_generator_dir "${CMAKE_CURRENT_BINARY_DIR}/svarg_generator")
+  # билд каждой версии svarg в отдельную папку - без отдельной папки возникает ошибка cmake
+  string(SHA1 svarg_source_hash "${CMAKE_CURRENT_SOURCE_DIR}")
+  string(SUBSTRING "${svarg_source_hash}" 0 8 svarg_source_hash)
+  set(svarg_generator_dir "${CMAKE_CURRENT_BINARY_DIR}/svarg_generator_${svarg_source_hash}")
   set(svarg_generator_args -DCMAKE_BUILD_TYPE=Release -Dsvarg_GENERATOR_ONLY=ON)
   if(NOT CMAKE_CROSSCOMPILING)
     list(APPEND svarg_generator_args -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
