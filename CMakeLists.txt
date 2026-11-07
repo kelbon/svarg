@@ -127,8 +127,8 @@ if(svarg_BUILD_CXX_SUPPORT AND NOT svarg_BUILD_GENERATOR)
       BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target svarg
       INSTALL_COMMAND ""
       BUILD_BYPRODUCTS "${svarg_generator_exe}"
-      # пересобирается при изменении исходников svarg (если ничего не изменилось - ничего не делает)
-      BUILD_ALWAYS ON
+      # пересобирается при изменении исходников svarg
+      BUILD_ALWAYS ${PROJECT_IS_TOP_LEVEL}
   )
   set(SVARG_GENERATOR_EXECUTABLE "${svarg_generator_exe}" CACHE INTERNAL "svarg built by svarg_generator")
 endif()
