@@ -53,7 +53,7 @@ endif()
 CPMAddPackage(
   NAME KELCORO
   GITHUB_REPOSITORY kelbon/kelcoro
-  GIT_TAG v1.5.0
+  GIT_TAG v1.5.1
 )
 
 # move_only_function, function ref etc (anyanylib)
@@ -83,7 +83,7 @@ if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   CPMAddPackage(
     NAME HIDI
     GIT_REPOSITORY https://github.com/kelbon/hidi
-    GIT_TAG v0.17.1
+    GIT_TAG v0.17.2
     OPTIONS "HIDI_USE_CPM ON"
   )
 endif()
