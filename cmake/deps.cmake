@@ -60,7 +60,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME ANYANY
   GITHUB_REPOSITORY kelbon/AnyAny
-  GIT_TAG v1.3.1
+  GIT_TAG v1.4.0
 )
 
 # on_scope_exit / on_scope_failure (zallib)
@@ -83,7 +83,7 @@ if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   CPMAddPackage(
     NAME HIDI
     GIT_REPOSITORY https://github.com/kelbon/hidi
-    GIT_TAG v0.16.0
+    GIT_TAG v0.17.0
     OPTIONS "HIDI_USE_CPM ON"
   )
 endif()
@@ -91,7 +91,7 @@ endif()
 CPMAddPackage(
   NAME OMO
   GIT_REPOSITORY https://github.com/kelbon/omo
-  GIT_TAG v0.0.9
+  GIT_TAG v0.1.0
   OPTIONS "omo_DOWNLOAD_BOOST OFF"
 )
 
