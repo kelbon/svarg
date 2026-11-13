@@ -83,7 +83,7 @@ if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   CPMAddPackage(
     NAME HIDI
     GIT_REPOSITORY https://github.com/kelbon/hidi
-    GIT_TAG v0.18.3
+    GIT_TAG v0.18.4
     OPTIONS "HIDI_USE_CPM ON"
   )
 endif()
@@ -91,21 +91,21 @@ endif()
 CPMAddPackage(
   NAME OMO
   GIT_REPOSITORY https://github.com/kelbon/omo
-  GIT_TAG v0.1.2
+  GIT_TAG v0.1.3
   OPTIONS "omo_DOWNLOAD_BOOST OFF"
 )
 
 CPMAddPackage(
   NAME METEL
   GIT_REPOSITORY https://github.com/kelbon/metel
-  GIT_TAG v0.0.10
+  GIT_TAG v0.0.11
 )
 
 if (svarg_ENABLE_TESTING)
   CPMAddPackage(
     NAME MOKO3
     GITHUB_REPOSITORY kelbon/moko3
-    GIT_TAG v0.10.4
+    GIT_TAG v0.11.0
   )
 endif()
 
