@@ -43,4 +43,10 @@ inline dd::task<http_response> ready_response(http_response rsp) {
   co_return rsp;
 }
 
+// задача обработчика с контекстом (svarg --task-context) -> dd::task, которую ждёт hidi
+template <typename Ctx>
+dd::task<http_response> to_plain_task(dd::task<http_response, Ctx> t) {
+  co_return co_await std::move(t);
+}
+
 }  // namespace svarg::cxx_support

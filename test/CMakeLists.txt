@@ -86,3 +86,21 @@ target_sources(test_generated_names PRIVATE "${SVARG_TEST_GENERATED_DIR}/names/s
                                             "${SVARG_TEST_GENERATED_DIR}/names/names_2.cpp")
 target_include_directories(test_generated_names PRIVATE "${SVARG_TEST_GENERATED_DIR}")
 target_link_libraries(test_generated_names PRIVATE svarg_cxx_supportlib)
+
+# test_task_context - код из generated_api/task_context.yaml с --task-context: задачи обработчиков и send
+# клиента с контекстом
+add_custom_command(
+    OUTPUT "${SVARG_TEST_GENERATED_DIR}/task_context/server.hpp"
+           "${SVARG_TEST_GENERATED_DIR}/task_context/client.hpp"
+           "${SVARG_TEST_GENERATED_DIR}/task_context/task_context.cpp"
+    COMMAND svarg --out "${SVARG_TEST_GENERATED_DIR}" --specs-dir "${CMAKE_CURRENT_SOURCE_DIR}/generated_api"
+            --file-prefix "#include \"test_task_ctx.hpp\"" --task-context test_task_ctx::ctx task_context.yaml
+    DEPENDS svarg "${CMAKE_CURRENT_SOURCE_DIR}/generated_api/task_context.yaml"
+    VERBATIM
+)
+target_sources(test_task_context PRIVATE "${SVARG_TEST_GENERATED_DIR}/task_context/server.hpp"
+                                         "${SVARG_TEST_GENERATED_DIR}/task_context/client.hpp"
+                                         "${SVARG_TEST_GENERATED_DIR}/task_context/task_context.cpp")
+target_include_directories(test_task_context PRIVATE "${SVARG_TEST_GENERATED_DIR}"
+                                                     "${CMAKE_CURRENT_SOURCE_DIR}/generated_api")
+target_link_libraries(test_task_context PRIVATE svarg_cxx_supportlib)

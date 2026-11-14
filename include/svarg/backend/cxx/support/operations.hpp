@@ -708,9 +708,9 @@ bool select_body_sink(body_sink& sink, operation_result<Op>& result, http_respon
 
 // тело потокового медиа типа отдаётся в `on_part` (если он есть), тело, которое кодек разбирает потоком, -
 // разбирается по мере прихода, остальное собирается и разбирается целиком
-template <an_operation Op>
-dd::task<operation_result<Op>> receive_response(any_client& client, http_request req,
-                                                on_stream_part_fn_ptr on_part, deadline_t deadline) {
+template <an_operation Op, typename Ctx>
+dd::task<operation_result<Op>, Ctx> receive_response(any_client& client, http_request req,
+                                                     on_stream_part_fn_ptr on_part, deadline_t deadline) {
   static_assert(metel::is_decayed_v<Op>);
   hidi::client_request_context ctx;
   http_response rsp;
@@ -745,19 +745,20 @@ dd::task<operation_result<Op>> receive_response(any_client& client, http_request
 // отдельно принимает операцию и отдельно make_request чтобы легче контролировать параметры content_type
 // бросает исключение при ошибке транспорта, неразобранном ответе и unexpected_response. Тело, кодек которого
 // умеет разбирать потоком (JSON), разбирается по мере прихода
-template <an_operation Op>
-[[nodiscard]] dd::task<operation_result<Op>> send_request(any_client& client, http_request req,
-                                                          deadline_t deadline) {
-  return noexport::receive_response<Op>(client, std::move(req), nullptr, deadline);
+// Ctx - контекст возвращаемой задачи (см. svarg --task-context)
+template <an_operation Op, typename Ctx = dd::null_context>
+[[nodiscard]] dd::task<operation_result<Op>, Ctx> send_request(any_client& client, http_request req,
+                                                               deadline_t deadline) {
+  return noexport::receive_response<Op, Ctx>(client, std::move(req), nullptr, deadline);
 }
 
 // для операций с потоковыми телами ответов. Тело потокового медиа типа (по статусу и content-type) отдаётся в
 // `on_part` по мере прихода, любое другое разбирается, как в send_request. Исключения - как у send_request
-template <an_operation Op>
-[[nodiscard]] dd::task<operation_result<Op>> send_streaming(any_client& client, http_request req,
-                                                            on_stream_part_fn_ptr on_part,
-                                                            deadline_t deadline) {
-  return noexport::receive_response<Op>(client, std::move(req), on_part, deadline);
+template <an_operation Op, typename Ctx = dd::null_context>
+[[nodiscard]] dd::task<operation_result<Op>, Ctx> send_streaming(any_client& client, http_request req,
+                                                                 on_stream_part_fn_ptr on_part,
+                                                                 deadline_t deadline) {
+  return noexport::receive_response<Op, Ctx>(client, std::move(req), on_part, deadline);
 }
 
 }  // namespace svarg::cxx_support

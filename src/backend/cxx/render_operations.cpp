@@ -209,15 +209,15 @@ std::string renderer::render_instantiations(const ir::operation& op, bool is_ext
   if (op.servers) {
     if (has_stream_responses(op))
       r += std::format(
-          "{0}template dd::task<{1}::result_t> svarg::cxx_support::send_streaming<{1}>("
+          "{0}template {2} svarg::cxx_support::send_streaming<{3}>("
           "::svarg::cxx_support::any_client&, ::hidi::http_request, "
           "::svarg::cxx_support::on_stream_part_fn_ptr, ::hidi::deadline_t);\n",
-          ext, opname);
+          ext, opname, task_type(opname + "::result_t"), send_template_args(opname));
     else
       r += std::format(
-          "{0}template dd::task<{1}::result_t> svarg::cxx_support::send_request<{1}>("
+          "{0}template {2} svarg::cxx_support::send_request<{3}>("
           "::svarg::cxx_support::any_client&, ::hidi::http_request, ::hidi::deadline_t);\n",
-          ext, opname);
+          ext, opname, task_type(opname + "::result_t"), send_template_args(opname));
   }
   auto response = [&](std::string_view struct_name, const ir::response_desc& rsp) {
     std::string t = std::format("{}::{}", opname, struct_name);

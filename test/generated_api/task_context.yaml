@@ -1,0 +1,19 @@
+# генерируется с --task-context (см. test/CMakeLists.txt)
+openapi: 3.1.0
+info: {title: task_context, version: "1"}
+servers: [{url: /}]
+paths:
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [n]
+                properties:
+                  n:
+                    type: integer

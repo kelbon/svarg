@@ -16,6 +16,7 @@ svarg_generate_cxx(
     FORMATS              ...         # --add-format
     FILE_PREFIX          ...         # --file-prefix: свои кодеки, типы форматов и хуки
     SOURCES_PER_SPEC     ...         # --sources-per-spec
+    TASK_CONTEXT         ...         # --task-context
 )
 target_link_libraries(my_app PRIVATE api_generated)
 ```
@@ -153,6 +154,7 @@ svarg -s <папка со спеками> -o <папка для кода> [оп�
 | `--sources-per-spec N` | `1` | на сколько `.cpp` делится код каждой спеки, см. ниже |
 | `--stream-content-type` | | потоковые медиа типы ответов |
 | `--file-prefix` | | текст в начале каждого заголовка, например `#include` для своих кодеков и хуков |
+| `--task-context` | | контекст задач: обработчики сервера и `send` клиента возвращают `dd::task<T, контекст>` (например, для трассировки). Тип объявляется в `--file-prefix` |
 | `--add-format` | | C++ тип формата: `string+date=my::date`, см. [форматы](cxx_format.md) |
 | `--ignore-requirements` | | не проверять ограничения и требования схем: меньше кода, неполная проверка |
 | `--allow-remove` | `only_inline_schemas` | какие схемы оптимизация может удалять: `noone`, `only_inline_schemas`, `any` |

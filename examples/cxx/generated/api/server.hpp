@@ -32,7 +32,6 @@ struct server : hidi::h2server {
     return on_unknown_operation(std::move(req), std::move(ctx));
   }
 
-  // определение в .cpp спеки, чтобы разбор всех операций не инстанцировался у пользователя
   dd::task<hidi::http_response> handle_request(hidi::http_request req, hidi::request_context ctx) override;
 
   static constexpr size_t user_route_begin = 1;

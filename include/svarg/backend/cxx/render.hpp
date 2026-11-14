@@ -2,6 +2,7 @@
 
 #include "svarg/ir/ir_object.hpp"
 
+#include <format>
 #include <map>
 #include <print>
 #include <kelcoro/generator.hpp>
@@ -34,6 +35,9 @@ struct render_options {
   std::string inline_scope_suffix = "_";
   // вставляется в начало каждого сгенерированного заголовка
   std::string file_prefix;
+  // контекст задач обработчиков сервера и send клиента: dd::task<T, task_context>. Пусто - dd::task<T>
+  // Тип должен быть объявлен в file_prefix
+  std::string task_context;
   // какие медиа типы считать потоками
   std::vector<std::string> stream_content_types = {"application/octet-stream"};
   // незаданный additionalProperties объекта: true - неописанные свойства допустимы (пропускаются при
@@ -114,6 +118,19 @@ struct renderer {
 
   const ir::schemas_t& schemas() const {
     return *ir.schemas;
+  }
+
+  // dd::task<result> или dd::task<result, task_context>
+  std::string task_type(std::string_view result) const {
+    if (options.task_context.empty())
+      return std::format("dd::task<{}>", result);
+    return std::format("dd::task<{}, {}>", result, options.task_context);
+  }
+  // аргументы шаблона send_request/send_streaming: <Op> или <Op, task_context>
+  std::string send_template_args(std::string_view op) const {
+    if (options.task_context.empty())
+      return std::string(op);
+    return std::format("{}, {}", op, options.task_context);
   }
 
   const ir::schema& schemaof(const ir::schema_ref& ref) const {

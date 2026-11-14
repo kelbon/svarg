@@ -160,34 +160,31 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
     // или сделать что-то неподдерживаемое библиотекой
     // перегрузка в наследнике скрывает остальные при вызове через наследника (нужен using server::handle),
     // сам сервер вызывает их через базу
-    result += std::format(
-        "virtual dd::task<hidi::http_response> handle({}, hidi::http_request, hidi::request_context) = "
-        "0;\n\n",
-        make_cxx_ident(op->id, options));
+    result += std::format("virtual {} handle({}, hidi::http_request, hidi::request_context) = 0;\n\n",
+                          task_type("hidi::http_response"), make_cxx_ident(op->id, options));
   }
 
   result += std::format(
       "// путь и метод не подошли ни к одной операции\n"
-      "virtual dd::task<hidi::http_response> on_unknown_operation(hidi::http_request, "
+      "virtual {1} on_unknown_operation(hidi::http_request, "
       "hidi::request_context) {{\n"
       "co_return hidi::http_response{{.status = 404}};\n}}\n\n"
       "// операция найдена, но запрос не соответствует ей (параметры, тело...)\n"
-      "virtual dd::task<hidi::http_response> on_bad_request(hidi::http_request, svarg::error_code, "
+      "virtual {1} on_bad_request(hidi::http_request, svarg::error_code, "
       "hidi::request_context) {{\n"
       "co_return hidi::http_response{{.status = 400}};\n}}\n\n"
       "// маршрут пользователя: id >= user_route_begin\n"
-      "virtual dd::task<hidi::http_response> on_user_route(size_t, hidi::http_request req, "
+      "virtual {1} on_user_route(size_t, hidi::http_request req, "
       "hidi::request_context ctx) {{\n"
       "return on_unknown_operation(std::move(req), std::move(ctx));\n}}\n\n"
-      "// определение в .cpp спеки, чтобы разбор всех операций не инстанцировался у пользователя\n"
       "dd::task<hidi::http_response> handle_request(hidi::http_request req, hidi::request_context ctx) "
       "override;\n\n"
-      "static constexpr size_t user_route_begin = {};\n\n"
+      "static constexpr size_t user_route_begin = {0};\n\n"
       "::svarg::cxx_support::router& routes() noexcept {{\nreturn routes_;\n}}\n\n"
       "private:\n"
       "static ::svarg::cxx_support::router make_routes();\n\n"
       "::svarg::cxx_support::router routes_ = make_routes();\n",
-      ordered.size());
+      ordered.size(), task_type("hidi::http_response"));
   result += "};\n\n}\n";  // end struct, namespace
 
   std::string& impl = source;
@@ -201,28 +198,38 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
   }
   impl += "return r;\n}\n\n";
 
+  // обработчики с контекстом задачи возвращаются из handle_request (виртуальная функция hidi) обычной
+  // dd::task
+  auto plain = [&](std::string call) {
+    if (options.task_context.empty())
+      return call;
+    return std::format("svarg::cxx_support::to_plain_task({})", call);
+  };
   // значения параметров пути роутер не возвращает: from_request разбирает путь по шаблону операции
-  impl +=
+  impl += std::format(
       "dd::task<hidi::http_response> server::handle_request(hidi::http_request req, hidi::request_context "
-      "ctx) {\n"
+      "ctx) {{\n"
       "std::optional id = routes_.find(req.method, svarg::path_and_query(req.path).first);\n"
-      "if (!id) return on_unknown_operation(std::move(req), std::move(ctx));\n"
-      "switch (*id) {\n";
+      "if (!id) return {};\n"
+      "switch (*id) {{\n",
+      plain("on_unknown_operation(std::move(req), std::move(ctx))"));
   for (size_t i = 0; i < ordered.size(); ++i) {
     auto& [method, r] = ordered[i];
     impl += std::format(
         "case {}: {{\n"
         "{} op;\n"
         "svarg::error_code ec = svarg::cxx_support::from_request(req, op, {});\n"
-        "if (ec) return on_bad_request(std::move(req), std::move(ec), std::move(ctx));\n"
+        "if (ec) return {};\n"
         "if (dd::task t = svarg::cxx_support::do_handle_request(op, req, *this, ctx))\n"
         "return t;\n"
-        "return handle(std::move(op), std::move(req), std::move(ctx));\n"
+        "return {};\n"
         "}}\n",
-        i, make_cxx_ident(r.op->id, options), render_string(r.base_path));
+        i, make_cxx_ident(r.op->id, options), render_string(r.base_path),
+        plain("on_bad_request(std::move(req), std::move(ec), std::move(ctx))"),
+        plain("handle(std::move(op), std::move(req), std::move(ctx))"));
   }
   impl += "default: break;\n}\n";  // end switch
-  impl += "return on_user_route(*id, std::move(req), std::move(ctx));\n";
+  impl += std::format("return {};\n", plain("on_user_route(*id, std::move(req), std::move(ctx))"));
   impl += "}\n\n}\n";  // end fn, namespace
   return result;
 }
@@ -272,31 +279,31 @@ std::string renderer::render_client(const std::vector<const ir::operation*>& ope
       if (has_stream_responses(*op)) {
         res += std::format(
             "// тело ответа потоком отдаётся в on_part по мере прихода, остальные ответы разбираются\n"
-            "dd::task<{0}::result_t> send(const {0}& op, svarg::cxx_support::on_stream_part_fn_ptr on_part, "
+            "{2} send(const {0}& op, svarg::cxx_support::on_stream_part_fn_ptr on_part, "
             "hidi::deadline_t deadline, const svarg::content_type_params& ctp = {{}});\n",
-            opname);
+            opname, name, task_type(opname + "::result_t"));
         source += std::format(
-            "dd::task<{0}::result_t> {1}::send(const {0}& op, svarg::cxx_support::on_stream_part_fn_ptr "
+            "{2} {1}::send(const {0}& op, svarg::cxx_support::on_stream_part_fn_ptr "
             "on_part, "
             "hidi::deadline_t deadline, const svarg::content_type_params& ctp) {{\n"
-            "return svarg::cxx_support::send_streaming<{0}>(transport, "
+            "return svarg::cxx_support::send_streaming<{3}>(transport, "
             "svarg::cxx_support::make_request(op, ctp, base_path), on_part, deadline);\n"
             "}}\n\n",
-            opname, name);
+            opname, name, task_type(opname + "::result_t"), send_template_args(opname));
         continue;
       }
       res += std::format(
-          "dd::task<{0}::result_t> send(const {0}& op, hidi::deadline_t deadline, "
+          "{1} send(const {0}& op, hidi::deadline_t deadline, "
           "const svarg::content_type_params& ctp = {{}});\n",
-          opname);
+          opname, task_type(opname + "::result_t"));
       // определение в .cpp спеки
       source += std::format(
-          "dd::task<{0}::result_t> {1}::send(const {0}& op, hidi::deadline_t deadline, "
+          "{2} {1}::send(const {0}& op, hidi::deadline_t deadline, "
           "const svarg::content_type_params& ctp) {{\n"
-          "return svarg::cxx_support::send_request<{0}>(transport, "
+          "return svarg::cxx_support::send_request<{3}>(transport, "
           "svarg::cxx_support::make_request(op, ctp, base_path), deadline);\n"
           "}}\n\n",
-          opname, name);
+          opname, name, task_type(opname + "::result_t"), send_template_args(opname));
     }
     res += "};\n\n";
   }

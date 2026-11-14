@@ -155,6 +155,7 @@ int main(int argc, char* argv[]) try {
   renoptions.dry_run = cliopts.dry_run;
   renoptions.simple_cxx_identifiers = cliopts.simple_identifiers;
   renoptions.file_prefix = cliopts.file_prefix;
+  renoptions.task_context = cliopts.task_context;
   renoptions.unsetted_additional_properties = cliopts.unsetted_additional_properties;
   if (cliopts.sources_per_spec < 1) {
     std::println("--sources-per-spec must be at least 1");
