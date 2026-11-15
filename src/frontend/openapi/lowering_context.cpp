@@ -1004,16 +1004,19 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
   }
   if (param.required)
     result.required = param.required;
-  // style/explode - как есть в meta, что из этого поддерживать, решает бэкенд
-  if (param.style || param.explode) {
+  // style/explode/allowReserved - как есть в meta, что из этого поддерживать, решает бэкенд
+  if (param.style || param.explode || param.allowReserved) {
     if (result.encoding) {
-      emit_warn(file, jp, "parameter `{}` with `content` ignores style/explode", param.name);
+      emit_warn(file, jp, "parameter `{}` with `content` ignores style/explode/allowReserved", param.name);
     } else {
       result.meta.emplace();
       if (param.style)
         (*result.meta)[std::string(x_param_style)] = Any{boost::json::value(std::string_view(*param.style))};
       if (param.explode)
         (*result.meta)[std::string(x_param_explode)] = Any{boost::json::value(bool(*param.explode))};
+      if (param.allowReserved)
+        (*result.meta)[std::string(x_param_allow_reserved)] =
+            Any{boost::json::value(bool(*param.allowReserved))};
     }
   }
   if (result.required.value_or(false) && result.default_value) {
@@ -1021,7 +1024,6 @@ ir::operation_parameter lowering_context::parameter_lowering(const parameter_obj
     emit_warn(file, jp, "required parameter `{}` has default, default ignored", param.name);
     result.default_value.reset();
   }
-  // TODO result.meta
   return result;
 }
 std::set<ir::body> lowering_context::request_body_lowering(request_body_object obj, fs::path file,
@@ -1254,7 +1256,7 @@ void lowering_context::visit_and_generate_ir(const openapi_object& api, const fs
                             json_pointer jp) {
                           SVARG_ASSERT(parsable_as<callback_object>(jp.access(load_as_json(cbpath_))));
                           auto [rcb, cbpath, cbjp] = resolve_ref_and_ret(cb, cbpath_, jp, *this);
-                          // TODO not ignore `expr` (складывать в список для дальнейшей генерации)
+                          // `expr` игнорируется, пользователь сам знает куда отправлять калбек
                           for (auto&& [expr, pathItem] : rcb) {
                             // используем cbpath, т.к. ссылки могут указывать туда если он загружен оттуда
                             auto [rpi, rpipath, rpijp] =

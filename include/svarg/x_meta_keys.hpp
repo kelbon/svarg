@@ -32,8 +32,9 @@ constexpr inline std::string_view x_format_hint = "x-format-hint";
 constexpr inline std::string_view x_null_when_absent = "x-null-when-absent";
 
 // meta параметра операции, только если указаны явно: как массив/объект записывается в строку (OpenAPI
-// style и explode). Значения строка и bool
-constexpr inline std::string_view x_param_style = "x-style";
-constexpr inline std::string_view x_param_explode = "x-explode";
+// style, explode, allowReserved)
+constexpr inline std::string_view x_param_style = "x-style";                   // string
+constexpr inline std::string_view x_param_explode = "x-explode";               // bool
+constexpr inline std::string_view x_param_allow_reserved = "x-allowReserved";  // bool
 
 }  // namespace svarg

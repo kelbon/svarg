@@ -53,14 +53,6 @@ struct route {
 // проверяются линейно и выигрывает первый подошедший
 static string_map<std::vector<route>> order_routes_for_path_matching(std::vector<route> routes) {
   auto is_not_templated = [](const route& r) { return !is_template_path(r.path); };
-  // TODO такую неоднозначность (см. ниже) можно решать по правилу точное совпадение выигрывает. В данном
-  // случае v1 это точное совпадение с пришедшей строкой, а значит выигрывает она?
-
-  // приоритет важен для предсказуемости выбора в неоднозначных ситуациях
-  // /v1/{a} и /{version}/x могут сматчить одну и ту же строку "/v1/x"
-  // хотя среди них нет более специализированного
-  // для разрешения этой ситуации используется приоритет,
-  // в опенапи приоритет выше если операция написана выше в спеке
 
   auto by_priority = [](const route& a, const route& b) {
     // меньше приоритет - выше в списке. У всех должен быть назначен приоритет, так как вебхуки не должны
@@ -146,7 +138,6 @@ std::string renderer::render_server(const std::vector<const ir::operation*>& ope
     result += std::format("#include \"{}\"\n", make_file_path(*op, options, /*is_webhook=*/false));
   result += std::format("namespace {} {{\n\n", make_namespace(spec, {}));
 
-  // TODO x-name для сервера поддержать ?
   result +=
       "// операции спеки - перегрузки виртуального handle по типу операции. Маршрут каждой операции в "
       "routes()\n"

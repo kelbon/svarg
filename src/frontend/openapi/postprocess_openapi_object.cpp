@@ -78,8 +78,6 @@ static void postprocess_operation_object(operation_object& op) {
 static void postprocess_path_item_object(reference_or<path_item_object>& pir) {
   path_item_object* pi = pir.get_if_value();
   if (!pi)
-    // TODO вообще-то там могут рядом со ссылкой лежать всякие данные, которые требуют обработки.
-    // Пока игнорируется
     return;
   remove_ignored_header_params(pi->parameters);
   auto visit_op = [](optional<operation_object>& op) {
