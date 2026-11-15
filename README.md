@@ -145,3 +145,4 @@ int main() {
 - [Сервер](docs/cxx_server.md) - обработчики, routing
 - [Клиент](docs/cxx_client.md) - отправка запросов, middleware
 - [Концепция svarg](docs/what_is_svarg.md) - описание самого инструмента, создание своего бекенда и фронтенда
+- [jinja backend](docs/jinja_backend.md) - свой бекенд на jinja шаблонах (если они вам нравятся)

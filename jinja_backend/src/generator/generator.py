@@ -5,8 +5,9 @@
 запускает все шаблоны из соответствующей папки. Каждый шаблон обязан
 выставить переменную output_path (или none для пропуска).
 
+Шаблоны и что в них доступно описаны в docs/jinja_backend.md
+
 Структура папки шаблонов:
-# TODO дополнить filters/globals etc, что прокидывается шаблоны
     templates_dir/
         operation/      # шаблоны для каждой Operation и (при fallback) webhook
             header.j2
@@ -17,8 +18,8 @@
             handler.j2  # webhooks рендерятся здесь; иначе fallback на operation/
 
 Каждый .j2-файл:
-1. Обязан установить {{ set_output_path("<relative/path>") }}
-   или {% set output_path = none %} чтобы пропустить генерацию файла.
+1. Обязан вызвать {{ set_output_path("<relative/path>") }}
+   или {{ set_output_path(none) }} чтобы пропустить генерацию файла.
 2. Тело шаблона целиком становится содержимым выходного файла.
 3. output_path интерпретируется относительно output_dir.
 4. Несколько рендеров с одинаковым output_path конкатенируются в один файл
