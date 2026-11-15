@@ -44,7 +44,7 @@ if(PROJECT_IS_TOP_LEVEL AND NOT svarg_GENERATOR_ONLY)
   CPMAddPackage(
     NAME CCOZY
     GITHUB_REPOSITORY kelbon/ccozy
-    GIT_TAG v0.8.2
+    GIT_TAG v0.9.0
   )
   include(${CCOZY_SOURCE_DIR}/ccozy_tools.cmake)
 endif()
@@ -83,7 +83,7 @@ if(svarg_BUILD_CXX_SUPPORT OR svarg_ENABLE_NETWORK_REFS)
   CPMAddPackage(
     NAME HIDI
     GIT_REPOSITORY https://github.com/kelbon/hidi
-    GIT_TAG v0.18.4
+    GIT_TAG v0.18.5
     OPTIONS "HIDI_USE_CPM ON"
   )
 endif()
