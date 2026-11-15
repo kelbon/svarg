@@ -765,10 +765,6 @@ struct operation {
   // path + method + spec должны быть уникальны (у вебхуков path пуст - id + method + spec).
   // Шаблонизированность не учитывается
   // если это callback/webhook, то путь пуст
-  // TODO генерировать проверки на фронтенде и на бекенде надо делать парсеры путей
-  // н-р если users/{id}, то обязательно должен быть параметр с in: path и именем id
-  // TODO использовать правила валидации из openapie 3.2
-  // https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.2.0.md#path-templating
   string path;
   // GET/POST/...
   // Всегда в верхнем регистре
@@ -870,7 +866,6 @@ struct ir_object {
   std::optional<std::set<operation>> operations;
   // здесь помимо webhooks лежат callbacks (они то же самое, но ещё вычислимый url)
   std::optional<std::set<operation>> webhooks;
-  // TODO servers
 
   // объединяет 2 ir в один
   void merge(ir_object obj);

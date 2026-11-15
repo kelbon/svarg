@@ -12,10 +12,6 @@
 
 namespace svarg {
 
-// TODO support formats
-// int32, int64, float, double, password, ... и тд может быть определено пользователем (data ещё, но видимо
-// убрали в новой версии)
-
 struct reference_object {
   SVARG_FRONTEND_TYPE;
 

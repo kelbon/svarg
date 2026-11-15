@@ -20,10 +20,6 @@ struct escaped_t {
 
 // заставляет вставить сегменты как есть
 constexpr inline escaped_t escaped = escaped_t{};
-// TODO rename file / test
-
-// TODO нужно хранить экранировано, т.к. могут совпасть "/" + "name" и add_key("/name")
-// TODO escaped_json_pointer(str) - вьюшка
 
 // по сути json pointer с возможностью добавлять и убирать последний сегмент
 // НО может быть невалидным json pointer, так как в add_scope можно подать и строки содержащие /
@@ -192,11 +188,6 @@ struct json_pointer {
     return result;
   }
 
-  // TODO тесты из json pointer rfc
-  // TODO взятие сегмента по индексу (и замена)
-  // TODO понять не будет ли description/прочая хрень из ссылки ломать парсинг каких-то типов
-  // желательно наверное игнорировать их при override
-
   // получает доступ без escape/unescape
   boost::json::value* access(boost::json::value& json) const {
     auto r = json.try_at_pointer(data);
@@ -245,7 +236,6 @@ struct json_pointer {
     SVARG_ASSERT(!str.empty());
     prevszs.push_back(data.size());
     data.push_back('/');
-    // TODO лучше с экранированным ренжом, а не созданием строки
     if (!jp_escape_required(str))
       data += str;
     else

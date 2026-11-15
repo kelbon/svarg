@@ -133,7 +133,6 @@ struct lowering_context {
                                                       fs::path spec, fs::path resolve_ref_file,
                                                       json_pointer jp, std::string_view name,
                                                       const path_item_object&);
-  // TODO как-то объединить везде file + jsonptr, везде прокидывается же абсолютно
 
   ir::operation_parameter parameter_lowering(const parameter_object& param, fs::path file, json_pointer,
                                              std::string_view path);

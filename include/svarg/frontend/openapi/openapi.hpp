@@ -22,9 +22,8 @@ struct openapi_options {
   bool ref_depth_is_a_fail = true;
   // если встречается ссылка в виде URL переходить ли по ней (это может быть небезопасно, по умолчанию
   // выключено)
-  // TODO под это ещё кеш надо сделать, чтобы лишний раз не ходить с запросами
+  // TODO? под это ещё кеш надо сделать, чтобы лишний раз не ходить с запросами
   bool resolve_url_refs = false;
-  // TODO unordered_map<string> known_formats?
   // Зависят от порядка. При резолве ссылки берётся первый существующий файл
   // spec dir это тоже include dir и она имеет приоритет
   std::vector<fs::path> include_dirs = {};

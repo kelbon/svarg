@@ -7,7 +7,6 @@
 
 namespace svarg::cxx_support {
 
-// TODO ? отдельный тип
 template <typename... Types>
 using oneof = metel::box_union<Types...>;
 

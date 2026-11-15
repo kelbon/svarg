@@ -329,7 +329,6 @@ struct postparse<schema_object> {
   error_code operator()(schema_object& schema) {
     if (schema.const_) {
       if (schema.enum_ && !std::ranges::contains(*schema.enum_, *schema.const_)) {
-        // TODO добавить варн
         // никогда не сработает
         schema._keyfield_boolean_schema = false;
       }

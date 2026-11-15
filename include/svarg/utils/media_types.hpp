@@ -186,7 +186,6 @@ constexpr bool match_content_type(std::string_view candidate) {
     static_assert(ContentType.str().ends_with("/*"));
     std::string_view prefix = ContentType.str();
     prefix.remove_suffix(2);  // '/*'
-    // TODO что-то сделать для проверки что дальше либо ничего либо параметры
     return starts_with_ci_prefix_lowered(candidate, prefix);
   } else if constexpr (starcount == 0) {
     auto ends_or_params = [&c = candidate] {

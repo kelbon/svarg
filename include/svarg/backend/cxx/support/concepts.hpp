@@ -46,19 +46,6 @@ using deoptional_type_t = typename deoptional_type<std::decay_t<T>>::type;
 
 namespace svarg::cxx_support {
 
-
-// TODO генерировать геттеры сеттеры для объектов и вариантов (get if/is/visit)
-// TODO генерировать серверы и клиенты - у сервера адрес по выражению, функция которая определяет какой запрос
-// пришёл по path и сами обработчики (видимо виртуальные функции для удобства пользователя при
-// переопределении). В одной спеке я так понимаю может быть много серверов, но как будто у каждой спеки на
-// деле один сервер со всеми её операциями
-// Клиент - а вот тут вопрос, видимо тоже один на спеку? типа все запросы отправлять
-// но у него не виртуальные, просто методы которые принимают операцию, разница от обычного шаблона просто в
-// именованности. Теоретически можно ещё аргументы спрятать в клиенте общие, типа авторизации, но хз
-// В общем надо парсинг, сериализацию, валидацию запросв при отправке, саму отправку запроса/получение ответа,
-// и выбор правильного обработчика в сервере. Необработанное идёт в виртуальную функцию unhandled_request
-// который по умолчанию бросает 500
-
 template <typename T>
 constexpr bool has_required_schemas = requires { typename T::svarg_required_schemas; };
 
@@ -136,7 +123,8 @@ template <typename T>
 concept a_response = tagged_as<T>(parse_tag_e::response);
 
 // стиль параметра (OpenAPI style). default_ - по умолчанию для места параметра: simple в path и header, form
-// в query и cookie. label и matrix - только path, space_delimited, pipe_delimited и deep_object - только query
+// в query и cookie. label и matrix - только path, space_delimited, pipe_delimited и deep_object - только
+// query
 enum struct param_style_e { default_, label, matrix, space_delimited, pipe_delimited, deep_object };
 
 // описание поля объекта или структуры параметров операции (path_t, query_t, headers_t, cookies_t).
@@ -285,8 +273,8 @@ template <size_t I, typename T>
     return {};
 }
 
-// сгенерированные типы перечисляют поля сами (svarg_fields, svarg_field<I>, единственное поле svarg_implfield),
-// boost::pfr - только для написанных вручную структур: он дорог для компиляции
+// сгенерированные типы перечисляют поля сами (svarg_fields, svarg_field<I>, единственное поле
+// svarg_implfield), boost::pfr - только для написанных вручную структур: он дорог для компиляции
 template <typename T>
 constexpr bool has_generated_fields = requires { requires T::svarg_has_field; };
 

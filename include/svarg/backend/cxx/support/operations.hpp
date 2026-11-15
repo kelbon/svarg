@@ -18,7 +18,6 @@
 
 namespace svarg::cxx_support {
 
-// TODO consteval (efromstr in HTTP/2)
 template <an_operation Op>
 constexpr http_method_e get_operation_method() {
   http_method_e method;
@@ -63,7 +62,7 @@ auto make_path(const Op& op) {
     }
   }
 }
-// TODO тесты на каждую часть
+
 template <an_operation Op>
 struct parse_path_visitor {
   Op& op;
@@ -245,7 +244,7 @@ http_request make_request(const Op& op, const content_type_params& ctparams = {}
             op.query, [&](std::string_view k, std::string_view v) { query.encoded_arg(k, v); });
       }
     };
-    // TODO вынести в отдельную функцию по работе с квери
+
     std::string q = query.take();
     if (!q.empty()) {
       req.path.push_back('?');
