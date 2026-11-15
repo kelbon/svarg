@@ -17,7 +17,7 @@
 | `type: boolean` | `bool` |
 | схема без `type`, не ограничивающая | `boost::json::value` |
 | `type: array` | `std::vector<T>` |
-| `additionalProperties: <схема>` | поле `svarg_additional_properties` (`string_map<T>`) |
+| `additionalProperties: <схема>` | поле `additional_properties` (`string_map<T>`) |
 | `type: [string, "null"]`, `nullable: true` | `std::optional<T>` |
 | рекурсия (`Order.parent` - `Order`) | `metel::box<Order>`, пустой если поля нет |
 | `enum` строк | `struct` с `get()` и константами: `order.status.get() = Order_::properties::status::paid` |

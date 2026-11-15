@@ -120,7 +120,7 @@ struct with_extra_t {
   std::optional<std::string> a;
 
   using svarg_additional_properties_type = integer;
-  additional_properties_t<svarg_additional_properties_type> svarg_additional_properties;
+  additional_properties_t<svarg_additional_properties_type> additional_properties;
 
   static constexpr std::array<field_info, 1> svarg_fields = {{{.name = "a"}}};
 };
@@ -199,7 +199,7 @@ TEST("object constraints") {
 TEST("additional properties") {
   with_extra_t v;
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": "x", "n": 1})"), v).failed());
-  REQUIRE(v.a == "x" && v.svarg_additional_properties.size() == 1 && v.svarg_additional_properties.at("n") == 1);
+  REQUIRE(v.a == "x" && v.additional_properties.size() == 1 && v.additional_properties.at("n") == 1);
   REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": "x", "n": 1})"));
   REQUIRE(!parses<with_extra_t>(R"({"a": "x", "n": "y"})"));  // неописанное свойство по своей схеме
   // additionalProperties не задано - неописанные свойства пропускаются

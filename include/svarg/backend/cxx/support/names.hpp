@@ -18,7 +18,7 @@ constexpr inline std::string_view content_type_hdr = "content-type";
 static constexpr std::string_view special_field_name = "svarg_implfield";
 
 constexpr inline std::string_view additional_properties_schema_alias_name = "svarg_additional_properties_type";
-constexpr inline std::string_view additional_properties_field_name = "svarg_additional_properties";
+constexpr inline std::string_view additional_properties_field_name = "additional_properties";
 constexpr inline std::string_view additional_properties_forbidden_name = "svarg_additional_properties_forbidden";
 
 enum struct parse_tag_e {
@@ -36,7 +36,7 @@ enum struct parse_tag_e {
 
   // не комбинаторы
   object,  // сначала требуемые поля, затем опциональные + fields (описания полей) +
-           // svarg_additional_properties_type / svarg_additional_properties
+           // svarg_additional_properties_type / additional_properties
   enum_,
   string_enum,
   open_string_enum,  // std::string value + известные значения values, допустима любая строка

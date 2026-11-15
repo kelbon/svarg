@@ -18,7 +18,6 @@ constexpr decltype(auto) visit_field_index(F&& f, size_t i) {
     return;
 }
 
-
 template <typename T>
 [[nodiscard]] constexpr auto& get_special_field(T& in) noexcept {
   static_assert(fields_count<std::remove_const_t<T>>() == 1);
@@ -31,12 +30,11 @@ template <typename T>
 template <typename T>
 using additional_properties_schema_t = typename std::decay_t<T>::svarg_additional_properties_type;
 
-
 template <typename T>
 constexpr auto& get_additional_properties(T& x) noexcept {
-  static_assert(std::is_same_v<decltype(x.svarg_additional_properties),
+  static_assert(std::is_same_v<decltype(x.additional_properties),
                                additional_properties_t<additional_properties_schema_t<T>>>);
-  return x.svarg_additional_properties;
+  return x.additional_properties;
 }
 
 // object
@@ -49,7 +47,7 @@ consteval bool valid_generated_object() {
 
   if constexpr (has_additional_properties<T> && has_generated_fields<T>) {
     // поля доступны через svarg_field, положение additional properties не важно
-    return std::is_same_v<decltype(T::svarg_additional_properties),
+    return std::is_same_v<decltype(T::additional_properties),
                           additional_properties_t<additional_properties_schema_t<T>>>;
   } else if constexpr (has_additional_properties<T>) {
     // для pfr лежит последним полем и с правильным типом

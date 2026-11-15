@@ -257,7 +257,7 @@ constexpr bool has_additional_properties = [] {
 }();
 
 // additionalProperties: false - неописанные свойства объекта отвергаются при разборе. Иначе они разбираются
-// в svarg_additional_properties (has_additional_properties) или пропускаются
+// в additional_properties (has_additional_properties) или пропускаются
 template <typename T>
 constexpr bool forbids_additional_properties = [] {
   if constexpr (requires { T::svarg_additional_properties_forbidden; })

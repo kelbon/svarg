@@ -153,7 +153,8 @@ template <typename T>
 constexpr auto single_body_media_type_v = constexpr_string<T::body_content_type.size()>(T::body_content_type);
 
 template <typename B>
-constexpr auto body_wrapper_media_type_v = constexpr_string<get_content_type<B>().size()>(get_content_type<B>());
+constexpr auto body_wrapper_media_type_v =
+    constexpr_string<get_content_type<B>().size()>(get_content_type<B>());
 
 // вызывает vtor.template operator()<MediaType>(значение тела), если тело присутствует. MediaType -
 // constexpr_string, медиа тип тела
@@ -475,6 +476,18 @@ template <a_response R>
   return rawrsp;
 }
 
+[[nodiscard]] inline http_response bad_request_response(const error_code& ec) {
+  http_response rsp{.status = 400};
+  std::string body = boost::json::serialize(boost::json::object{
+      {"title", "Bad Request"},
+      {"status", 400},
+      {"detail", ec.message()},
+  });
+  rsp.headers.emplace_back(std::string(content_type_hdr), "application/problem+json");
+  rsp.body.assign(body.begin(), body.end());
+  return rsp;
+}
+
 // `ParseBody` = false: тело уже разобрано потоком, разбираются только статус и хедеры
 template <a_response R, bool ParseBody = true>
 error_code from_response(const http_response& rawrsp, R& rsp) {
@@ -580,7 +593,6 @@ template <an_operation Op>
   });
 }
 
-
 // тело ответа операции со статусом `status` и хедером content-type `content_type` - поток. Ответ выбирается
 // по статусу, тело ответа - по content-type, как в спецификации: responses[статус].content[медиа тип]
 template <an_operation Op>
@@ -605,7 +617,8 @@ concept has_stream_parser = requires { typename Codec::template stream_parser<T>
 
 // куда идут данные тела ответа: колбэк потокового медиа типа, парсер кодека или буфер. Ошибка - исключение:
 // hidi прерывает запрос и отдаёт его из send_request
-anyany_method2_n(feed_m, feed, (&self, std::string_view part, bool last) requires(self.feed(part, last))->void);
+anyany_method2_n(feed_m, feed,
+                 (&self, std::string_view part, bool last) requires(self.feed(part, last))->void);
 
 using body_sink = aa::any_with<feed_m>;
 

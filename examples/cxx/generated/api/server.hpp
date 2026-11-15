@@ -21,9 +21,9 @@ struct server : hidi::h2server {
   }
 
   // операция найдена, но запрос не соответствует ей (параметры, тело...)
-  virtual dd::task<hidi::http_response> on_bad_request(hidi::http_request, svarg::error_code,
+  virtual dd::task<hidi::http_response> on_bad_request(hidi::http_request, svarg::error_code ec,
                                                        hidi::request_context) {
-    co_return hidi::http_response{.status = 400};
+    co_return ::svarg::cxx_support::bad_request_response(ec);
   }
 
   // маршрут пользователя: id >= user_route_begin

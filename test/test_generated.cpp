@@ -861,6 +861,10 @@ TEST("generated server") {
   REQUIRE(rsps[1].status == 404);
   REQUIRE(rsps[2].status == 404);
   REQUIRE(rsps[3].status == 400);
+  REQUIRE(std::ranges::contains(rsps[3].headers,
+                                hidi::http_header_t{"content-type", "application/problem+json"}));
+  REQUIRE(boost::json::parse(rsps[3].body_strview()).at("detail") == "0 is less than minimum 1");
+
   REQUIRE(rsps[4].status == 204);
   REQUIRE(server.uploaded == "data");
   REQUIRE(rsps[5].status == 400);
