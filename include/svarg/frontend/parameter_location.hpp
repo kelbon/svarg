@@ -13,7 +13,7 @@ enum struct parameter_location : uint8_t {
   query,
   header,
   cookie,
-  // TODO querystring (openapi 3.2)?
+  // TODO? querystring (openapi 3.2)
 };
 
 std::string_view e2str(parameter_location l) noexcept;

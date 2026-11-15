@@ -24,6 +24,4 @@ using hidi::http_response;
 using hidi::internet_address;
 using hidi::request_context;
 
-// TODO добавить HTTP коды енам, его e2str/efromstr и в самом http2 вынести это в отдельный неймспейс
-
 }  // namespace svarg::cxx_support

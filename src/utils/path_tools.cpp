@@ -46,8 +46,6 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   if (!path2name.contains(name))
     return name;
   for (int i = 2;; ++i) {
-    // TODO string view rope (типа две строки эмулируют одну строку)
-    // TODO ренж строкового представления чисел типа '1' '2' и тд
     auto num = std::to_string(i);
     if (!path2name.contains(name + num)) {
       name += num;

@@ -72,9 +72,7 @@ struct from_json_value<T> {
   static_assert(metel::is_decayed_v<T>);
 
   error_code operator()(const boost::json::value& v, T& out) {
-    // TODO можно развернуть парсинг - вместо того чтобы он зависел от количества полей в типе, он должен
-    // зависеть от количества ключей в джсоне т.е. идти по ключам и маппить куда они должны попасть. И
-    // проверять в конце, что все требуемые поля пришли
+    // этот код парсит только спеку, перфоманс здесь не критичен
     const auto* obj = v.if_object();
     if (!obj) {
       if constexpr (parsable_even_from_not_object<T>)

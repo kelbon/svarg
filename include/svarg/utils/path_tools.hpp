@@ -304,7 +304,6 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   return !vtor.failed;
 }
 
-// TODO совместить с парсингом path параметров?
 // `path` не декодируется: разделители из шаблона внутри значений закодированы (percent_encode_path_value).
 // Значение может содержать '/' (GitHub `{ref}` = feature/x): последний параметр забирает остаток пути
 constexpr bool match_path_pattern(std::string_view path_pattern, std::string_view path) {
