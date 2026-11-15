@@ -3,7 +3,9 @@
 #include "svarg/to_json_value.hpp"
 #include "svarg/frontend/openapi/generate_ir.hpp"
 #include "svarg/utils/json_pretty.hpp"
+#include <format>
 #include <fstream>
+#include <stdexcept>
 
 #include "svarg/ir/ir_object.hpp"
 
@@ -195,7 +197,8 @@ components:
   } catch (std::exception& e) {
     error = e.what();
   }
-  REQUIRE(error.contains("#/paths/~1a~1{x}/get/") && error.contains("in error_location.yaml#/components/schemas/Bad: "));
+  REQUIRE(error.contains("#/paths/~1a~1{x}/get/") &&
+          error.contains("in error_location.yaml#/components/schemas/Bad: "));
 }
 
 TEST("spec is searched in specs dir") {
@@ -213,6 +216,94 @@ components:
   svarg::ir::ir_object o =
       svarg::openapi2ir(std::filesystem::current_path() / "specs_subdir", {"same_name.yaml"}, {});
   REQUIRE(o.schemas && o.schemas->size() == 1);
+}
+
+// схема в IR как JSON по спеке и указателю
+static const boost::json::object& ir_schema(const boost::json::value& ir, std::string_view spec,
+                                            std::string_view ptr) {
+  for (const boost::json::value& s : ir.at("schemas").as_array())
+    if (s.at("spec").as_string() == spec && s.at("jsonptr").as_string() == ptr)
+      return s.as_object();
+  throw std::runtime_error(std::format("no schema {}#{}", spec, ptr));
+}
+
+static const boost::json::value& field_ref(const boost::json::object& schema, std::string_view name) {
+  for (const boost::json::value& f : schema.at("type").at("object").at("fields").as_array())
+    if (f.at("name").as_string() == name)
+      return f.at("type");
+  throw std::runtime_error(std::format("no field {}", name));
+}
+
+TEST("$ref: overrides and references remapped across files") {
+  // lib.yaml находится только через include dir. У каждого файла своя схема Local
+  std::filesystem::create_directories("remap/specs");
+  std::filesystem::create_directories("remap/lib");
+  svarg::write_into("remap/specs/main.yaml", R"(
+openapi: 3.1.0
+info: {title: m, version: "1"}
+paths: {}
+components:
+  schemas:
+    Local: {type: string, maxLength: 3}
+    # тип создаётся здесь (первая ссылка с перекрытием), а перекрытие properties написано в mid.yaml:
+    # его '#/...' - это mid.yaml
+    UsesLib:
+      $ref: 'mid.yaml#/components/schemas/Mid'
+      maxProperties: 5
+    ViaLib: {$ref: 'lib.yaml#/components/schemas/Wrapper'}
+    # тип создаётся здесь, но '#/...' внутри Wrapper - это lib.yaml
+    Extended: {$ref: 'lib.yaml#/components/schemas/Wrapper', maxProperties: 1}
+    Base: {type: string}
+    Narrow: {$ref: '#/components/schemas/Base', maxLength: 2}
+    # перекрытия всей цепочки ссылок складываются
+    Chain: {$ref: '#/components/schemas/Narrow', minLength: 1}
+)");
+  svarg::write_into("remap/specs/mid.yaml", R"(
+openapi: 3.1.0
+info: {title: mid, version: "1"}
+paths: {}
+components:
+  schemas:
+    Local: {type: string, maxLength: 7}
+    Mid:
+      $ref: 'lib.yaml#/components/schemas/Wrapper'
+      properties:
+        extra: {$ref: '#/components/schemas/Local'}
+)");
+  svarg::write_into("remap/lib/lib.yaml", R"(
+openapi: 3.1.0
+info: {title: l, version: "1"}
+paths: {}
+components:
+  schemas:
+    Local: {type: integer, minimum: 5}
+    Wrapper:
+      type: object
+      properties:
+        inner: {$ref: '#/components/schemas/Local'}
+)");
+  svarg::openapi_options opts;
+  opts.include_dirs = {std::filesystem::current_path() / "remap/lib"};
+  opts.ir_opts.enable_optimizations = false;
+  opts.ir_opts.allow_rm_unused = svarg::ir::remove_category_e::noone;
+  boost::json::value ir =
+      svarg::to_json(svarg::openapi2ir(std::filesystem::current_path() / "remap/specs", {"main.yaml"}, opts));
+
+  auto ref = [](std::string_view spec, std::string_view ptr) {
+    return boost::json::value{{"name", "Local"}, {"spec", spec}, {"jsonptr", ptr}};
+  };
+  REQUIRE(field_ref(ir_schema(ir, "main", "/components/schemas/UsesLib"), "extra") ==
+          ref("mid", "/components/schemas/Local"));
+  REQUIRE(field_ref(ir_schema(ir, "lib", "/components/schemas/Wrapper"), "inner") ==
+          ref("lib", "/components/schemas/Local"));
+  REQUIRE(field_ref(ir_schema(ir, "main", "/components/schemas/Extended"), "inner") ==
+          ref("lib", "/components/schemas/Local"));
+  auto constraints = [&](std::string_view ptr) {
+    return ir_schema(ir, "main", std::string(ptr) + "/constraints").at("type").at("constraints");
+  };
+  REQUIRE(constraints("/components/schemas/Narrow") == boost::json::parse(R"({"maxLength": 2})"));
+  REQUIRE(constraints("/components/schemas/Chain") ==
+          boost::json::parse(R"({"minLength": 1, "maxLength": 2})"));
 }
 
 TEST("parse_spec") {
@@ -315,8 +406,3 @@ paths:
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);
 MOKO3_MAIN;
-// TODO тесты на парсинг разных типов. В том числе рекурсивных, с всякими anyof и тд
-// TODO подключить позже измерялку, чтобы понять где теряется больше всего времени
-
-// TODO тест который поможет понять что всё правильно везде лежит (json ptr / file)
-// TODO override ссылками всякими заниматься (и на них тоже тест)

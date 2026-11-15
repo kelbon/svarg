@@ -39,7 +39,43 @@ TEST("json_pointer: basic") {
   REQUIRE(collect(s) == segments{});
   REQUIRE(s.view() == "");
 }
-// TODO тесты из json pointer RFC на escaped
+
+// RFC 6901, раздел 5 (кроме пустого ключа "" - пустые сегменты json_pointer не поддерживает)
+TEST("json_pointer: RFC 6901 escaping") {
+  boost::json::value doc = boost::json::parse(R"({
+    "foo": ["bar", "baz"], "a/b": 1, "c%d": 2, "e^f": 3, "g|h": 4, "i\\j": 5, "k\"l": 6, " ": 7, "m~n": 8
+  })");
+  auto at = [&](svarg::json_pointer p) -> const boost::json::value& {
+    const boost::json::value* v = p.access(doc);
+    REQUIRE(v);
+    return *v;
+  };
+  REQUIRE(at(svarg::json_pointer()) == doc);
+  REQUIRE(at(svarg::json_pointer("/foo/0"_jp)) == "bar");
+  REQUIRE(at(svarg::json_pointer("/a~1b"_jp)) == 1);
+  REQUIRE(at(svarg::json_pointer("/c%d"_jp)) == 2);
+  REQUIRE(at(svarg::json_pointer("/e^f"_jp)) == 3);
+  REQUIRE(at(svarg::json_pointer("/g|h"_jp)) == 4);
+  REQUIRE(at(svarg::json_pointer("/i\\j"_jp)) == 5);
+  REQUIRE(at(svarg::json_pointer("/k\"l"_jp)) == 6);
+  REQUIRE(at(svarg::json_pointer("/ "_jp)) == 7);
+  REQUIRE(at(svarg::json_pointer("/m~0n"_jp)) == 8);
+
+  // add_key экранирует, сегменты остаются экранированными, unescaped и last_segment - нет
+  svarg::json_pointer p;
+  p.add_key("a/b");
+  REQUIRE(p.view() == "/a~1b" && at(p) == 1);
+  p.rm_last_segment();
+  p.add_key("m~n");
+  REQUIRE(p.view() == "/m~0n" && at(p) == 8);
+  REQUIRE(collect(p) == segments{"m~0n"});
+  REQUIRE(p.unescaped() == "/m~n" && p.last_segment() == "m~n");
+  // сначала ~1, затем ~0: "~01" - это "~1", а не "/"
+  svarg::json_pointer q;
+  q.add_key("~1");
+  REQUIRE(q.view() == "/~01" && q.unescaped() == "/~1");
+  REQUIRE(svarg::jp_unescape_segment("~01") == "~1");
+}
 
 TEST("json_pointer: multiscope") {
   svarg::json_pointer s = "/foo/bar/baz"_jp;

@@ -109,11 +109,9 @@ struct load_raw_ref_return {
 // `curfile` должен быть относительным путём или URL (или также может быть URL, если загрузили файл до этого)
 static load_raw_ref_return load_raw_refered_object(std::string_view url, fs::path curfile,
                                                    const openapi_options& options, jsons_cache* cache) {
+  // fixup_path нормализует только путь url, схема и '//' остаются
   curfile = fixup_path(std::move(curfile));
-  // вроде если не обрабатывать путь может получится слишком длинным и в итоге
-  // сломается всё. А если обрабатывать - https:// -> https:/ может выйти боком
   SVARG_ASSERT(!url.contains('#'));
-  // TODO здесь путь обрабывается и https:// может превратиться в https:/
 
   // абсолютные ссылки в сеть
   if (is_net_ref(url)) {

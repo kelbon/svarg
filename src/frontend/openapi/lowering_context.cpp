@@ -126,9 +126,6 @@ struct references_chain {
   }
 };
 
-// TODO тест на ремап ссылок в resolve_ref_to учитывая инклуд директории и так далее
-// TODO в IR складывать и спеку и джсон птр где лежало значение
-
 // ref - ссылка по которой нужно пройти
 // file - файл где эта ссылка лежит
 // jp - указатель в file где эта ссылка лежит
@@ -864,12 +861,6 @@ static void visit_all_callbacks(const openapi_object& api, fs::path file, loweri
     }
   }
 }
-// TODO?  если вообще все ссылки ремапить сразу, то как будто легче код становится сразу
-// и ещё можно сразу вычислить для всех json pointer и сложить где-то либо в json либо в структуры
-// распаршенные
-// TODO в интерфейс принимать сразу все файлы которые нужно сгенерировать и объединить процесс
-// загрузки всех файлов, предобработки (и там ремап ссылок абсолютно всех даже в файлах НА которые ссылки)
-// и затем generate, в итоге один метод есть просто
 
 ir::body lowering_context::media_type_object_lowering(const media_type_object& obj, fs::path file,
                                                       json_pointer jp, std::string_view content_type,

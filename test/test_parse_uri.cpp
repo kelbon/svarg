@@ -2,10 +2,11 @@
 
 #include <moko3/moko3.hpp>
 
-bool test_parse_uri(std::string_view url, bool invalid = false) {
+// invalid: разбор должен бросить исключение
+static bool test_parse_uri(std::string_view url, bool invalid = false) {
   try {
     svarg::url_ref p = svarg::parse_absolute_url(url);
-    return p.to_string() == url;
+    return !invalid && p.to_string() == url;
   } catch (const std::exception&) {
     return invalid;
   }
@@ -49,7 +50,6 @@ TEST("parse_absolute_url") {
     REQUIRE(url.path == "/v2");
   }
   REQUIRE(test_parse_uri("h2c://example.com/"));
-  // TODO relative проверить и написать is_relative
 
   // невалидные / относительные
   REQUIRE(test_parse_uri("/api/v2", true));
@@ -63,6 +63,18 @@ TEST("parse_absolute_url") {
   REQUIRE(test_parse_uri("https://[::1", true));
   REQUIRE(test_parse_uri("https:/example.com", true));
   REQUIRE(test_parse_uri("mailto:foo@example.com", true));
+}
+
+TEST("is_relative_url") {
+  // url сервера относительно документа спеки
+  REQUIRE(svarg::is_relative_url("/"));
+  REQUIRE(svarg::is_relative_url("/v1"));
+  REQUIRE(svarg::is_relative_url("v1/sub"));
+  REQUIRE(svarg::is_relative_url("../v1"));
+  REQUIRE(svarg::is_relative_url(""));
+  REQUIRE(svarg::is_relative_url("/redirect?next=http://evil.com"));
+  REQUIRE(!svarg::is_relative_url("https://api.example.com/v2"));
+  REQUIRE(!svarg::is_relative_url("coap+tcp://example.com/v2"));
 }
 
 REGISTER_TEST_LISTENER(moko3::gtest_listener);

@@ -394,8 +394,7 @@ static std::optional<size_t> find_weak(const arrayof<schema_ref>& reqs, access_s
   // anyof с меньшим числом аргументов перекрывает другой anyof
   // all проигрывает всем и вылетает
 
-  // TODO? здесь потенциально очень много случаев типа oneof + anyof, allof + oneof и так далее
-  // но их обработка не стоит того
+  // остальные сочетания (oneof + anyof, allof + oneof и так далее) не обрабатываются, не стоит того
 
   auto is_never = [](const schema_ref& r) {
     auto f = r.if_fundamental();

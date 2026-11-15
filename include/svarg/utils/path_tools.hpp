@@ -259,7 +259,6 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   return out;
 }
 
-// TODO test
 [[nodiscard]] constexpr size_t count_in_str(std::string_view str, std::string_view needle) {
   SVARG_ASSERT(!needle.empty());
   size_t count = 0;
@@ -272,7 +271,6 @@ std::string path_to_name(std::string_view path, string_map<std::string>& name2pa
   } while (!str.empty());
   return count;
 }
-// TODO test
 
 // проверяет что все переменные в пути не пустые и упоминаются ровно один раз
 [[nodiscard]] constexpr bool validate_maybe_templated_path_parameters(std::string_view path) {
@@ -571,8 +569,6 @@ template <bool WwwUrlEncoded>
   return {};
 }
 
-// TODO test
-
 // cookie-string = cookie-pair *( ";" SP cookie-pair )
 // cookie-pair   = cookie-name "=" cookie-value
 // cookie-name   = token
@@ -625,7 +621,6 @@ template <bool WwwUrlEncoded>
 // возвращает false на некорректном енкодинге или если за %xy скрывалось '/'
 // (это неоднозначность для опенапи пути)
 [[nodiscard]] bool deescape_percent_encoding(std::string& inout);
-// TODO? какое-то оптимизированное сравнение, чтобы сравнивать хендлеры?..
 
 [[nodiscard]] inline std::string deescape_percent_encoding_str(std::string_view in) {
   std::string out{in};
