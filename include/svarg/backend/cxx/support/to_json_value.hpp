@@ -105,14 +105,18 @@ template <cxx_support::an_object A>
 boost::json::value aggregate_to_json(const A& v) {
   boost::json::value j;
   boost::json::object& obj = j.emplace_object();
+  size_t size = fields_count<A>();
+  if constexpr (cxx_support::has_additional_properties<A>)
+    size += cxx_support::get_additional_properties(v).size();
+  obj.reserve(size);
 
   auto serialize_one = [&]<size_t I>(std::index_sequence<I>) {
     const auto& field = cxx_support::get_field<I>(v);
     constexpr std::string_view field_name = cxx_support::get_field_name<I, A>();
     if (cxx_support::is_field_present<I>(v))
-      obj[field_name] = to_json(field);
+      obj.emplace(field_name, to_json(field));
     else if constexpr (cxx_support::get_field_info<I, A>().null_when_absent)
-      obj[field_name] = nullptr;
+      obj.emplace(field_name, nullptr);
   };
   APPLY_INDEXES(fields_count<A>()) {
     (serialize_one(std::index_sequence<Is>{}), ...);
@@ -122,7 +126,7 @@ boost::json::value aggregate_to_json(const A& v) {
       obj[name] = to_json(value);
   }
   cxx_support::validate_required_schemas(j, v).rethrow_if_failed();
-  return obj;
+  return j;
 }
 
 template <cxx_support::an_object T>
