@@ -161,7 +161,7 @@ TEST("json encode/decode") {
       {"x-some-field", svarg::Any(0)},
       {"something2", svarg::Any("nothing")},
   };
-  auto ref = svarg::from_json<svarg::reference_object>(input);
+  auto ref = svarg::from_json<svarg::reference_object>(boost::json::parse(input));
 
   REQUIRE(ref == expected);
   boost::json::value json = svarg::to_json(ref);
@@ -172,7 +172,7 @@ TEST("json encode/decode") {
 
 template <typename T>
 void test_json_encode_decode(std::string_view input, T expected) {
-  auto ref = svarg::from_json<T>(input);
+  auto ref = svarg::from_json<T>(boost::json::parse(input));
   REQUIRE(to_json(ref) == to_json(expected));
 }
 

@@ -42,4 +42,15 @@ struct svarg::from_json_value<my::date> {
 };
 ```
 
+Тела `application/json` пишутся сразу в буфер, без `boost::json::value`: значение обходится событиями `to_tokens` (см. `to_tokens.hpp`), JSON из них пишет `json_writer`. Тип без своей специализации `to_tokens` обходится через `to_json_value`, это медленнее. Обход напрямую:
+
+```cpp
+template <>
+struct svarg::cxx_support::to_tokens<my::date> {
+  static void operator()(const my::date& v, auto& w) {
+    w.on_string(svarg::cxx_support::text_value<my::date>::serialize(v));
+  }
+};
+```
+
 Пользовательские форматы отключают проверки на `minimum`, `pattern` и тому подобное

@@ -5,13 +5,10 @@
 #include <string_view>
 
 #include <boost/json/value.hpp>
-#include <boost/json/parse.hpp>
 
 #include "svarg/errors.hpp"
-#include "svarg/utils/yamljson.hpp"
 #include "svarg/common_types.hpp"
 #include "svarg/utils/safe_cast.hpp"
-#include "svarg/concepts.hpp"
 
 namespace svarg {
 
@@ -32,20 +29,6 @@ T from_json(const boost::json::value& j) {
   T value;
   try_from_json(j, value).rethrow_if_failed();
   return value;
-}
-
-template <typename T>
-T from_json(std::string_view str) {
-  return from_json<T>(boost::json::parse(str, {}, {.allow_comments = true}));
-}
-
-template <typename T>
-T from_yaml(std::string_view str) {
-  // yaml может быть пуст, json - нет. Так-то может быть null, "", {}, [], но выбран объект
-  if (str.empty()) [[unlikely]]
-    str = "{}";
-  return from_json<T>(
-      boost::json::parse(yaml2json(str), {}, boost::json::parse_options{.allow_comments = true}));
 }
 
 // специализации

@@ -14,7 +14,7 @@
 #include "svarg/utils/combined_hash.hpp"
 #include "svarg/utils/from_chars.hpp"
 #include "svarg/utils/matcher.hpp"
-#include "svarg/utils/parse_frontend_or_ir_type.hpp"
+#include "svarg/utils/frontend_or_ir_type_json.hpp"
 #include "svarg/x_meta_keys.hpp"
 
 namespace svarg::ir {

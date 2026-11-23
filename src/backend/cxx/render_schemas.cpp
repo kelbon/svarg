@@ -4,6 +4,7 @@
 #include "render_common.hpp"
 #include "svarg/utils/number.hpp"
 #include "svarg/from_json_value.hpp"
+#include "svarg/utils/json_text.hpp"
 
 namespace svarg::cxx {
 
@@ -691,7 +692,7 @@ std::string renderer::render_struct_content(const ir::schema& s, std::string typ
             for (auto&& v : e.values) {
               if (!v.value.is_null())
                 throw parse_error("cannot parse `null` from not null json value `{}`",
-                                  to_json_string(v, /*pretty=*/false));
+                                  to_json_text(v, /*pretty=*/false));
               result += "::svarg::cxx_support::null{},";
             }
           } else {

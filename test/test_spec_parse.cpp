@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "svarg/ir/ir_object.hpp"
+#include "svarg/utils/json_text.hpp"
 
 TEST("json is an yaml") {
   std::string json = R"({"name":"Alice","age":30,"tags":["dev","cpp"]})";
@@ -321,9 +322,9 @@ TEST("raw_refs") {
   boost::json::value v;
   svarg::pass_as_json(p, [&](std::string_view str) { v = boost::json::parse(str); });
   v = svarg::resolve_raw_references(std::move(v), p, options);
-  svarg::write_into("mdamda.json", svarg::to_json_string(v));
+  svarg::write_into("mdamda.json", svarg::to_json_text(v));
   svarg::openapi_object o = svarg::parse_spec(std::move(v), options);
-  svarg::write_into("mdamdaout.json", svarg::to_json_string(o));
+  svarg::write_into("mdamdaout.json", svarg::to_json_text(o));
 }
 
 // часто отваливается всилу то гитхаба то ещё чего

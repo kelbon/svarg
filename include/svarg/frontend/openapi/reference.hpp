@@ -8,7 +8,7 @@
 #include "svarg/utils/parse_ref.hpp"
 #include "svarg/utils/svarg_assert.hpp"
 
-#include "svarg/utils/parse_frontend_or_ir_type.hpp"
+#include "svarg/utils/frontend_or_ir_type_json.hpp"
 
 namespace svarg {
 

@@ -4,7 +4,6 @@
 #include <string_view>
 
 #include <boost/json/parse.hpp>
-#include <boost/json/serializer.hpp>
 
 #include "svarg/errors.hpp"
 #include "svarg/utils/media_types.hpp"
@@ -12,6 +11,7 @@
 #include "svarg/backend/cxx/support/concepts.hpp"
 #include "svarg/backend/cxx/support/nonbody.hpp"
 #include "svarg/backend/cxx/support/json_stream.hpp"
+#include "svarg/backend/cxx/support/json_writer.hpp"
 
 // встроенные кодеки значений (json_codec, raw_codec) и медиа типы свойств: параметр с `content:`, поле
 // form-urlencoded тела, часть multipart
@@ -91,42 +91,24 @@ template <typename T, size_t I>
 constexpr auto field_encoding_v =
     constexpr_string<get_field_encoding<I, T>().size()>(get_field_encoding<I, T>());
 
-namespace noexport {
-
-// пишет прямо в `out`, без промежуточной строки
-inline void serialize_json_into(http_body_bytes& out, const boost::json::value& v) {
-  unsigned char tmpbuf[256];
-  boost::json::serializer sr(boost::json::storage_ptr{}, +tmpbuf, sizeof(tmpbuf));
-  sr.reset(&v);
-  size_t len = out.size();
-  out.resize(len + BOOST_JSON_STACK_BUFFER_SIZE, hidi::uninitialized_byte);
-  for (;;) {
-    boost::json::string_view sv = sr.read(reinterpret_cast<char*>(out.data()) + len, out.size() - len);
-    len += sv.size();
-    if (sr.done())
-      break;
-    out.resize(out.size() * 2, hidi::uninitialized_byte);
-  }
-  out.resize(len);
-}
-
-}  // namespace noexport
-
 struct json_codec {
   template <typename T>
   static void serialize(const T& value, std::string_view, content_type_params&, http_body_bytes& out) {
-    noexport::serialize_json_into(out, to_json(value));
+    to_json_raw(value, out);
   }
   template <typename T>
-  [[nodiscard]] static error_code parse(std::string_view, std::string_view data, T& out) {
-    std::error_code jec;
-    boost::json::value v = boost::json::parse(data, jec);
-    if (jec)
-      return parse_error("cannot parse JSON: {}", jec.message());
-    return try_from_json(v, out);
+  [[nodiscard]] static error_code parse(std::string_view content_type, std::string_view data, T& out) {
+    try {
+      json_stream_parser<T>(content_type, out).feed(data, /*last=*/true);
+    } catch (parse_error& e) {
+      return std::move(e);
+    } catch (validate_error& e) {
+      return std::move(e);
+    }
+    return {};
   }
   template <typename T>
-  using stream_parser = json_body_stream_parser<T>;
+  using stream_parser = json_stream_parser<T>;
 };
 
 // значение как есть (text/plain "abc", а не "\"abc\""), для медиа типов без своего кодека

@@ -1,6 +1,7 @@
 
 #include "svarg/ir/optimization_passes.hpp"
 #include "svarg/utils/clang_format_dir.hpp"
+#include "svarg/utils/json_text.hpp"
 #define CLINOK_NAMESPACE_NAME cxxcli
 #define program_options_file "svarg/cli/cxx_options.def"
 #include <clinok/cli_interface.hpp>
@@ -27,7 +28,7 @@ int main(int argc, char* argv[]) try {
   }
   ir::ir_object ir;
   for (fs::path p : cliopts.additional_args)
-    ir.merge(from_json<ir::ir_object>(load_yaml_as_json(p)));
+    ir.merge(from_json<ir::ir_object>(boost::json::parse(load_yaml_as_json(p))));
   if (cliopts.ignore_requirements && ir.schemas) {
     for (const ir::schema& s : *ir.schemas) {
       const_cast<ir::schema&>(s).required = {};

@@ -33,7 +33,7 @@
 //   };
 //
 // Встроенные (выбираются по body_format_of медиа типа):
-//   json_codec      - application/json и любой +json
+//   json_codec      - application/json и любой +json, пишет через to_json_raw (json_writer.hpp)
 //   form_codec      - application/x-www-form-urlencoded, объект
 //   multipart_codec - multipart/*, объект
 //   raw_codec       - остальное: строка, число, bool или енам как есть
