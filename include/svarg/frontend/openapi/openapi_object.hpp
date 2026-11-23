@@ -4,7 +4,7 @@
 #include "svarg/frontend/parameter_location.hpp"
 #include "svarg/utils/all.hpp"
 #include "svarg/frontend/openapi/reference.hpp"
-#include "svarg/utils/parse_frontend_or_ir_type.hpp"  // IWYU pragma: keep (специализация для парсинга всех типов)
+#include "svarg/utils/frontend_or_ir_type_json.hpp"  // IWYU pragma: keep (специализация для парсинга всех типов)
 
 #include <boost/json/serialize.hpp>
 #include <ranges>

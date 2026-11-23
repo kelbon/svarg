@@ -1,6 +1,7 @@
 
 #include "svarg/ir/optimization_passes.hpp"
 #include "svarg/utils/clang_format_dir.hpp"
+#include "svarg/utils/json_text.hpp"
 #define CLINOK_NAMESPACE_NAME cxxcli
 #define program_options_file "svarg/cli/cxx_options.def"
 #include <clinok/cli_interface.hpp>

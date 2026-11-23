@@ -1,4 +1,5 @@
 #include "svarg/frontend/openapi/openapi.hpp"
+#include "svarg/utils/yamljson.hpp"
 #include <boost/json/parse.hpp>
 
 namespace svarg {

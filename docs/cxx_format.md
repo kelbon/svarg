@@ -48,7 +48,7 @@ struct svarg::from_json_value<my::date> {
 template <>
 struct svarg::cxx_support::to_tokens<my::date> {
   static void operator()(const my::date& v, auto& w) {
-    w.string(svarg::cxx_support::text_value<my::date>::serialize(v));
+    w.on_string(svarg::cxx_support::text_value<my::date>::serialize(v));
   }
 };
 ```

@@ -202,11 +202,17 @@ TEST("additional properties") {
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": "x", "n": 1})"), v).failed());
   REQUIRE(v.a == "x" && v.additional_properties.size() == 1 && v.additional_properties.at("n") == 1);
   REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": "x", "n": 1})"));
-  REQUIRE(boost::json::parse(svarg::to_raw_json_string(v)) == svarg::to_json(v));
-  // одноимённое дополнительное свойство заменяет поле, ключ один
+  REQUIRE(boost::json::parse(svarg::to_json_string(v)) == svarg::to_json(v));
+  // одноимённое дополнительное свойство заменяет поле, ключ один. Значение не по схеме (a - строка), поэтому
+  // мимо проверки to_json_raw - сразу писателем
   v.additional_properties["a"] = 5;
   REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": 5, "n": 1})"));
-  REQUIRE(svarg::to_raw_json_string(v) == R"({"a":5,"n":1})");
+  std::string out;
+  json_writer<std::string> w{.b = out, .ix = 0};
+  write_tokens(v, w);
+  w.finish();
+  out.resize(w.ix);
+  REQUIRE(out == R"({"a":5,"n":1})");
   REQUIRE(!parses<with_extra_t>(R"({"a": "x", "n": "y"})"));  // неописанное свойство по своей схеме
   // additionalProperties не задано - неописанные свойства пропускаются
   patch_t p;

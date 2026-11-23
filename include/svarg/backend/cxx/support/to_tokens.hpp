@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -15,6 +16,7 @@
 
 #include "svarg/errors.hpp"
 #include "svarg/backend/cxx/support/to_json_value.hpp"
+#include "svarg/backend/cxx/support/stream_parsing.hpp"
 
 namespace svarg::cxx_support {
 
@@ -30,29 +32,29 @@ template <typename W>
 void json_value_to_tokens(const boost::json::value& v, W& w) {
   switch (v.kind()) {
     case boost::json::kind::null:
-      return w.null();
+      return w.on_null();
     case boost::json::kind::bool_:
-      return w.bool_(v.get_bool());
+      return w.on_bool(v.get_bool());
     case boost::json::kind::int64:
-      return w.int64(v.get_int64());
+      return w.on_int64(v.get_int64());
     case boost::json::kind::uint64:
-      return w.uint64(v.get_uint64());
+      return w.on_uint64(v.get_uint64());
     case boost::json::kind::double_:
-      return w.double_(v.get_double());
+      return w.on_double(v.get_double());
     case boost::json::kind::string:
-      return w.string(std::string_view(v.get_string().subview()));
+      return w.on_string(std::string_view(v.get_string().subview()));
     case boost::json::kind::array:
-      w.begin_array();
+      w.on_array_begin();
       for (const boost::json::value& x : v.get_array())
         json_value_to_tokens(x, w);
-      return w.end_array();
+      return w.on_array_end();
     case boost::json::kind::object:
-      w.begin_object();
+      w.on_object_begin();
       for (const boost::json::key_value_pair& kv : v.get_object()) {
-        w.key(std::string_view(kv.key()));
+        w.on_key(std::string_view(kv.key()));
         json_value_to_tokens(kv.value(), w);
       }
-      return w.end_object();
+      return w.on_object_end();
   }
 }
 
@@ -62,9 +64,25 @@ constexpr bool json_safe(std::string_view s) {
       s, [](char c) { return c == '"' || c == '\\' || static_cast<unsigned char>(c) < 0x20; });
 }
 
+// on_escaped_key/on_escaped_string необязательны
+void write_escaped_key(auto& w, std::string_view k) {
+  if constexpr (requires { w.on_escaped_key(k); })
+    w.on_escaped_key(k);
+  else
+    w.on_key(k);
+}
+
+void write_escaped_string(auto& w, std::string_view s) {
+  if constexpr (requires { w.on_escaped_string(s); })
+    w.on_escaped_string(s);
+  else
+    w.on_string(s);
+}
+
 }  // namespace noexport
 
-template <typename T, typename W>
+// события `v` для писателя `w` (serialize_tokens_consumer)
+template <typename T, serialize_tokens_consumer W>
 void write_tokens(const T& v, W& w) {
   if constexpr (has_to_tokens<T>)
     to_tokens<std::remove_cvref_t<T>>{}(v, w);
@@ -78,9 +96,9 @@ template <typename T, size_t I>
 void write_field_key(auto& w) {
   constexpr std::string_view name = get_field_name<I, T>();
   if constexpr (json_safe(name))
-    w.escaped_key(name);
+    noexport::write_escaped_key(w, name);
   else
-    w.key(name);
+    w.on_key(name);
 }
 
 // свойства объекта без begin/end. Discriminated - oneOf, дискриминатор которого уже записан (одноимённое
@@ -112,7 +130,7 @@ void object_fields_to_tokens(const T& v, W& w) {
         write_tokens(field, w);
     } else if constexpr (info.null_when_absent) {
       write_field_key<T, I>(w);
-      w.null();
+      w.on_null();
     }
   };
   [&]<size_t... I>(std::index_sequence<I...>) {
@@ -124,7 +142,7 @@ void object_fields_to_tokens(const T& v, W& w) {
         if (name == Discriminated::svarg_discriminator_field)
           continue;
       }
-      w.key(name);
+      w.on_key(name);
       write_tokens(value, w);
     }
   }
@@ -137,7 +155,7 @@ void object_fields_to_tokens(const T& v, W& w) {
 template <>
 struct to_tokens<bool> {
   static void operator()(bool v, auto& w) {
-    w.bool_(v);
+    w.on_bool(v);
   }
 };
 
@@ -146,37 +164,37 @@ template <std::integral T>
 struct to_tokens<T> {
   static void operator()(T v, auto& w) {
     if constexpr (std::is_signed_v<T>)
-      w.int64(v);
+      w.on_int64(v);
     else
-      w.uint64(v);
+      w.on_uint64(v);
   }
 };
 
 template <std::floating_point T>
 struct to_tokens<T> {
   static void operator()(T v, auto& w) {
-    w.double_(double(v));
+    w.on_double(double(v));
   }
 };
 
 template <>
 struct to_tokens<std::string> {
   static void operator()(std::string_view v, auto& w) {
-    w.string(v);
+    w.on_string(v);
   }
 };
 
 template <>
 struct to_tokens<std::string_view> {
   static void operator()(std::string_view v, auto& w) {
-    w.string(v);
+    w.on_string(v);
   }
 };
 
 template <>
 struct to_tokens<null> {
   static void operator()(const null&, auto& w) {
-    w.null();
+    w.on_null();
   }
 };
 
@@ -206,10 +224,10 @@ struct to_tokens<boost::json::value> {
 template <typename T, typename A>
 struct to_tokens<std::vector<T, A>> {
   static void operator()(const std::vector<T, A>& v, auto& w) {
-    w.begin_array();
+    w.on_array_begin();
     for (const auto& x : v)
       write_tokens<T>(x, w);  // T явно: у vector<bool> элемент - прокси
-    w.end_array();
+    w.on_array_end();
   }
 };
 
@@ -219,7 +237,7 @@ struct to_tokens<std::optional<T>> {
     if (v)
       write_tokens(*v, w);
     else
-      w.null();
+      w.on_null();
   }
 };
 
@@ -229,7 +247,7 @@ struct to_tokens<metel::box<T>> {
     if (v)
       write_tokens(*v, w);
     else
-      w.null();
+      w.on_null();
   }
 };
 
@@ -237,12 +255,12 @@ namespace noexport {
 
 template <typename M>
 void map_to_tokens(const M& m, auto& w) {
-  w.begin_object();
+  w.on_object_begin();
   for (const auto& [k, v] : m) {
-    w.key(k);
+    w.on_key(k);
     write_tokens(v, w);
   }
-  w.end_object();
+  w.on_object_end();
 }
 
 }  // namespace noexport
@@ -317,16 +335,16 @@ struct to_tokens<T> {
   static void operator()(const T& v, auto& w) {
     std::string_view s = T::values[std::to_underlying(get_special_field(v))];
     if constexpr (safe)
-      w.escaped_string(s);
+      noexport::write_escaped_string(w, s);
     else
-      w.string(s);
+      w.on_string(s);
   }
 };
 
 template <an_open_string_enum T>
 struct to_tokens<T> {
   static void operator()(const T& v, auto& w) {
-    w.string(v.value);
+    w.on_string(v.value);
   }
 };
 
@@ -334,9 +352,9 @@ template <an_object T>
 struct to_tokens<T> {
   static void operator()(const T& v, auto& w) {
     static_assert(valid_generated_object<T>());
-    w.begin_object();
+    w.on_object_begin();
     noexport::object_fields_to_tokens<void>(v, w);
-    w.end_object();
+    w.on_object_end();
   }
 };
 
@@ -354,11 +372,11 @@ struct to_tokens<T> {
                              std::string_view discriminator = T::template svarg_discriminator_for<X>();
                              if (discriminator.empty())
                                return write_tokens(x, w);
-                             w.begin_object();
-                             w.key(T::svarg_discriminator_field);
-                             w.string(discriminator);
+                             w.on_object_begin();
+                             w.on_key(T::svarg_discriminator_field);
+                             w.on_string(discriminator);
                              noexport::object_fields_to_tokens<T>(x, w);
-                             w.end_object();
+                             w.on_object_end();
                            } else {
                              // объект ли это, известно только по JSON
                              noexport::json_value_to_tokens(to_json(v), w);

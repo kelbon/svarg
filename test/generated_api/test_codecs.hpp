@@ -108,7 +108,7 @@ struct svarg::to_json_value<test_codecs::date> {
 template <>
 struct svarg::cxx_support::to_tokens<test_codecs::date> {
   static void operator()(const test_codecs::date& v, auto& w) {
-    w.string(svarg::cxx_support::text_value<test_codecs::date>::serialize(v));
+    w.on_string(svarg::cxx_support::text_value<test_codecs::date>::serialize(v));
   }
 };
 

@@ -5,6 +5,7 @@
 #include "svarg/frontend/openapi/openapi.hpp"
 #include "svarg/utils/parse_url.hpp"
 #include "svarg/utils/svarg_assert.hpp"
+#include "svarg/utils/yamljson.hpp"
 
 #ifdef SVARG_ENABLE_NETWORK_REFS
   #include <hidi/h2client.hpp>

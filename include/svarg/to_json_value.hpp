@@ -3,16 +3,9 @@
 #include <set>
 #include <unordered_set>
 
-#include <boost/pfr.hpp>
 #include <boost/json.hpp>
 
 #include "svarg/common_types.hpp"
-#include "svarg/concepts.hpp"
-#include "svarg/utils/unescape_field_name.hpp"
-#include "svarg/utils/json_pretty.hpp"
-#include "svarg/utils/yamljson.hpp"
-#include "svarg/utils/indexes.hpp"
-#include "svarg/utils/svarg_assert.hpp"
 
 namespace svarg {
 
@@ -32,25 +25,6 @@ struct to_json_value<E> {
 template <typename T>
 [[nodiscard]] boost::json::value to_json(const T& x) {
   return to_json_value<std::remove_cvref_t<T>>{}(x);
-}
-
-[[nodiscard]] inline std::string to_json_string(const boost::json::value& v, bool pretty = true) {
-  if (pretty)
-    return pretty_print(v);
-  return boost::json::serialize(v);
-}
-[[nodiscard]] inline std::string to_yaml_string(const boost::json::value& v) {
-  return json2yaml(to_json_string(v, /*pretty=*/false));
-}
-
-[[nodiscard]] std::string to_json_string(const auto& x, bool pretty = true) {
-  if (pretty)
-    return pretty_print(to_json(x));
-  return boost::json::serialize(to_json(x));
-}
-
-[[nodiscard]] std::string to_yaml_string(const auto& x) {
-  return json2yaml(to_json_string(x, /*pretty=*/false));
 }
 
 // специализации
@@ -208,54 +182,6 @@ struct to_json_value<std::set<Types...>> {
     out.reserve(r.size());
     for (const auto& elem : r)
       out.push_back(to_json(elem));
-    return out;
-  }
-};
-
-namespace noexport {
-
-template <front_or_ir_type T, size_t I>
-void frontent_type_serialize_field(const T& in, boost::json::object& out) {
-  constexpr std::string_view raw_name = boost::pfr::get_name<I, T>();
-  constexpr std::string_view name = unescape_field_name(raw_name);
-
-  // пропускаем внутренние keyfield поля (они не часть JSON-схемы)
-  if constexpr (is_keyfield(raw_name))
-    return;
-
-  const auto& field = boost::pfr::get<I>(in);
-
-  if constexpr (requires { field.has_value(); }) {
-    if (!field.has_value())
-      return;
-    out.emplace(name, to_json(*field));
-  } else {
-    out.emplace(name, to_json(field));
-  }
-}
-
-}  // namespace noexport
-
-template <front_or_ir_type T>
-struct to_json_value<T> {
-  static_assert(std::is_same_v<T, std::decay_t<T>>);
-
-  boost::json::value operator()(const T& in) const {
-    // костыль для schema_object
-    if constexpr (requires { in._keyfield_boolean_schema; }) {
-      if (in._keyfield_boolean_schema.has_value())
-        return *in._keyfield_boolean_schema;
-    }
-    boost::json::object out;
-    APPLY_INDEXES(boost::pfr::tuple_size_v<T>) {
-      (noexport::frontent_type_serialize_field<T, Is>(in, out), ...);
-    };
-    if constexpr (allows_meta_fields<std::decay_t<T>>) {
-      for (auto& [key, value] : in.SVARG_META_KEYFIELD) {
-        SVARG_ASSERT(is_meta_key(std::string_view(key)));
-        out[key] = value.value;
-      }
-    }
     return out;
   }
 };

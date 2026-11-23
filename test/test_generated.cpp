@@ -366,7 +366,7 @@ TEST("webhook") {
 // JSON. Способы разбора - DOM, поток целиком, поток по частям - дают один и тот же итог: значение или вид
 // ошибки. DOM - эталон. Разобранное значение проходит круг сериализация -> разбор без изменений
 
-// числа сравниваются по значению: to_json пишет 1.0 как 1E0, to_raw_json - как 1
+// числа сравниваются по значению: to_json пишет 1.0 как 1E0, to_json_raw - как 1
 static bool same_json(const boost::json::value& a, const boost::json::value& b) {
   if (a.is_number() && b.is_number())
     return a.to_number<double>() == b.to_number<double>() && (a.is_double() || b.is_double() || a == b);
@@ -416,14 +416,14 @@ static bool has_duplicate_keys(std::string_view json) {
   return keys_count(json) != keys_count(boost::json::parse(json));
 }
 
-// `raw` (to_raw_json) - тот же JSON, что у to_json, без повторяющихся ключей
+// `raw` (to_json_raw) - тот же JSON, что у to_json, без повторяющихся ключей
 template <typename T>
 static void check_raw_json(const T& v, std::string_view raw) {
   std::string dom = boost::json::serialize(svarg::to_json(v));
   std::error_code ec;
   boost::json::value parsed = boost::json::parse(raw, ec);
   if (ec || has_duplicate_keys(raw) || !same_json(parsed, boost::json::parse(dom))) {
-    std::println("to_raw_json: {}\nto_json:     {}", raw, dom);
+    std::println("to_json_raw: {}\nto_json:     {}", raw, dom);
     REQUIRE(false);
   }
 }
@@ -440,7 +440,7 @@ static void check_tokens_roundtrip(const T& v, std::string_view raw) {
     std::println("to_tokens -> from_tokens failed: {}\nvalue: {}", e.what(), raw);
     REQUIRE(false);
   }
-  std::string copy_raw = svarg::to_raw_json_string(copy);
+  std::string copy_raw = svarg::to_json_string(copy);
   if (copy_raw != raw) {
     std::println("to_tokens -> from_tokens: {}\nvalue:                   {}", copy_raw, raw);
     REQUIRE(false);
@@ -465,7 +465,7 @@ static std::string json_outcome(svarg::error_code& ec, const T& v) {
       svarg::content_type_params params;
       http_body_bytes out;
       json_codec::serialize(v, "application/json", params, out);
-      // json_codec пишет через to_raw_json: сверка с to_json
+      // json_codec пишет через to_json_raw: сверка с to_json
       check_raw_json(v, std::string_view((const char*)out.data(), out.size()));
       check_tokens_roundtrip(v, std::string_view((const char*)out.data(), out.size()));
       return "ok: " + std::string((const char*)out.data(), out.size());
@@ -694,22 +694,29 @@ TEST("raw json") {
   // дискриминатор записывается по типу варианта, свойство варианта с тем же именем пропускается
   Pet pet;
   pet.get().emplace<Cat>(Cat{.petType = "wrong", .lives = 7});
-  REQUIRE(boost::json::parse(svarg::to_raw_json_string(pet)) ==
+  REQUIRE(boost::json::parse(svarg::to_json_string(pet)) ==
           boost::json::parse(R"({"petType": "kitty", "lives": 7})"));
-  REQUIRE(!has_duplicate_keys(svarg::to_raw_json_string(pet)));
+  REQUIRE(!has_duplicate_keys(svarg::to_json_string(pet)));
+  // и дополнительное свойство варианта с именем дискриминатора
+  Bird bird;
+  bird.additional_properties["kind"] = "x";
+  Flyer flyer;
+  flyer.get().emplace<Bird>(bird);
+  REQUIRE(boost::json::serialize(svarg::to_json(flyer)) == R"({"kind":"Bird"})");
+  REQUIRE(svarg::to_json_string(flyer) == R"({"kind":"Bird"})");
   // null в словаре не пропускается
   std::map<std::string, std::optional<int64_t>> nullable_map{{"a", std::nullopt}, {"b", 1}};
-  REQUIRE(svarg::to_raw_json_string(nullable_map) == R"({"a":null,"b":1})");
+  REQUIRE(svarg::to_json_string(nullable_map) == R"({"a":null,"b":1})");
   // дописывает в конец буфера
   http_body_bytes out;
   out.assign({'[', ' '});
-  svarg::to_raw_json(Tree{}, out);
-  REQUIRE(std::string_view((const char*)out.data(), out.size()) == R"([ {"children":null})");
+  svarg::to_json_raw(std::string("a"), out);
+  REQUIRE(std::string_view((const char*)out.data(), out.size()) == R"([ "a")");
   // ошибка записи (пустой oneOf) - исключение, буфер не меняется
   const size_t size_before = out.size();
   bool thrown = false;
   try {
-    svarg::to_raw_json(Pet{}, out);
+    svarg::to_json_raw(Pet{}, out);
   } catch (svarg::serialize_error&) {
     thrown = true;
   }

@@ -94,7 +94,7 @@ constexpr auto field_encoding_v =
 struct json_codec {
   template <typename T>
   static void serialize(const T& value, std::string_view, content_type_params&, http_body_bytes& out) {
-    to_raw_json(value, out);
+    to_json_raw(value, out);
   }
   template <typename T>
   [[nodiscard]] static error_code parse(std::string_view, std::string_view data, T& out) {

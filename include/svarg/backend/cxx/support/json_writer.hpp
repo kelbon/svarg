@@ -4,6 +4,8 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -12,10 +14,11 @@
 
 #include "svarg/errors.hpp"
 #include "svarg/backend/cxx/support/to_tokens.hpp"
+#include "svarg/from_json_value.hpp"
 
 // ПИСАТЕЛЬ JSON
 //
-// События to_tokens пишутся прямо в буфер, без boost::json::value. to_raw_json - запись значения целиком, так
+// События to_tokens пишутся прямо в буфер, без boost::json::value. to_json_raw - запись значения целиком, так
 // пишутся тела application/json (json_codec)
 
 namespace svarg::cxx_support {
@@ -64,25 +67,25 @@ struct json_writer {
   B& b;
   size_t ix;
 
-  void begin_object() {
+  void on_object_begin() {
     put('{');
   }
-  void end_object() {
+  void on_object_end() {
     close('}');
   }
-  void begin_array() {
+  void on_array_begin() {
     put('[');
   }
-  void end_array() {
+  void on_array_end() {
     close(']');
   }
 
-  void key(std::string_view k) {
+  void on_key(std::string_view k) {
     char* p = quoted(k);
     *p++ = ':';
     ix = p - data();
   }
-  void escaped_key(std::string_view k) {
+  void on_escaped_key(std::string_view k) {
     char* p = reserve(k.size() + 3);
     p[0] = '"';
     std::memcpy(p + 1, k.data(), k.size());
@@ -90,12 +93,12 @@ struct json_writer {
     p[k.size() + 2] = ':';
     ix += k.size() + 3;
   }
-  void string(std::string_view s) {
+  void on_string(std::string_view s) {
     char* p = quoted(s);
     *p++ = ',';
     ix = p - data();
   }
-  void escaped_string(std::string_view s) {
+  void on_escaped_string(std::string_view s) {
     char* p = reserve(s.size() + 3);
     p[0] = '"';
     std::memcpy(p + 1, s.data(), s.size());
@@ -104,13 +107,13 @@ struct json_writer {
     ix += s.size() + 3;
   }
 
-  void int64(int64_t v) {
+  void on_int64(int64_t v) {
     number(v);
   }
-  void uint64(uint64_t v) {
+  void on_uint64(uint64_t v) {
     number(v);
   }
-  void double_(double v) {
+  void on_double(double v) {
     // как boost::json: в JSON нет бесконечностей и NaN
     if (std::isnan(v))
       raw("null,");
@@ -119,10 +122,10 @@ struct json_writer {
     else
       number(v);
   }
-  void bool_(bool v) {
+  void on_bool(bool v) {
     raw(v ? "true," : "false,");
   }
-  void null() {
+  void on_null() {
     raw("null,");
   }
 
@@ -198,7 +201,7 @@ namespace svarg {
 
 // дописывает JSON `x` в конец `out` (std::string, hidi::http_body_bytes...). При ошибке `out` не меняется
 template <typename T, typename B>
-void to_raw_json(const T& x, B& out) {
+void to_json_raw(const T& x, B& out) {
   const size_t start = out.size();
   cxx_support::json_writer<B> w{.b = out, .ix = start};
   try {
@@ -212,9 +215,11 @@ void to_raw_json(const T& x, B& out) {
 }
 
 template <typename T>
-[[nodiscard]] std::string to_raw_json_string(const T& x) {
+[[nodiscard]] std::string to_json_string(const T& x) {
   std::string out;
-  to_raw_json(x, out);
+  to_json_raw(x, out);
+  // exception on debug
+  assert((from_json<T>(out), true));
   return out;
 }
 

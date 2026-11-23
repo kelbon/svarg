@@ -6,6 +6,7 @@
 #include "svarg/ir/optimization_passes.hpp"
 #include "svarg/frontend/openapi/generate_ir.hpp"
 #include "svarg/utils/yamljson.hpp"
+#include "svarg/utils/json_text.hpp"
 
 using namespace svarg;
 using ir::ir_object;

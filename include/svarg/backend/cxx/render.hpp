@@ -1,6 +1,7 @@
 #pragma once
 
 #include "svarg/ir/ir_object.hpp"
+#include "svarg/utils/yamljson.hpp"
 
 #include <format>
 #include <map>

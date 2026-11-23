@@ -1,6 +1,7 @@
 
 #include <filesystem>
 #include "svarg/ir/optimization_passes.hpp"
+#include "svarg/utils/json_text.hpp"
 #define program_options_file "svarg/cli/ir_options.def"
 #include <clinok/cli_interface.hpp>
 
@@ -99,7 +100,7 @@ int main(int argc, char* argv[]) try {
   if (*f == format_e::yaml)
     write_into(out, to_yaml_string(ir));
   else
-    write_into(out, to_json_string(ir));
+    write_into(out, to_json_text(ir));
   std::println("output written to {}", fs::absolute(out).generic_string());
   return 0;
 } catch (std::exception& e) {
