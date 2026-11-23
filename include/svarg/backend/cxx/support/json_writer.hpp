@@ -1,12 +1,9 @@
 #pragma once
 
 #include <array>
-#include <cassert>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -212,6 +209,7 @@ void to_json_raw(const T& x, B& out) {
     T value;
     cxx_support::parsing_writer<T> validator(value);
     cxx_support::write_tokens(x, validator);
+    validator.finish();
 #endif
   } catch (...) {
     out.resize(start);

@@ -5,7 +5,6 @@
 #include <string_view>
 
 #include <boost/json/value.hpp>
-#include <boost/json/parse.hpp>
 
 #include "svarg/errors.hpp"
 #include "svarg/common_types.hpp"

@@ -725,7 +725,7 @@ TEST("raw json") {
   }
   REQUIRE(thrown && out.size() == size_before);
 #ifndef NDEBUG
-  // в отладочной сборке написанное проверяется: невалидное значение - исключение, буфер не меняется
+  // в отладочной сборке сериализуемое проверяется: невалидное значение - исключение
   Strict strict;
   strict.code = Strict_::properties::code{"long"};
   thrown = false;
