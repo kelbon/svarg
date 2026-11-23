@@ -49,21 +49,11 @@ struct from_tokens {
   }
 };
 
-// шорткат
-// НЕ валидирует, так что его нужно использовать для верхнеуровневого парса,
-// а для подобъектов всегда from_tokens_subobject
+// разбор T без проверок требований и ограничений самого T: для служебного поля внутри уже проверяемой схемы и
+// внутри from_tokens_subobject. Значение целиком и подобъекты разбираются from_tokens_subobject
 template <typename T>
 tokens_consumer from_tokens_parser(T& v, sax_token& tok, dd::with_stack_resource r) {
   return from_tokens<std::remove_cvref_t<T>>{}(v, tok, r);
-}
-
-template <typename T>
-omo::stream_parser json_stream_parser_for(T& out, std::span<unsigned char> buf = {}) {
-  return omo::stream_parser(
-      [&out](sax_token& tok, dd::with_stack_resource r) -> tokens_consumer {
-        return from_tokens_parser(out, tok, r);
-      },
-      buf);
 }
 
 }  // namespace svarg::cxx_support

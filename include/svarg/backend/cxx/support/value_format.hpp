@@ -99,7 +99,7 @@ struct json_codec {
   template <typename T>
   [[nodiscard]] static error_code parse(std::string_view content_type, std::string_view data, T& out) {
     try {
-      json_body_stream_parser<T>(content_type, out).feed(data, /*last=*/true);
+      json_stream_parser<T>(content_type, out).feed(data, /*last=*/true);
     } catch (parse_error& e) {
       return std::move(e);
     } catch (validate_error& e) {
@@ -108,7 +108,7 @@ struct json_codec {
     return {};
   }
   template <typename T>
-  using stream_parser = json_body_stream_parser<T>;
+  using stream_parser = json_stream_parser<T>;
 };
 
 // значение как есть (text/plain "abc", а не "\"abc\""), для медиа типов без своего кодека

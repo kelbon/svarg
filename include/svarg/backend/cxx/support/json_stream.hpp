@@ -7,24 +7,20 @@
 
 namespace svarg::cxx_support {
 
-// потоковый разбор JSON тела (json_codec::stream_parser): токены сразу разбираются в `out` (from_tokens), с
-// теми же проверками требований схемы, что и разбор целиком
+// потоковый разбор JSON текста (json_codec): токены сразу разбираются в `out` (from_tokens) с проверками
+// требований схемы
 template <typename T>
-struct json_body_stream_parser {
+struct json_stream_parser {
  private:
   boost::json::basic_parser<omo::boostjson_token_feeder> p;
 
  public:
-  json_body_stream_parser(std::string_view /*content_type*/, T& out)
-      : p(boost::json::parse_options{},
-          [&out](sax_token& tok, dd::with_stack_resource r) -> tokens_consumer {
-            return from_tokens_subobject(out, tok, r);
-          },
-          std::span<unsigned char>{}) {
+  json_stream_parser(std::string_view /*content_type*/, T& out)
+      : p(boost::json::parse_options{}, make_make_parser_for(out), std::span<unsigned char>{}) {
   }
 
-  json_body_stream_parser(json_body_stream_parser&&) = delete;
-  void operator=(json_body_stream_parser&&) = delete;
+  json_stream_parser(json_stream_parser&&) = delete;
+  void operator=(json_stream_parser&&) = delete;
 
   // `last` - кусок последний. Ошибка - исключение (parse_error, validate_error)
   void feed(std::string_view part, bool last) {
@@ -53,7 +49,7 @@ namespace svarg {
 template <typename T>
 [[nodiscard]] T from_json_string(std::string_view str) {
   T value;
-  cxx_support::json_body_stream_parser<T>("application/json", value).feed(str, /*last=*/true);
+  cxx_support::json_stream_parser<T>("application/json", value).feed(str, /*last=*/true);
   return value;
 }
 

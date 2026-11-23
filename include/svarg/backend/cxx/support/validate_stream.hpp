@@ -57,8 +57,8 @@ void feed_in_parallel_end(std::span<tokens_consumer> parsers, std::span<std::exc
 // каждый токен значения отдаётся `main` и всем `parsers`. Ошибка main - сразу ошибка, ошибки остальных
 // запоминаются. Значение кончается вместе с main, не закончивший к этому моменту разбор получает ошибку
 // pre: все созданы на первом токене значения
-// Кадр - не в стек-ресурсе: main может разбираться в ресурсе родителя, и его вложенные кадры выделяются поверх
-// этого. При ошибке main они ещё живы, когда этот кадр уже уничтожается
+// Кадр - не в стек-ресурсе: main может разбираться в ресурсе родителя, и его вложенные кадры выделяются
+// поверх этого. При ошибке main они ещё живы, когда этот кадр уже уничтожается
 inline tokens_consumer feed_in_parallel(tokens_consumer& main, std::span<tokens_consumer> parsers,
                                         std::span<std::exception_ptr> errors) {
   for (;;) {
@@ -92,9 +92,9 @@ inline void feed_in_parallel_end(std::span<tokens_consumer> parsers, std::span<s
 }
 
 // значение и требования к нему (required_schemas_t<T>) разбираются одновременно по одним и тем же токенам.
-// Ошибки - как в DOM: сначала разбор значения (сразу), потом требования по порядку, потом ограничения, даже если
-// требование нарушено раньше по тексту. Значение разбирается в стек-ресурсе родителя: кроме него туда никто не
-// пишет, пока идёт разбор
+// Ошибки - как в DOM: сначала разбор значения (сразу), потом требования по порядку, потом ограничения, даже
+// если требование нарушено раньше по тексту. Значение разбирается в стек-ресурсе родителя: кроме него туда
+// никто не пишет, пока идёт разбор
 template <typename T, typename... Schemas>
 tokens_consumer from_tokens_with_requirements(T& v, sax_token& tok, metel::typelist<Schemas...>,
                                               dd::with_stack_resource r) {
@@ -129,6 +129,15 @@ tokens_consumer from_tokens_subobject(T& v, sax_token& tok, dd::with_stack_resou
     return noexport::from_tokens_with_constraints(v, tok, r);
   else  // нет требований
     return from_tokens_parser(v, tok, r);
+}
+
+// make_parser для omo::token_feeder (и разборов на нём): разбор `out` с проверками схемы, создаётся на первом
+// токене
+template <typename T>
+auto make_make_parser_for(T& out) {
+  return [&out](sax_token& tok, dd::with_stack_resource r) -> tokens_consumer {
+    return from_tokens_subobject(out, tok, r);
+  };
 }
 
 }  // namespace svarg::cxx_support
