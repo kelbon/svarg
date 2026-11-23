@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cassert>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
@@ -14,7 +15,8 @@
 
 #include "svarg/errors.hpp"
 #include "svarg/backend/cxx/support/to_tokens.hpp"
-#include "svarg/from_json_value.hpp"
+#include "svarg/backend/cxx/support/json_stream.hpp"
+#include "svarg/backend/cxx/support/parsing_writer.hpp"
 
 // ПИСАТЕЛЬ JSON
 //
@@ -206,6 +208,11 @@ void to_json_raw(const T& x, B& out) {
   cxx_support::json_writer<B> w{.b = out, .ix = start};
   try {
     cxx_support::write_tokens(x, w);
+#ifndef NDEBUG
+    T value;
+    cxx_support::parsing_writer<T> validator(value);
+    cxx_support::write_tokens(x, validator);
+#endif
   } catch (...) {
     out.resize(start);
     throw;
@@ -218,8 +225,6 @@ template <typename T>
 [[nodiscard]] std::string to_json_string(const T& x) {
   std::string out;
   to_json_raw(x, out);
-  // exception on debug
-  assert((from_json<T>(out), true));
   return out;
 }
 

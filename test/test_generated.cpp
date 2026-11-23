@@ -481,7 +481,10 @@ static std::string json_outcome(svarg::error_code& ec, const T& v) {
 template <typename T>
 static std::string decode_json_dom(std::string_view json) {
   T v;
-  svarg::error_code ec = json_codec::parse("application/json", json, v);
+  std::error_code jec;
+  boost::json::value j = boost::json::parse(json, jec);
+  svarg::error_code ec =
+      jec ? svarg::parse_error("cannot parse JSON: {}", jec.message()) : svarg::try_from_json(j, v);
   return json_outcome(ec, v);
 }
 
@@ -721,6 +724,18 @@ TEST("raw json") {
     thrown = true;
   }
   REQUIRE(thrown && out.size() == size_before);
+#ifndef NDEBUG
+  // в отладочной сборке написанное проверяется: невалидное значение - исключение, буфер не меняется
+  Strict strict;
+  strict.code = Strict_::properties::code{"long"};
+  thrown = false;
+  try {
+    svarg::to_json_raw(strict, out);
+  } catch (svarg::validate_error&) {
+    thrown = true;
+  }
+  REQUIRE(thrown && out.size() == size_before);
+#endif
 }
 
 // ошибка разбора тела по ходу прихода прерывает запрос и приходит исключением, соединение живо

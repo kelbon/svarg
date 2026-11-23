@@ -97,12 +97,15 @@ struct json_codec {
     to_json_raw(value, out);
   }
   template <typename T>
-  [[nodiscard]] static error_code parse(std::string_view, std::string_view data, T& out) {
-    std::error_code jec;
-    boost::json::value v = boost::json::parse(data, jec);
-    if (jec)
-      return parse_error("cannot parse JSON: {}", jec.message());
-    return try_from_json(v, out);
+  [[nodiscard]] static error_code parse(std::string_view content_type, std::string_view data, T& out) {
+    try {
+      json_body_stream_parser<T>(content_type, out).feed(data, /*last=*/true);
+    } catch (parse_error& e) {
+      return std::move(e);
+    } catch (validate_error& e) {
+      return std::move(e);
+    }
+    return {};
   }
   template <typename T>
   using stream_parser = json_body_stream_parser<T>;

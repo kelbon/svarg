@@ -32,11 +32,6 @@ T from_json(const boost::json::value& j) {
   return value;
 }
 
-template <typename T>
-T from_json(std::string_view str) {
-  return from_json<T>(boost::json::parse(str, {}, {.allow_comments = true}));
-}
-
 // специализации
 
 template <>

@@ -45,3 +45,16 @@ struct json_body_stream_parser {
 };
 
 }  // namespace svarg::cxx_support
+
+namespace svarg {
+
+// JSON текст в T через токены, без boost::json::value, с проверками схемы. Ошибка - исключение (parse_error,
+// validate_error)
+template <typename T>
+[[nodiscard]] T from_json_string(std::string_view str) {
+  T value;
+  cxx_support::json_body_stream_parser<T>("application/json", value).feed(str, /*last=*/true);
+  return value;
+}
+
+}  // namespace svarg
