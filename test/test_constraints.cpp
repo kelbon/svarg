@@ -1,6 +1,7 @@
 #include <moko3/moko3.hpp>
 
 #include "svarg/backend/cxx/support/common_types.hpp"
+#include "svarg/backend/cxx/support/json_writer.hpp"
 
 // типы повторяют то, что генерирует бекенд для схем с ограничениями (minLength, minimum и т.д.)
 
@@ -201,6 +202,11 @@ TEST("additional properties") {
   REQUIRE(!svarg::try_from_json(boost::json::parse(R"({"a": "x", "n": 1})"), v).failed());
   REQUIRE(v.a == "x" && v.additional_properties.size() == 1 && v.additional_properties.at("n") == 1);
   REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": "x", "n": 1})"));
+  REQUIRE(boost::json::parse(svarg::to_raw_json_string(v)) == svarg::to_json(v));
+  // одноимённое дополнительное свойство заменяет поле, ключ один
+  v.additional_properties["a"] = 5;
+  REQUIRE(svarg::to_json(v) == boost::json::parse(R"({"a": 5, "n": 1})"));
+  REQUIRE(svarg::to_raw_json_string(v) == R"({"a":5,"n":1})");
   REQUIRE(!parses<with_extra_t>(R"({"a": "x", "n": "y"})"));  // неописанное свойство по своей схеме
   // additionalProperties не задано - неописанные свойства пропускаются
   patch_t p;

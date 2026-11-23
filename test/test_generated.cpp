@@ -12,6 +12,9 @@
 #include "api/all_webhooks.hpp"
 #include "api/all_schemas.hpp"
 
+#include <svarg/backend/cxx/support/json_writer.hpp>
+#include <svarg/backend/cxx/support/parsing_writer.hpp>
+
 using namespace svarg::cxx_support;
 
 struct test_server : api::server {
@@ -363,6 +366,87 @@ TEST("webhook") {
 // JSON. Способы разбора - DOM, поток целиком, поток по частям - дают один и тот же итог: значение или вид
 // ошибки. DOM - эталон. Разобранное значение проходит круг сериализация -> разбор без изменений
 
+// числа сравниваются по значению: to_json пишет 1.0 как 1E0, to_raw_json - как 1
+static bool same_json(const boost::json::value& a, const boost::json::value& b) {
+  if (a.is_number() && b.is_number())
+    return a.to_number<double>() == b.to_number<double>() && (a.is_double() || b.is_double() || a == b);
+  if (a.kind() != b.kind())
+    return false;
+  if (auto* x = a.if_array()) {
+    const auto& y = b.get_array();
+    return x->size() == y.size() && std::ranges::equal(*x, y, same_json);
+  }
+  if (auto* x = a.if_object()) {
+    const auto& y = b.get_object();
+    return x->size() == y.size() && std::ranges::all_of(*x, [&](const auto& kv) {
+             const boost::json::value* o = y.if_contains(kv.key());
+             return o && same_json(kv.value(), *o);
+           });
+  }
+  return a == b;
+}
+
+// повторяющийся ключ boost::json::parse оставил бы последним молча: ключей в тексте больше, чем в разобранном
+static size_t keys_count(std::string_view json) {
+  size_t n = 0;
+  for (size_t i = 0; i < json.size(); ++i) {
+    if (json[i] != '"')
+      continue;
+    for (++i; json[i] != '"'; ++i)
+      i += json[i] == '\\';
+    n += i + 1 < json.size() && json[i + 1] == ':';
+  }
+  return n;
+}
+
+static size_t keys_count(const boost::json::value& v) {
+  size_t n = 0;
+  if (auto* o = v.if_object()) {
+    n += o->size();
+    for (const auto& kv : *o)
+      n += keys_count(kv.value());
+  } else if (auto* a = v.if_array()) {
+    for (const auto& x : *a)
+      n += keys_count(x);
+  }
+  return n;
+}
+
+static bool has_duplicate_keys(std::string_view json) {
+  return keys_count(json) != keys_count(boost::json::parse(json));
+}
+
+// `raw` (to_raw_json) - тот же JSON, что у to_json, без повторяющихся ключей
+template <typename T>
+static void check_raw_json(const T& v, std::string_view raw) {
+  std::string dom = boost::json::serialize(svarg::to_json(v));
+  std::error_code ec;
+  boost::json::value parsed = boost::json::parse(raw, ec);
+  if (ec || has_duplicate_keys(raw) || !same_json(parsed, boost::json::parse(dom))) {
+    std::println("to_raw_json: {}\nto_json:     {}", raw, dom);
+    REQUIRE(false);
+  }
+}
+
+// to_tokens -> from_tokens без текста: разбирается в то же значение (сравнивается по записи)
+template <typename T>
+static void check_tokens_roundtrip(const T& v, std::string_view raw) {
+  T copy;
+  try {
+    parsing_writer<T> w(copy);
+    write_tokens(v, w);
+    w.finish();
+  } catch (std::exception& e) {
+    std::println("to_tokens -> from_tokens failed: {}\nvalue: {}", e.what(), raw);
+    REQUIRE(false);
+  }
+  std::string copy_raw = svarg::to_raw_json_string(copy);
+  if (copy_raw != raw) {
+    std::println("to_tokens -> from_tokens: {}\nvalue:                   {}", copy_raw, raw);
+    REQUIRE(false);
+  }
+}
+
 // итог разбора, по которому сравниваются способы: "ok: <значение, сериализованное снова>" или вид ошибки.
 // Сообщения ошибок не сравниваются
 template <typename T>
@@ -381,6 +465,9 @@ static std::string json_outcome(svarg::error_code& ec, const T& v) {
       svarg::content_type_params params;
       http_body_bytes out;
       json_codec::serialize(v, "application/json", params, out);
+      // json_codec пишет через to_raw_json: сверка с to_json
+      check_raw_json(v, std::string_view((const char*)out.data(), out.size()));
+      check_tokens_roundtrip(v, std::string_view((const char*)out.data(), out.size()));
       return "ok: " + std::string((const char*)out.data(), out.size());
     } catch (std::exception& e) {
       // разобранное значение всегда сериализуется
@@ -543,11 +630,12 @@ TEST("json") {
   // почти все виды схем: объекты, enum, рекурсия, oneOf и anyOf с дискриминатором, требования, ограничения,
   // additionalProperties, nullable
   check_json_with_mutations<Item>(R"({
-    "name": "a\"b", "count": 12345, "kind": "a", "mode": "fast", "tags": ["x", "yy"],
+    "name": "a\"b\u0001\n", "count": 12345, "kind": "a", "mode": "fast",
+    "tags": ["x", "yy", "0123456789\"abcdefgh\\ijklmnop\u001fq"],
     "child": {"name": "c", "tags": []}, "color": "red", "filter": {"kind": "k", "id": "i"},
     "pet": {"petType": "kitty", "lives": 9}, "anyPet": {"petType": "Dog", "bark": true}, "reaction": "+1",
     "fields": "f", "tree": {"children": [{"children": []}]}, "nulls": {"a": null, "b": "b"},
-    "strict": {"code": "abc", "n": 1}, "bag": {"x": 1, "y": 2}, "reqs": {"a": "s"},
+    "strict": {"code": "abc", "n": 1}, "bag": {"x": 1, "y\u0002": 2}, "reqs": {"a": "s"},
     "ordered": {"a": "s", "b": 1}, "shape": {"r": 1}, "mix": {"a": "s", "b": 1}, "both": [1, 2],
     "both2": 5, "num": 1.5, "nothing": null
   })");
@@ -599,6 +687,33 @@ TEST("json") {
   // not как тип не сериализуется: только совпадение итогов
   for (std::string_view not_str : {"1", R"("s")", "{}", R"({"a": "s"})"})
     check_json<NotStr>(not_str, json_check_e::exhaustive);
+}
+
+TEST("raw json") {
+  using namespace api::components::schemas;
+  // дискриминатор записывается по типу варианта, свойство варианта с тем же именем пропускается
+  Pet pet;
+  pet.get().emplace<Cat>(Cat{.petType = "wrong", .lives = 7});
+  REQUIRE(boost::json::parse(svarg::to_raw_json_string(pet)) ==
+          boost::json::parse(R"({"petType": "kitty", "lives": 7})"));
+  REQUIRE(!has_duplicate_keys(svarg::to_raw_json_string(pet)));
+  // null в словаре не пропускается
+  std::map<std::string, std::optional<int64_t>> nullable_map{{"a", std::nullopt}, {"b", 1}};
+  REQUIRE(svarg::to_raw_json_string(nullable_map) == R"({"a":null,"b":1})");
+  // дописывает в конец буфера
+  http_body_bytes out;
+  out.assign({'[', ' '});
+  svarg::to_raw_json(Tree{}, out);
+  REQUIRE(std::string_view((const char*)out.data(), out.size()) == R"([ {"children":null})");
+  // ошибка записи (пустой oneOf) - исключение, буфер не меняется
+  const size_t size_before = out.size();
+  bool thrown = false;
+  try {
+    svarg::to_raw_json(Pet{}, out);
+  } catch (svarg::serialize_error&) {
+    thrown = true;
+  }
+  REQUIRE(thrown && out.size() == size_before);
 }
 
 // ошибка разбора тела по ходу прихода прерывает запрос и приходит исключением, соединение живо

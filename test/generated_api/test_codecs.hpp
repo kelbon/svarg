@@ -104,6 +104,14 @@ struct svarg::to_json_value<test_codecs::date> {
   }
 };
 
+// JSON без boost::json::value (to_tokens). У point его нет: он обходится через to_json_value
+template <>
+struct svarg::cxx_support::to_tokens<test_codecs::date> {
+  static void operator()(const test_codecs::date& v, auto& w) {
+    w.string(svarg::cxx_support::text_value<test_codecs::date>::serialize(v));
+  }
+};
+
 template <>
 struct svarg::from_json_value<test_codecs::date> {
   svarg::error_code operator()(const boost::json::value& j, test_codecs::date& v) const {
